@@ -57,6 +57,8 @@ model Organization {
 
   events      Event[]
 
+  description String?
+
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 }
@@ -79,6 +81,8 @@ model Event {
   status         EventStatus @default(DRAFT)
 
   organizationId String
+
+  isPublic Boolean @default(true)
 
   organization   Organization @relation(fields: [organizationId], references: [id])
 

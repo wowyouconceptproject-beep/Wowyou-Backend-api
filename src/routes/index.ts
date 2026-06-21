@@ -4,6 +4,9 @@ import authRoutes from "../modules/auth/auth.routes";
 
 import testRoutes from "./test.routes";
 
+import organizationRoutes
+  from "../modules/organizations/organization.routes";
+
 
 const router = Router();
 
@@ -21,6 +24,11 @@ router.use(testRoutes);
 router.use(
   "/auth",
   authRoutes
+);
+
+router.use(
+  "/organizations",
+  organizationRoutes
 );
 
 
