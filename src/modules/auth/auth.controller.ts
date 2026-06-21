@@ -14,6 +14,11 @@ export async function register(
   res: Response
 ) {
   try {
+    console.log(
+      "REGISTER BODY:",
+      req.body
+    );
+
     const result =
       await registerUser(
         req.body
