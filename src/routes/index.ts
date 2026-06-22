@@ -7,6 +7,8 @@ import testRoutes from "./test.routes";
 import organizationRoutes
   from "../modules/organizations/organization.routes";
 
+import eventRoutes
+  from "../modules/events/event.routes";
 
 const router = Router();
 
@@ -29,6 +31,11 @@ router.use(
 router.use(
   "/organizations",
   organizationRoutes
+);
+
+router.use(
+  "/events",
+  eventRoutes
 );
 
 

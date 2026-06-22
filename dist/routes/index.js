@@ -6,6 +6,8 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
 const auth_routes_1 = __importDefault(require("../modules/auth/auth.routes"));
 const test_routes_1 = __importDefault(require("./test.routes"));
+const organization_routes_1 = __importDefault(require("../modules/organizations/organization.routes"));
+const event_routes_1 = __importDefault(require("../modules/events/event.routes"));
 const router = (0, express_1.Router)();
 router.get("/", (_req, res) => {
     res.json({
@@ -15,4 +17,6 @@ router.get("/", (_req, res) => {
 });
 router.use(test_routes_1.default);
 router.use("/auth", auth_routes_1.default);
+router.use("/organizations", organization_routes_1.default);
+router.use("/events", event_routes_1.default);
 exports.default = router;

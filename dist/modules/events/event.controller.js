@@ -1,0 +1,35 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.create = create;
+exports.myEvents = myEvents;
+const event_service_1 = require("./event.service");
+async function create(req, res) {
+    try {
+        const event = await (0, event_service_1.createEvent)(req.user.userId, req.body);
+        return res.status(201).json({
+            success: true,
+            event,
+        });
+    }
+    catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error.message,
+        });
+    }
+}
+async function myEvents(req, res) {
+    try {
+        const events = await (0, event_service_1.getMyEvents)(req.user.userId);
+        return res.json({
+            success: true,
+            events,
+        });
+    }
+    catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error.message,
+        });
+    }
+}
