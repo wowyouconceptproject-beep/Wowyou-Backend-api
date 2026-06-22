@@ -67,9 +67,17 @@ async function publish(req, res) {
     }
 }
 async function publicEvents(_req, res) {
-    const events = await (0, event_service_1.getPublicEvents)();
-    return res.json({
-        success: true,
-        events,
-    });
+    try {
+        const events = await (0, event_service_1.getPublicEvents)();
+        return res.json({
+            success: true,
+            events,
+        });
+    }
+    catch (error) {
+        return res.status(500).json({
+            success: false,
+            message: error.message,
+        });
+    }
 }

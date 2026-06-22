@@ -109,11 +109,19 @@ export async function publicEvents(
   _req: Request,
   res: Response
 ) {
-  const events =
-    await getPublicEvents();
+  try {
+    const events =
+      await getPublicEvents();
 
-  return res.json({
-    success: true,
-    events,
-  });
+    return res.json({
+      success: true,
+      events,
+    });
+  } catch (error: any) {
+    return res.status(500).json({
+      success: false,
+      message:
+        error.message,
+    });
+  }
 }

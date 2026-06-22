@@ -102,7 +102,13 @@ async function getPublicEvents() {
             startDate: "asc",
         },
         include: {
-            organization: true,
+            organization: {
+                select: {
+                    id: true,
+                    name: true,
+                    slug: true,
+                },
+            },
         },
     });
 }
