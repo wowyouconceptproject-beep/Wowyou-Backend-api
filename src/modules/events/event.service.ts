@@ -73,3 +73,28 @@ export async function createEvent(
     },
   });
 }
+
+export async function getMyEvents(
+  userId: string
+) {
+  const organization =
+    await prisma.organization.findUnique({
+      where: {
+        ownerId: userId,
+      },
+    });
+
+  if (!organization) {
+    return [];
+  }
+
+  return prisma.event.findMany({
+    where: {
+      organizationId:
+        organization.id,
+    },
+    orderBy: {
+      createdAt: "desc",
+    },
+  });
+}
