@@ -10,6 +10,9 @@ import organizationRoutes
 import eventRoutes
   from "../modules/events/event.routes";
 
+import attendeeProfileRoutes
+from "../modules/attendee-profile/attendee-profile.routes";
+
 const router = Router();
 
 router.get("/", (_req, res) => {
@@ -36,6 +39,11 @@ router.use(
 router.use(
   "/events",
   eventRoutes
+);
+
+router.use(
+  "/attendee-profile",
+  attendeeProfileRoutes
 );
 
 
