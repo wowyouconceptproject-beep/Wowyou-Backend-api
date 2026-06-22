@@ -13,6 +13,9 @@ import eventRoutes
 import attendeeProfileRoutes
 from "../modules/attendee-profile/attendee-profile.routes";
 
+import ticketRoutes
+from "../modules/tickets/ticket.routes";
+
 const router = Router();
 
 router.get("/", (_req, res) => {
@@ -44,6 +47,11 @@ router.use(
 router.use(
   "/attendee-profile",
   attendeeProfileRoutes
+);
+
+router.use(
+  "/tickets",
+  ticketRoutes
 );
 
 
