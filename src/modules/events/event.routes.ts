@@ -8,6 +8,7 @@ import {
   getEvent,
   publish,
   publicEvents,
+  register,
 } from "./event.controller";
 
 const router = Router();
@@ -22,6 +23,12 @@ router.patch(
   "/:id/publish",
   auth,
   publish
+);
+
+router.post(
+  "/:id/register",
+  auth,
+  register
 );
 
 router.get(

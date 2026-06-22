@@ -6,6 +6,7 @@ const event_controller_1 = require("./event.controller");
 const router = (0, express_1.Router)();
 router.post("/", auth_middleware_1.auth, event_controller_1.create);
 router.patch("/:id/publish", auth_middleware_1.auth, event_controller_1.publish);
+router.post("/:id/register", auth_middleware_1.auth, event_controller_1.register);
 router.get("/my", auth_middleware_1.auth, event_controller_1.myEvents);
 router.get("/public", event_controller_1.publicEvents);
 router.get("/:id", auth_middleware_1.auth, event_controller_1.getEvent);

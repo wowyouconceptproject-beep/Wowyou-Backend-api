@@ -34,6 +34,8 @@ model User {
 
   role        UserRole
 
+  registrations Registration[]
+
   isActive    Boolean  @default(true)
 
   createdAt   DateTime @default(now())
@@ -84,8 +86,24 @@ model Event {
 
   isPublic Boolean @default(true)
 
+  registrations Registration[]
+
   organization   Organization @relation(fields: [organizationId], references: [id])
 
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
+}
+
+model Registration {
+  id        String   @id @default(cuid())
+
+  userId    String
+  eventId   String
+
+  user       User    @relation(fields: [userId], references: [id])
+  event      Event   @relation(fields: [eventId], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@unique([userId, eventId])
 }

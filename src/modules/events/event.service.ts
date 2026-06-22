@@ -180,3 +180,44 @@ export async function getPublicEvents() {
     },
   });
 }
+
+export async function registerForEvent(
+  userId: string,
+  eventId: string
+) {
+  const event =
+    await prisma.event.findUnique({
+      where: {
+        id: eventId,
+      },
+    });
+
+  if (!event) {
+    throw new Error(
+      "Event not found"
+    );
+  }
+
+  const existing =
+    await prisma.registration.findUnique({
+      where: {
+        userId_eventId: {
+          userId,
+          eventId,
+        },
+      },
+    });
+
+  if (existing) {
+    throw new Error(
+      "Already registered"
+    );
+  }
+
+  return prisma.registration.create({
+    data: {
+      userId,
+      eventId,
+    },
+  });
+}

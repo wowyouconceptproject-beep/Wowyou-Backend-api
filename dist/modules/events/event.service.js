@@ -5,6 +5,7 @@ exports.getMyEvents = getMyEvents;
 exports.getEventById = getEventById;
 exports.publishEvent = publishEvent;
 exports.getPublicEvents = getPublicEvents;
+exports.registerForEvent = registerForEvent;
 const prisma_1 = require("../../lib/prisma");
 async function createEvent(userId, data) {
     console.log("CREATE EVENT DATA:", data);
@@ -109,6 +110,33 @@ async function getPublicEvents() {
                     slug: true,
                 },
             },
+        },
+    });
+}
+async function registerForEvent(userId, eventId) {
+    const event = await prisma_1.prisma.event.findUnique({
+        where: {
+            id: eventId,
+        },
+    });
+    if (!event) {
+        throw new Error("Event not found");
+    }
+    const existing = await prisma_1.prisma.registration.findUnique({
+        where: {
+            userId_eventId: {
+                userId,
+                eventId,
+            },
+        },
+    });
+    if (existing) {
+        throw new Error("Already registered");
+    }
+    return prisma_1.prisma.registration.create({
+        data: {
+            userId,
+            eventId,
         },
     });
 }

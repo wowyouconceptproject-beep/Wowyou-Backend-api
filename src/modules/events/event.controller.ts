@@ -8,6 +8,7 @@ import {
   getEventById,
   publishEvent,
   getPublicEvents,
+  registerForEvent,
 } from "./event.service";
 
 export async function create(
@@ -119,6 +120,30 @@ export async function publicEvents(
     });
   } catch (error: any) {
     return res.status(500).json({
+      success: false,
+      message:
+        error.message,
+    });
+  }
+}
+
+export async function register(
+  req: AuthRequest,
+  res: Response
+) {
+  try {
+    await registerForEvent(
+      req.user!.userId,
+      String(req.params.id)
+    );
+
+    return res.json({
+      success: true,
+      message:
+        "Registered successfully",
+    });
+  } catch (error: any) {
+    return res.status(400).json({
       success: false,
       message:
         error.message,
