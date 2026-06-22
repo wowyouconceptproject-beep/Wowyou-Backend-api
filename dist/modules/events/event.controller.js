@@ -3,6 +3,8 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.create = create;
 exports.myEvents = myEvents;
 exports.getEvent = getEvent;
+exports.publish = publish;
+exports.publicEvents = publicEvents;
 const event_service_1 = require("./event.service");
 async function create(req, res) {
     try {
@@ -48,4 +50,26 @@ async function getEvent(req, res) {
             message: error.message,
         });
     }
+}
+async function publish(req, res) {
+    try {
+        const event = await (0, event_service_1.publishEvent)(req.user.userId, String(req.params.id));
+        return res.json({
+            success: true,
+            event,
+        });
+    }
+    catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error.message,
+        });
+    }
+}
+async function publicEvents(_req, res) {
+    const events = await (0, event_service_1.getPublicEvents)();
+    return res.json({
+        success: true,
+        events,
+    });
 }

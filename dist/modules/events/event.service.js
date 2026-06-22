@@ -3,6 +3,8 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.createEvent = createEvent;
 exports.getMyEvents = getMyEvents;
 exports.getEventById = getEventById;
+exports.publishEvent = publishEvent;
+exports.getPublicEvents = getPublicEvents;
 const prisma_1 = require("../../lib/prisma");
 async function createEvent(userId, data) {
     console.log("CREATE EVENT DATA:", data);
@@ -72,4 +74,35 @@ async function getEventById(userId, eventId) {
         throw new Error("Event not found");
     }
     return event;
+}
+async function publishEvent(userId, eventId) {
+    const organization = await prisma_1.prisma.organization.findUnique({
+        where: {
+            ownerId: userId,
+        },
+    });
+    if (!organization) {
+        throw new Error("Organization not found");
+    }
+    return prisma_1.prisma.event.update({
+        where: {
+            id: eventId,
+        },
+        data: {
+            status: "PUBLISHED",
+        },
+    });
+}
+async function getPublicEvents() {
+    return prisma_1.prisma.event.findMany({
+        where: {
+            status: "PUBLISHED",
+        },
+        orderBy: {
+            startDate: "asc",
+        },
+        include: {
+            organization: true,
+        },
+    });
 }

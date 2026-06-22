@@ -133,3 +133,44 @@ export async function getEventById(
 
   return event;
 }
+
+export async function publishEvent(
+  userId: string,
+  eventId: string
+) {
+  const organization =
+    await prisma.organization.findUnique({
+      where: {
+        ownerId: userId,
+      },
+    });
+
+  if (!organization) {
+    throw new Error(
+      "Organization not found"
+    );
+  }
+
+  return prisma.event.update({
+    where: {
+      id: eventId,
+    },
+    data: {
+      status: "PUBLISHED",
+    },
+  });
+}
+
+export async function getPublicEvents() {
+  return prisma.event.findMany({
+    where: {
+      status: "PUBLISHED",
+    },
+    orderBy: {
+      startDate: "asc",
+    },
+    include: {
+      organization: true,
+    },
+  });
+}

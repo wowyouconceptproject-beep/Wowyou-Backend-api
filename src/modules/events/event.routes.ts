@@ -6,6 +6,8 @@ import {
   create,
   myEvents,
   getEvent,
+  publish,
+  publicEvents,
 } from "./event.controller";
 
 const router = Router();
@@ -16,10 +18,21 @@ router.post(
   create
 );
 
+router.patch(
+  "/:id/publish",
+  auth,
+  publish
+);
+
 router.get(
   "/my",
   auth,
   myEvents
+);
+
+router.get(
+  "/public",
+  publicEvents
 );
 
 router.get(

@@ -1,4 +1,4 @@
-import { Response } from "express";
+import { Request, Response } from "express";
 
 import { AuthRequest } from "../auth/auth.middleware";
 
@@ -6,6 +6,8 @@ import {
   createEvent,
   getMyEvents,
   getEventById,
+  publishEvent,
+  getPublicEvents,
 } from "./event.service";
 
 export async function create(
@@ -77,4 +79,41 @@ export async function getEvent(
         error.message,
     });
   }
+}
+
+export async function publish(
+  req: AuthRequest,
+  res: Response
+) {
+  try {
+    const event =
+      await publishEvent(
+        req.user!.userId,
+        String(req.params.id)
+      );
+
+    return res.json({
+      success: true,
+      event,
+    });
+  } catch (error: any) {
+    return res.status(400).json({
+      success: false,
+      message:
+        error.message,
+    });
+  }
+}
+
+export async function publicEvents(
+  _req: Request,
+  res: Response
+) {
+  const events =
+    await getPublicEvents();
+
+  return res.json({
+    success: true,
+    events,
+  });
 }
