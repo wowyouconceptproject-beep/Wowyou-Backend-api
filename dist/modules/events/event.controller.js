@@ -6,6 +6,7 @@ exports.getEvent = getEvent;
 exports.publish = publish;
 exports.publicEvents = publicEvents;
 exports.register = register;
+exports.myRegistrations = myRegistrations;
 const event_service_1 = require("./event.service");
 async function create(req, res) {
     try {
@@ -88,6 +89,21 @@ async function register(req, res) {
         return res.json({
             success: true,
             message: "Registered successfully",
+        });
+    }
+    catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error.message,
+        });
+    }
+}
+async function myRegistrations(req, res) {
+    try {
+        const events = await (0, event_service_1.getMyRegistrations)(req.user.userId);
+        return res.json({
+            success: true,
+            events,
         });
     }
     catch (error) {

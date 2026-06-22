@@ -221,3 +221,25 @@ export async function registerForEvent(
     },
   });
 }
+
+export async function getMyRegistrations(
+  userId: string
+) {
+  const registrations =
+    await prisma.registration.findMany({
+      where: {
+        userId,
+      },
+      include: {
+        event: true,
+      },
+      orderBy: {
+        createdAt: "desc",
+      },
+    });
+
+  return registrations.map(
+    (registration) =>
+      registration.event
+  );
+}

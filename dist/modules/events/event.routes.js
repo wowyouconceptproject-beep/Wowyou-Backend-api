@@ -9,5 +9,6 @@ router.patch("/:id/publish", auth_middleware_1.auth, event_controller_1.publish)
 router.post("/:id/register", auth_middleware_1.auth, event_controller_1.register);
 router.get("/my", auth_middleware_1.auth, event_controller_1.myEvents);
 router.get("/public", event_controller_1.publicEvents);
+router.get("/my-registrations", auth_middleware_1.auth, event_controller_1.myRegistrations);
 router.get("/:id", auth_middleware_1.auth, event_controller_1.getEvent);
 exports.default = router;

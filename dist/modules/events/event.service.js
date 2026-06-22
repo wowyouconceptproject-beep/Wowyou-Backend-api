@@ -6,6 +6,7 @@ exports.getEventById = getEventById;
 exports.publishEvent = publishEvent;
 exports.getPublicEvents = getPublicEvents;
 exports.registerForEvent = registerForEvent;
+exports.getMyRegistrations = getMyRegistrations;
 const prisma_1 = require("../../lib/prisma");
 async function createEvent(userId, data) {
     console.log("CREATE EVENT DATA:", data);
@@ -139,4 +140,18 @@ async function registerForEvent(userId, eventId) {
             eventId,
         },
     });
+}
+async function getMyRegistrations(userId) {
+    const registrations = await prisma_1.prisma.registration.findMany({
+        where: {
+            userId,
+        },
+        include: {
+            event: true,
+        },
+        orderBy: {
+            createdAt: "desc",
+        },
+    });
+    return registrations.map((registration) => registration.event);
 }

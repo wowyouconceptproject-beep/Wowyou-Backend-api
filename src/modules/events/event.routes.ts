@@ -9,6 +9,7 @@ import {
   publish,
   publicEvents,
   register,
+  myRegistrations,
 } from "./event.controller";
 
 const router = Router();
@@ -40,6 +41,12 @@ router.get(
 router.get(
   "/public",
   publicEvents
+);
+
+router.get(
+  "/my-registrations",
+  auth,
+  myRegistrations
 );
 
 router.get(
