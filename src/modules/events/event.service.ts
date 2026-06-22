@@ -98,3 +98,38 @@ export async function getMyEvents(
     },
   });
 }
+
+export async function getEventById(
+  userId: string,
+  eventId: string
+) {
+  const organization =
+    await prisma.organization.findUnique({
+      where: {
+        ownerId: userId,
+      },
+    });
+
+  if (!organization) {
+    throw new Error(
+      "Organization not found"
+    );
+  }
+
+  const event =
+    await prisma.event.findFirst({
+      where: {
+        id: eventId,
+        organizationId:
+          organization.id,
+      },
+    });
+
+  if (!event) {
+    throw new Error(
+      "Event not found"
+    );
+  }
+
+  return event;
+}

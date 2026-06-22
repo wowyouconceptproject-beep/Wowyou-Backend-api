@@ -2,6 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.create = create;
 exports.myEvents = myEvents;
+exports.getEvent = getEvent;
 const event_service_1 = require("./event.service");
 async function create(req, res) {
     try {
@@ -24,6 +25,21 @@ async function myEvents(req, res) {
         return res.json({
             success: true,
             events,
+        });
+    }
+    catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error.message,
+        });
+    }
+}
+async function getEvent(req, res) {
+    try {
+        const event = await (0, event_service_1.getEventById)(req.user.userId, String(req.params.id));
+        return res.json({
+            success: true,
+            event,
         });
     }
     catch (error) {

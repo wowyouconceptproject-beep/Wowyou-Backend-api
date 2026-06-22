@@ -2,6 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.createEvent = createEvent;
 exports.getMyEvents = getMyEvents;
+exports.getEventById = getEventById;
 const prisma_1 = require("../../lib/prisma");
 async function createEvent(userId, data) {
     console.log("CREATE EVENT DATA:", data);
@@ -51,4 +52,24 @@ async function getMyEvents(userId) {
             createdAt: "desc",
         },
     });
+}
+async function getEventById(userId, eventId) {
+    const organization = await prisma_1.prisma.organization.findUnique({
+        where: {
+            ownerId: userId,
+        },
+    });
+    if (!organization) {
+        throw new Error("Organization not found");
+    }
+    const event = await prisma_1.prisma.event.findFirst({
+        where: {
+            id: eventId,
+            organizationId: organization.id,
+        },
+    });
+    if (!event) {
+        throw new Error("Event not found");
+    }
+    return event;
 }

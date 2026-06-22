@@ -5,6 +5,7 @@ import { AuthRequest } from "../auth/auth.middleware";
 import {
   createEvent,
   getMyEvents,
+  getEventById,
 } from "./event.service";
 
 export async function create(
@@ -44,6 +45,30 @@ export async function myEvents(
     return res.json({
       success: true,
       events,
+    });
+  } catch (error: any) {
+    return res.status(400).json({
+      success: false,
+      message:
+        error.message,
+    });
+  }
+}
+
+export async function getEvent(
+  req: AuthRequest,
+  res: Response
+) {
+  try {
+    const event =
+  await getEventById(
+    req.user!.userId,
+    String(req.params.id)
+  );
+
+    return res.json({
+      success: true,
+      event,
     });
   } catch (error: any) {
     return res.status(400).json({
