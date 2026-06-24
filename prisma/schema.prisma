@@ -27,6 +27,12 @@ enum VendorStatus {
   REJECTED
 }
 
+enum PurchaseStatus {
+  PENDING
+  PAID
+  FAILED
+}
+
 model User {
   id String @id @default(cuid())
 
@@ -46,6 +52,8 @@ model User {
   updatedAt DateTime @updatedAt
 
   organization Organization?
+
+  purchases TicketPurchase[]
 
   registrations Registration[]
 
@@ -93,6 +101,8 @@ model Event {
   organizationId String
 
   tickets TicketType[]
+
+  purchases TicketPurchase[]
 
   isPublic Boolean @default(true)
 
@@ -151,6 +161,8 @@ model TicketType {
 
   sold Int @default(0)
 
+  purchases TicketPurchase[]
+
   isActive Boolean @default(true)
 
   event Event @relation(fields: [eventId], references: [id])
@@ -183,4 +195,28 @@ model VendorApplication {
   createdAt DateTime @default(now())
 
   event Event @relation(fields: [eventId], references: [id])
+}
+
+model TicketPurchase {
+  id String @id @default(cuid())
+
+  userId String
+
+  eventId String
+
+  ticketTypeId String
+
+  quantity Int
+
+  amount Float
+
+  status PurchaseStatus @default(PENDING)
+
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+
+  event Event @relation(fields: [eventId], references: [id])
+
+  ticket TicketType @relation(fields: [ticketTypeId], references: [id])
 }

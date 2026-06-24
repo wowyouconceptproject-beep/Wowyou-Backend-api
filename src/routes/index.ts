@@ -16,6 +16,9 @@ from "../modules/attendee-profile/attendee-profile.routes";
 import ticketRoutes
 from "../modules/tickets/ticket.routes";
 
+import revenueRoutes
+from "../modules/revenue/revenue.routes";
+
 const router = Router();
 
 router.get("/", (_req, res) => {
@@ -54,5 +57,9 @@ router.use(
   ticketRoutes
 );
 
+router.use(
+  "/revenue",
+  revenueRoutes
+);
 
 export default router;
