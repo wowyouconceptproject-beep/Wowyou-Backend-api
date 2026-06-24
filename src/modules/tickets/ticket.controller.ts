@@ -33,14 +33,17 @@ export async function list(
   res: Response
 ) {
   try {
-    const tickets =
+    const result =
       await getTickets(
         req.params.eventId as string
       );
 
     return res.json({
       success: true,
-      tickets,
+      currency:
+        result.currency,
+      tickets:
+        result.tickets,
     });
   } catch (error: any) {
     return res.status(400).json({

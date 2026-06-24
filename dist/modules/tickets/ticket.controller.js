@@ -20,10 +20,11 @@ async function create(req, res) {
 }
 async function list(req, res) {
     try {
-        const tickets = await (0, ticket_service_1.getTickets)(req.params.eventId);
+        const result = await (0, ticket_service_1.getTickets)(req.params.eventId);
         return res.json({
             success: true,
-            tickets,
+            currency: result.currency,
+            tickets: result.tickets,
         });
     }
     catch (error) {

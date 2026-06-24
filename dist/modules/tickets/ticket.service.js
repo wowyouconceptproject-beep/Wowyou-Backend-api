@@ -14,12 +14,23 @@ async function createTicket(eventId, data) {
     });
 }
 async function getTickets(eventId) {
-    return prisma_1.prisma.ticketType.findMany({
+    const event = await prisma_1.prisma.event.findUnique({
         where: {
-            eventId,
+            id: eventId,
         },
-        orderBy: {
-            createdAt: "desc",
+        include: {
+            tickets: {
+                orderBy: {
+                    createdAt: "desc",
+                },
+            },
         },
     });
+    if (!event) {
+        throw new Error("Event not found");
+    }
+    return {
+        currency: event.currency,
+        tickets: event.tickets,
+    };
 }
