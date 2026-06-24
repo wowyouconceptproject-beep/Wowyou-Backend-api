@@ -33,8 +33,9 @@ async function createEvent(userId, data) {
             description: data.description,
             venue: data.venue,
             capacity: Number(data.capacity),
-            startDate,
-            endDate,
+            currency: data.currency || "USD",
+            startDate: new Date(data.startDate),
+            endDate: new Date(data.endDate),
             organizationId: organization.id,
         },
     });

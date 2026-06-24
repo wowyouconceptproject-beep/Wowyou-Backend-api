@@ -6,8 +6,17 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.createPurchase = createPurchase;
 const stripe_1 = __importDefault(require("stripe"));
 const prisma_1 = require("../../lib/prisma");
-const stripe = new stripe_1.default(process.env.STRIPE_SECRET_KEY);
+function getStripe() {
+    const key = process.env.STRIPE_SECRET_KEY;
+    if (!key) {
+        throw new Error("STRIPE_SECRET_KEY is missing");
+    }
+    return new stripe_1.default(key);
+}
 async function createPurchase(userId, ticketTypeId, quantity) {
+    if (quantity < 1) {
+        throw new Error("Quantity must be at least 1");
+    }
     const ticket = await prisma_1.prisma.ticketType.findUnique({
         where: {
             id: ticketTypeId,
@@ -33,6 +42,7 @@ async function createPurchase(userId, ticketTypeId, quantity) {
             status: "PENDING",
         },
     });
+    const stripe = getStripe();
     const session = await stripe.checkout.sessions.create({
         mode: "payment",
         success_url: `${process.env.FRONTEND_URL}/tickets/success?purchase=${purchase.id}`,
@@ -47,7 +57,8 @@ async function createPurchase(userId, ticketTypeId, quantity) {
             {
                 quantity,
                 price_data: {
-                    currency: "usd",
+                    currency: ticket.event.currency
+                        .toLowerCase(),
                     product_data: {
                         name: ticket.name,
                         description: ticket.event.title,

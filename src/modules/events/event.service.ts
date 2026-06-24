@@ -7,6 +7,7 @@ export async function createEvent(
     description: string;
     venue: string;
     capacity: number;
+    currency?: string;
     startDate: string;
     endDate: string;
   }
@@ -58,20 +59,22 @@ export async function createEvent(
   }
 
   return prisma.event.create({
-    data: {
-      title: data.title,
-      description:
-        data.description,
-      venue: data.venue,
-      capacity: Number(
-        data.capacity
-      ),
-      startDate,
-      endDate,
-      organizationId:
-        organization.id,
-    },
-  });
+  data: {
+    title: data.title,
+    description: data.description,
+    venue: data.venue,
+    capacity: Number(data.capacity),
+
+    currency:
+      data.currency || "USD",
+
+    startDate: new Date(data.startDate),
+    endDate: new Date(data.endDate),
+
+    organizationId:
+      organization.id,
+  },
+});
 }
 
 export async function getMyEvents(

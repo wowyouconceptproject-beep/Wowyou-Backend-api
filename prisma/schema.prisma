@@ -93,6 +93,8 @@ model Event {
 
   capacity Int
 
+  currency       String @default("USD")
+
   startDate DateTime
   endDate   DateTime
 
