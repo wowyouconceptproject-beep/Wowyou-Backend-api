@@ -19,6 +19,9 @@ from "../modules/tickets/ticket.routes";
 import revenueRoutes
 from "../modules/revenue/revenue.routes";
 
+import purchaseRoutes
+from "../modules/purchases/purchase.routes";
+
 const router = Router();
 
 router.get("/", (_req, res) => {
@@ -60,6 +63,11 @@ router.use(
 router.use(
   "/revenue",
   revenueRoutes
+);
+
+router.use(
+  "/purchases",
+  purchaseRoutes
 );
 
 export default router;
