@@ -127,3 +127,39 @@ export async function createPurchase(
       session.url,
   };
 }
+
+export async function getMyTickets(
+  userId: string
+) {
+  return prisma.ticketPurchase.findMany({
+    where: {
+      userId,
+      status: "PAID",
+    },
+    include: {
+      event: {
+        select: {
+          id: true,
+          title: true,
+          venue: true,
+          startDate: true,
+          endDate: true,
+          coverImage: true,
+          currency: true,
+        },
+      },
+
+      ticket: {
+        select: {
+          id: true,
+          name: true,
+          price: true,
+        },
+      },
+    },
+
+    orderBy: {
+      createdAt: "desc",
+    },
+  });
+}
