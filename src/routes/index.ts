@@ -22,6 +22,9 @@ from "../modules/revenue/revenue.routes";
 import purchaseRoutes
 from "../modules/purchases/purchase.routes";
 
+import stripeRoutes
+from "../modules/stripe/stripe.routes";
+
 const router = Router();
 
 router.get("/", (_req, res) => {
@@ -68,6 +71,11 @@ router.use(
 router.use(
   "/purchases",
   purchaseRoutes
+);
+
+router.use(
+  "/stripe",
+  stripeRoutes
 );
 
 export default router;
