@@ -2,6 +2,8 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.getEventPass = getEventPass;
 exports.generateSecurePass = generateSecurePass;
+exports.verifySecurePass = verifySecurePass;
+exports.checkInPass = checkInPass;
 const prisma_1 = require("../../lib/prisma");
 const pass_jwt_1 = require("./pass.jwt");
 async function getEventPass(purchaseId, userId) {
@@ -44,5 +46,77 @@ async function generateSecurePass(purchaseId, userId) {
     });
     return {
         token,
+    };
+}
+const pass_jwt_2 = require("./pass.jwt");
+async function verifySecurePass(token) {
+    const payload = (0, pass_jwt_2.verifyPassToken)(token);
+    const purchase = await prisma_1.prisma.ticketPurchase.findUnique({
+        where: {
+            id: payload.purchaseId,
+        },
+        include: {
+            user: true,
+            event: true,
+            ticket: true,
+        },
+    });
+    if (!purchase) {
+        throw new Error("Pass not found.");
+    }
+    if (purchase.status !==
+        "PAID") {
+        throw new Error("Ticket not paid.");
+    }
+    return {
+        purchase,
+        alreadyCheckedIn: purchase.checkedIn,
+    };
+}
+async function checkInPass(token, organizerId) {
+    const payload = (0, pass_jwt_2.verifyPassToken)(token);
+    const purchase = await prisma_1.prisma.ticketPurchase.findUnique({
+        where: {
+            id: payload.purchaseId,
+        },
+        include: {
+            event: true,
+        },
+    });
+    if (!purchase) {
+        throw new Error("Pass not found.");
+    }
+    if (purchase.status !== "PAID") {
+        throw new Error("Ticket has not been paid.");
+    }
+    if (purchase.checkedIn) {
+        throw new Error("Attendee has already checked in.");
+    }
+    await prisma_1.prisma.$transaction([
+        prisma_1.prisma.ticketPurchase.update({
+            where: {
+                id: purchase.id,
+            },
+            data: {
+                checkedIn: true,
+                checkedInAt: new Date(),
+            },
+        }),
+        prisma_1.prisma.ticketCheckIn.create({
+            data: {
+                purchaseId: purchase.id,
+                checkedInBy: organizerId,
+            },
+        }),
+    ]);
+    const attendance = await prisma_1.prisma.ticketPurchase.count({
+        where: {
+            eventId: purchase.eventId,
+            checkedIn: true,
+        },
+    });
+    return {
+        attendance,
+        purchase,
     };
 }

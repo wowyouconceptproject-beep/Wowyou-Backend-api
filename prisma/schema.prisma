@@ -51,6 +51,8 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  ticketCheckIns TicketCheckIn[]
+
   organization Organization?
 
   purchases TicketPurchase[]
@@ -214,6 +216,8 @@ model TicketPurchase {
 
   stripeSessionId String?
 
+  checkIn TicketCheckIn?
+
   status PurchaseStatus @default(PENDING)
 
   createdAt DateTime @default(now())
@@ -238,4 +242,18 @@ model EventPass {
   createdAt  DateTime @default(now())
 
   purchase TicketPurchase @relation(fields: [purchaseId], references: [id])
+}
+
+model TicketCheckIn {
+  id String @id @default(cuid())
+
+  purchaseId String @unique
+
+  checkedInBy String
+
+  checkedInAt DateTime @default(now())
+
+  purchase TicketPurchase @relation(fields: [purchaseId], references: [id])
+
+  organizer User @relation(fields: [checkedInBy], references: [id])
 }

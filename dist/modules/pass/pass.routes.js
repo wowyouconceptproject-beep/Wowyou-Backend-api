@@ -6,4 +6,6 @@ const pass_controller_1 = require("./pass.controller");
 const router = (0, express_1.Router)();
 router.get("/:purchaseId", auth_middleware_1.auth, pass_controller_1.getPass);
 router.post("/:purchaseId/secure-pass", auth_middleware_1.auth, pass_controller_1.securePass);
+router.post("/verify", auth_middleware_1.auth, pass_controller_1.verifyPass);
+router.post("/check-in", auth_middleware_1.auth, pass_controller_1.checkIn);
 exports.default = router;
