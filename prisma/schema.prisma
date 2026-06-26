@@ -93,7 +93,7 @@ model Event {
 
   capacity Int
 
-  currency       String @default("USD")
+  currency String @default("USD")
 
   startDate DateTime
   endDate   DateTime
@@ -200,27 +200,42 @@ model VendorApplication {
 }
 
 model TicketPurchase {
-  id           String   @id @default(cuid())
+  id String @id @default(cuid())
 
-  userId       String
+  userId String
 
-  eventId      String
+  eventId String
 
   ticketTypeId String
 
-  quantity     Int
+  quantity Int
 
-  amount       Float
+  amount Float
 
   stripeSessionId String?
 
-  status       PurchaseStatus @default(PENDING)
+  status PurchaseStatus @default(PENDING)
 
-  createdAt    DateTime @default(now())
+  createdAt DateTime @default(now())
 
-  user         User @relation(fields: [userId], references: [id])
+  checkedIn Boolean @default(false)
 
-  event        Event @relation(fields: [eventId], references: [id])
+  checkedInAt DateTime?
 
-  ticket       TicketType @relation(fields: [ticketTypeId], references: [id])
+  user User @relation(fields: [userId], references: [id])
+
+  event Event @relation(fields: [eventId], references: [id])
+
+  ticket    TicketType @relation(fields: [ticketTypeId], references: [id])
+  EventPass EventPass?
+}
+
+model EventPass {
+  id         String   @id @default(cuid())
+  passNumber String   @unique
+  purchaseId String   @unique
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+
+  purchase TicketPurchase @relation(fields: [purchaseId], references: [id])
 }
