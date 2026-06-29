@@ -18,3 +18,4 @@ __exportStar(require("./socket"), exports);
 __exportStar(require("./rooms"), exports);
 __exportStar(require("./attendance"), exports);
 __exportStar(require("./notifications"), exports);
+__exportStar(require("./events"), exports);

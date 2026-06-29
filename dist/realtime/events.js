@@ -6,5 +6,4 @@ exports.RealtimeEvents = {
     AttendeeCheckedIn: "attendee.checked_in",
     Notification: "notification",
     Announcement: "announcement",
-    SessionStarted: "session.started",
 };
