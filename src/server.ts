@@ -1,7 +1,11 @@
 import "dotenv/config";
 
+import http from "http";
+
 import app from "./app";
 import routes from "./routes";
+
+import { initializeSocket } from "./realtime/socket";
 
 app.get("/health", (_req, res) => {
   return res.status(200).json({
@@ -17,9 +21,14 @@ const PORT = Number(
   process.env.PORT || 5000
 );
 
-app.listen(PORT, () => {
+const server =
+  http.createServer(app);
+
+initializeSocket(server);
+
+server.listen(PORT, () => {
   console.log(`
-🚀 WowYou Backend API Running
+ WowYou Backend API Running
 
 Environment: ${
     process.env.NODE_ENV ||

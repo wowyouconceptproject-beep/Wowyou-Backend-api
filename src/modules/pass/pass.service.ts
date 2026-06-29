@@ -2,7 +2,13 @@ import { prisma } from "../../lib/prisma";
 
 import {
   generatePassToken,
+  verifyPassToken,
 } from "./pass.jwt";
+
+import {
+  attendanceUpdated,
+  notifyAttendee,
+} from "../../realtime";
 
 export async function getEventPass(
   purchaseId: string,
@@ -13,28 +19,24 @@ export async function getEventPass(
       where: {
         id: purchaseId,
       },
-
       include: {
         user: true,
-
         event: true,
-
         ticket: true,
       },
     });
 
   if (!purchase) {
     throw new Error(
-      "Pass not found"
+      "Pass not found."
     );
   }
 
   if (
-    purchase.userId !==
-    userId
+    purchase.userId !== userId
   ) {
     throw new Error(
-      "Unauthorized"
+      "Unauthorized."
     );
   }
 
@@ -52,8 +54,7 @@ export async function generateSecurePass(
     );
 
   if (
-    purchase.status !==
-    "PAID"
+    purchase.status !== "PAID"
   ) {
     throw new Error(
       "Ticket has not been paid for."
@@ -81,10 +82,8 @@ export async function generateSecurePass(
     generatePassToken({
       purchaseId:
         purchase.id,
-
       eventId:
         purchase.eventId,
-
       userId:
         purchase.userId,
     });
@@ -93,8 +92,6 @@ export async function generateSecurePass(
     token,
   };
 }
-
-import { verifyPassToken } from "./pass.jwt";
 
 export async function verifySecurePass(
   token: string
@@ -111,7 +108,6 @@ export async function verifySecurePass(
       where: {
         id: payload.purchaseId,
       },
-
       include: {
         user: true,
         event: true,
@@ -126,8 +122,7 @@ export async function verifySecurePass(
   }
 
   if (
-    purchase.status !==
-    "PAID"
+    purchase.status !== "PAID"
   ) {
     throw new Error(
       "Ticket not paid."
@@ -155,9 +150,10 @@ export async function checkInPass(
       where: {
         id: payload.purchaseId,
       },
-
       include: {
+        user: true,
         event: true,
+        ticket: true,
       },
     });
 
@@ -190,14 +186,17 @@ export async function checkInPass(
       },
       data: {
         checkedIn: true,
-        checkedInAt: new Date(),
+        checkedInAt:
+          new Date(),
       },
     }),
 
     prisma.ticketCheckIn.create({
       data: {
-        purchaseId: purchase.id,
-        checkedInBy: organizerId,
+        purchaseId:
+          purchase.id,
+        checkedInBy:
+          organizerId,
       },
     }),
   ]);
@@ -205,10 +204,43 @@ export async function checkInPass(
   const attendance =
     await prisma.ticketPurchase.count({
       where: {
-        eventId: purchase.eventId,
+        eventId:
+          purchase.eventId,
         checkedIn: true,
       },
     });
+
+  // Realtime attendance update
+ attendanceUpdated(purchase.eventId, {
+  checkedIn: attendance,
+  purchaseId: purchase.id,
+  attendeeId: purchase.userId,
+  ticketTypeId: purchase.ticketTypeId,
+  checkedInAt: new Date().toISOString(),
+});
+
+  // Notify attendee
+  notifyAttendee(
+    purchase.userId,
+    {
+      type: "CHECK_IN_SUCCESS",
+
+      title:
+        "Welcome!",
+
+      message:
+        "You have successfully checked in.",
+
+      eventId:
+        purchase.eventId,
+
+      purchaseId:
+        purchase.id,
+
+      checkedInAt:
+        new Date().toISOString(),
+    }
+  );
 
   return {
     attendance,

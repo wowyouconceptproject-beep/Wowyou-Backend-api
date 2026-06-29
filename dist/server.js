@@ -4,8 +4,10 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 require("dotenv/config");
+const http_1 = __importDefault(require("http"));
 const app_1 = __importDefault(require("./app"));
 const routes_1 = __importDefault(require("./routes"));
+const socket_1 = require("./realtime/socket");
 app_1.default.get("/health", (_req, res) => {
     return res.status(200).json({
         success: true,
@@ -15,9 +17,11 @@ app_1.default.get("/health", (_req, res) => {
 });
 app_1.default.use(routes_1.default);
 const PORT = Number(process.env.PORT || 5000);
-app_1.default.listen(PORT, () => {
+const server = http_1.default.createServer(app_1.default);
+(0, socket_1.initializeSocket)(server);
+server.listen(PORT, () => {
     console.log(`
-🚀 WowYou Backend API Running
+ WowYou Backend API Running
 
 Environment: ${process.env.NODE_ENV ||
         "development"}

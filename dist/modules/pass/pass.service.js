@@ -6,6 +6,7 @@ exports.verifySecurePass = verifySecurePass;
 exports.checkInPass = checkInPass;
 const prisma_1 = require("../../lib/prisma");
 const pass_jwt_1 = require("./pass.jwt");
+const realtime_1 = require("../../realtime");
 async function getEventPass(purchaseId, userId) {
     const purchase = await prisma_1.prisma.ticketPurchase.findUnique({
         where: {
@@ -18,18 +19,16 @@ async function getEventPass(purchaseId, userId) {
         },
     });
     if (!purchase) {
-        throw new Error("Pass not found");
+        throw new Error("Pass not found.");
     }
-    if (purchase.userId !==
-        userId) {
-        throw new Error("Unauthorized");
+    if (purchase.userId !== userId) {
+        throw new Error("Unauthorized.");
     }
     return purchase;
 }
 async function generateSecurePass(purchaseId, userId) {
     const purchase = await getEventPass(purchaseId, userId);
-    if (purchase.status !==
-        "PAID") {
+    if (purchase.status !== "PAID") {
         throw new Error("Ticket has not been paid for.");
     }
     if (purchase.checkedIn) {
@@ -48,9 +47,8 @@ async function generateSecurePass(purchaseId, userId) {
         token,
     };
 }
-const pass_jwt_2 = require("./pass.jwt");
 async function verifySecurePass(token) {
-    const payload = (0, pass_jwt_2.verifyPassToken)(token);
+    const payload = (0, pass_jwt_1.verifyPassToken)(token);
     const purchase = await prisma_1.prisma.ticketPurchase.findUnique({
         where: {
             id: payload.purchaseId,
@@ -64,8 +62,7 @@ async function verifySecurePass(token) {
     if (!purchase) {
         throw new Error("Pass not found.");
     }
-    if (purchase.status !==
-        "PAID") {
+    if (purchase.status !== "PAID") {
         throw new Error("Ticket not paid.");
     }
     return {
@@ -74,13 +71,15 @@ async function verifySecurePass(token) {
     };
 }
 async function checkInPass(token, organizerId) {
-    const payload = (0, pass_jwt_2.verifyPassToken)(token);
+    const payload = (0, pass_jwt_1.verifyPassToken)(token);
     const purchase = await prisma_1.prisma.ticketPurchase.findUnique({
         where: {
             id: payload.purchaseId,
         },
         include: {
+            user: true,
             event: true,
+            ticket: true,
         },
     });
     if (!purchase) {
@@ -114,6 +113,23 @@ async function checkInPass(token, organizerId) {
             eventId: purchase.eventId,
             checkedIn: true,
         },
+    });
+    // Realtime attendance update
+    (0, realtime_1.attendanceUpdated)(purchase.eventId, {
+        checkedIn: attendance,
+        purchaseId: purchase.id,
+        attendeeId: purchase.userId,
+        ticketTypeId: purchase.ticketTypeId,
+        checkedInAt: new Date().toISOString(),
+    });
+    // Notify attendee
+    (0, realtime_1.notifyAttendee)(purchase.userId, {
+        type: "CHECK_IN_SUCCESS",
+        title: "Welcome!",
+        message: "You have successfully checked in.",
+        eventId: purchase.eventId,
+        purchaseId: purchase.id,
+        checkedInAt: new Date().toISOString(),
     });
     return {
         attendance,
