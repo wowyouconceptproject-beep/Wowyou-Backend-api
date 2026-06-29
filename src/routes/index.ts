@@ -28,6 +28,8 @@ from "../modules/stripe/stripe.routes";
 import passRoutes
 from "../modules/pass/pass.routes";
 
+import operationsRoutes from "../modules/operations/operations.routes";
+
 const router = Router();
 
 router.get("/", (_req, res) => {
@@ -84,6 +86,11 @@ router.use(
 router.use(
   "/passes",
   passRoutes
+);
+
+router.use(
+  "/operations",
+  operationsRoutes
 );
 
 export default router;

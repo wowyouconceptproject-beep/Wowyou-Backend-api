@@ -33,6 +33,14 @@ enum PurchaseStatus {
   FAILED
 }
 
+enum EventStaffRole {
+  OWNER
+  MANAGER
+  CHECK_IN
+  SECURITY
+  VOLUNTEER
+}
+
 model User {
   id String @id @default(cuid())
 
@@ -58,6 +66,12 @@ model User {
   purchases TicketPurchase[]
 
   registrations Registration[]
+
+  deviceTokens DeviceToken[]
+  
+  notifications Notification[]
+
+  staff EventStaff[] @relation("EventStaffMember")
 
   attendeeProfile AttendeeProfile?
 }
@@ -106,7 +120,15 @@ model Event {
 
   tickets TicketType[]
 
+  staff EventStaff[]
+
+  activities EventActivity[]
+
   purchases TicketPurchase[]
+
+  sessions Session[]
+  
+  announcements Announcement[]
 
   isPublic Boolean @default(true)
 
@@ -114,8 +136,9 @@ model Event {
 
   organization Organization @relation(fields: [organizationId], references: [id])
 
-  createdAt         DateTime            @default(now())
-  updatedAt         DateTime            @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   VendorApplication VendorApplication[]
 }
 
@@ -144,6 +167,11 @@ model AttendeeProfile {
   goals  Json?
   skills Json?
 
+  linkedin String?
+  company String?
+  jobTitle String?
+  avatar String?
+
   bio String?
 
   createdAt DateTime @default(now())
@@ -162,6 +190,10 @@ model TicketType {
   price Float
 
   quantity Int
+
+  description String?
+  color String?
+  benefits Json?
 
   sold Int @default(0)
 
@@ -214,6 +246,9 @@ model TicketPurchase {
 
   amount Float
 
+  paymentMethod String?
+  currency String @default("USD")
+
   stripeSessionId String?
 
   checkIn TicketCheckIn?
@@ -240,6 +275,8 @@ model EventPass {
   purchaseId String   @unique
   isActive   Boolean  @default(true)
   createdAt  DateTime @default(now())
+  lastGeneratedAt DateTime?
+  expiresAt DateTime?
 
   purchase TicketPurchase @relation(fields: [purchaseId], references: [id])
 }
@@ -253,7 +290,118 @@ model TicketCheckIn {
 
   checkedInAt DateTime @default(now())
 
+  deviceId String?
+  location String?
+
   purchase TicketPurchase @relation(fields: [purchaseId], references: [id])
 
   organizer User @relation(fields: [checkedInBy], references: [id])
+}
+
+model EventStaff {
+  id         String         @id @default(cuid())
+  eventId    String
+  userId     String
+  role       EventStaffRole @default(OWNER)
+  invitedBy  String?
+  acceptedAt DateTime?
+  createdAt  DateTime       @default(now())
+
+  event Event @relation(fields: [eventId], references: [id])
+
+  isActive Boolean @default(true)
+
+  user User @relation("EventStaffMember", fields: [userId], references: [id])
+
+  @@unique([eventId, userId])
+}
+
+model DeviceToken {
+  id String @id @default(cuid())
+
+  userId String
+
+  token String @unique
+
+  platform String
+
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+}
+
+model Notification {
+  id String @id @default(cuid())
+
+  userId String
+
+  title String
+
+  body String
+
+  read Boolean @default(false)
+
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+}
+
+model Announcement {
+  id String @id @default(cuid())
+
+  eventId String
+
+  title String
+
+  message String
+
+  createdAt DateTime @default(now())
+
+  event Event @relation(fields: [eventId], references: [id])
+}
+
+model Session {
+  id String @id @default(cuid())
+
+  eventId String
+
+  title String
+
+  speaker String?
+
+  venue String?
+
+  startTime DateTime
+
+  endTime DateTime
+
+  event Event @relation(fields: [eventId], references: [id])
+}
+
+model Connection {
+  id String @id @default(cuid())
+
+  requesterId String
+
+  receiverId String
+
+  accepted Boolean @default(false)
+
+  createdAt DateTime @default(now())
+}
+
+model EventActivity {
+  id String @id @default(cuid())
+
+  eventId String
+
+  actorId String?
+
+  type String
+
+  payload Json?
+
+  createdAt DateTime @default(now())
+
+  event Event @relation(fields: [eventId], references: [id])
 }

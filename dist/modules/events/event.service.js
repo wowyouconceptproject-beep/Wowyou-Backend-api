@@ -9,7 +9,6 @@ exports.registerForEvent = registerForEvent;
 exports.getMyRegistrations = getMyRegistrations;
 const prisma_1 = require("../../lib/prisma");
 async function createEvent(userId, data) {
-    console.log("CREATE EVENT DATA:", data);
     const organization = await prisma_1.prisma.organization.findUnique({
         where: {
             ownerId: userId,
@@ -20,24 +19,34 @@ async function createEvent(userId, data) {
     }
     const startDate = new Date(data.startDate);
     const endDate = new Date(data.endDate);
-    console.log("PARSED DATES:", startDate, endDate);
     if (isNaN(startDate.getTime())) {
         throw new Error(`Invalid startDate: ${data.startDate}`);
     }
     if (isNaN(endDate.getTime())) {
         throw new Error(`Invalid endDate: ${data.endDate}`);
     }
-    return prisma_1.prisma.event.create({
-        data: {
-            title: data.title,
-            description: data.description,
-            venue: data.venue,
-            capacity: Number(data.capacity),
-            currency: data.currency || "USD",
-            startDate: new Date(data.startDate),
-            endDate: new Date(data.endDate),
-            organizationId: organization.id,
-        },
+    return prisma_1.prisma.$transaction(async (tx) => {
+        const event = await tx.event.create({
+            data: {
+                title: data.title,
+                description: data.description,
+                venue: data.venue,
+                capacity: Number(data.capacity),
+                currency: data.currency ??
+                    "USD",
+                startDate,
+                endDate,
+                organizationId: organization.id,
+            },
+        });
+        await tx.eventStaff.create({
+            data: {
+                eventId: event.id,
+                userId,
+                role: "OWNER",
+            },
+        });
+        return event;
     });
 }
 async function getMyEvents(userId) {
@@ -72,6 +81,9 @@ async function getEventById(userId, eventId) {
             id: eventId,
             organizationId: organization.id,
         },
+        include: {
+            tickets: true,
+        },
     });
     if (!event) {
         throw new Error("Event not found");
@@ -100,9 +112,7 @@ async function getPublicEvents() {
     return prisma_1.prisma.event.findMany({
         where: {
             status: "PUBLISHED",
-        },
-        orderBy: {
-            startDate: "asc",
+            isPublic: true,
         },
         include: {
             organization: {
@@ -110,8 +120,13 @@ async function getPublicEvents() {
                     id: true,
                     name: true,
                     slug: true,
+                    logo: true,
                 },
             },
+            tickets: true,
+        },
+        orderBy: {
+            startDate: "asc",
         },
     });
 }
@@ -148,7 +163,11 @@ async function getMyRegistrations(userId) {
             userId,
         },
         include: {
-            event: true,
+            event: {
+                include: {
+                    organization: true,
+                },
+            },
         },
         orderBy: {
             createdAt: "desc",

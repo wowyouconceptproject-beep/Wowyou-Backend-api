@@ -12,11 +12,6 @@ export async function createEvent(
     endDate: string;
   }
 ) {
-  console.log(
-    "CREATE EVENT DATA:",
-    data
-  );
-
   const organization =
     await prisma.organization.findUnique({
       where: {
@@ -36,12 +31,6 @@ export async function createEvent(
   const endDate =
     new Date(data.endDate);
 
-  console.log(
-    "PARSED DATES:",
-    startDate,
-    endDate
-  );
-
   if (
     isNaN(startDate.getTime())
   ) {
@@ -58,23 +47,39 @@ export async function createEvent(
     );
   }
 
-  return prisma.event.create({
-  data: {
-    title: data.title,
-    description: data.description,
-    venue: data.venue,
-    capacity: Number(data.capacity),
+  return prisma.$transaction(
+    async (tx) => {
+      const event =
+        await tx.event.create({
+          data: {
+            title: data.title,
+            description:
+              data.description,
+            venue: data.venue,
+            capacity: Number(
+              data.capacity
+            ),
+            currency:
+              data.currency ??
+              "USD",
+            startDate,
+            endDate,
+            organizationId:
+              organization.id,
+          },
+        });
 
-    currency:
-      data.currency || "USD",
+      await tx.eventStaff.create({
+        data: {
+          eventId: event.id,
+          userId,
+          role: "OWNER",
+        },
+      });
 
-    startDate: new Date(data.startDate),
-    endDate: new Date(data.endDate),
-
-    organizationId:
-      organization.id,
-  },
-});
+      return event;
+    }
+  );
 }
 
 export async function getMyEvents(
@@ -126,6 +131,9 @@ export async function getEventById(
         organizationId:
           organization.id,
       },
+      include: {
+        tickets: true,
+      },
     });
 
   if (!event) {
@@ -168,9 +176,7 @@ export async function getPublicEvents() {
   return prisma.event.findMany({
     where: {
       status: "PUBLISHED",
-    },
-    orderBy: {
-      startDate: "asc",
+      isPublic: true,
     },
     include: {
       organization: {
@@ -178,8 +184,13 @@ export async function getPublicEvents() {
           id: true,
           name: true,
           slug: true,
+          logo: true,
         },
       },
+      tickets: true,
+    },
+    orderBy: {
+      startDate: "asc",
     },
   });
 }
@@ -234,7 +245,11 @@ export async function getMyRegistrations(
         userId,
       },
       include: {
-        event: true,
+        event: {
+          include: {
+            organization: true,
+          },
+        },
       },
       orderBy: {
         createdAt: "desc",

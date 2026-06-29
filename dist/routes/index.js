@@ -14,6 +14,7 @@ const revenue_routes_1 = __importDefault(require("../modules/revenue/revenue.rou
 const purchase_routes_1 = __importDefault(require("../modules/purchases/purchase.routes"));
 const stripe_routes_1 = __importDefault(require("../modules/stripe/stripe.routes"));
 const pass_routes_1 = __importDefault(require("../modules/pass/pass.routes"));
+const operations_routes_1 = __importDefault(require("../modules/operations/operations.routes"));
 const router = (0, express_1.Router)();
 router.get("/", (_req, res) => {
     res.json({
@@ -31,4 +32,5 @@ router.use("/revenue", revenue_routes_1.default);
 router.use("/purchases", purchase_routes_1.default);
 router.use("/stripe", stripe_routes_1.default);
 router.use("/passes", pass_routes_1.default);
+router.use("/operations", operations_routes_1.default);
 exports.default = router;
