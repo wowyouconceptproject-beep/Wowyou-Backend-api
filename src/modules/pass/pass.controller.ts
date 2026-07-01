@@ -5,13 +5,7 @@ import { AuthRequest } from "../auth/auth.middleware";
 import {
   generateSecurePass,
   getEventPass,
-} from "./pass.service";
-
-import {
   verifySecurePass,
-} from "./pass.service";
-
-import {
   checkInPass,
 } from "./pass.service";
 
@@ -71,33 +65,28 @@ export async function verifyPass(
         req.body.token
       );
 
+    const purchase =
+      result.purchase;
+
     return res.json({
       success: true,
 
       attendee: {
-        id: result.purchase.user.id,
+        id: purchase.user.id,
 
-        name:
-          `${result.purchase.user.firstName} ${result.purchase.user.lastName}`,
+        name: `${purchase.user.firstName} ${purchase.user.lastName}`,
 
-        email:
-          result.purchase.user.email,
+        email: purchase.user.email,
       },
 
       ticket: {
-        id:
-          result.purchase.ticket.id,
-
-        name:
-          result.purchase.ticket.name,
+        id: purchase.ticket.id,
+        name: purchase.ticket.name,
       },
 
       event: {
-        id:
-          result.purchase.event.id,
-
-        title:
-          result.purchase.event.title,
+        id: purchase.event.id,
+        title: purchase.event.title,
       },
 
       alreadyCheckedIn:
@@ -123,14 +112,24 @@ export async function checkIn(
         req.user!.userId
       );
 
+    const purchase =
+      result.purchase;
+
     return res.json({
       success: true,
 
       attendance:
         result.attendance,
 
-      attendee:
-        `${result.purchase.userId}`,
+      totalTickets:
+        result.totalTickets,
+
+      remaining:
+        result.remaining,
+
+      attendee: {
+        id: purchase.userId,
+      },
 
       message:
         "Attendee checked in successfully.",

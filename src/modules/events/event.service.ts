@@ -69,14 +69,6 @@ export async function createEvent(
           },
         });
 
-      await tx.eventStaff.create({
-        data: {
-          eventId: event.id,
-          userId,
-          role: "OWNER",
-        },
-      });
-
       return event;
     }
   );

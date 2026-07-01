@@ -39,13 +39,6 @@ async function createEvent(userId, data) {
                 organizationId: organization.id,
             },
         });
-        await tx.eventStaff.create({
-            data: {
-                eventId: event.id,
-                userId,
-                role: "OWNER",
-            },
-        });
         return event;
     });
 }

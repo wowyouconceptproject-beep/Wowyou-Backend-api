@@ -1,3 +1,4 @@
+import "./core/events/register-listeners";
 import "dotenv/config";
 
 import http from "http";

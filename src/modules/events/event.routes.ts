@@ -2,6 +2,8 @@ import { Router } from "express";
 
 import { auth } from "../auth/auth.middleware";
 
+import staffRoutes from "./staff.routes";
+
 import {
   create,
   myEvents,
@@ -54,5 +56,5 @@ router.get(
   auth,
   getEvent
 );
-
+router.use("/", staffRoutes);
 export default router;

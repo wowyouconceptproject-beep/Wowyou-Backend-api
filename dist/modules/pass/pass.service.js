@@ -91,10 +91,11 @@ async function checkInPass(token, organizerId) {
     if (purchase.checkedIn) {
         throw new Error("Attendee has already checked in.");
     }
+    const checkedPurchase = purchase;
     await prisma_1.prisma.$transaction([
         prisma_1.prisma.ticketPurchase.update({
             where: {
-                id: purchase.id,
+                id: checkedPurchase.id,
             },
             data: {
                 checkedIn: true,
@@ -103,36 +104,47 @@ async function checkInPass(token, organizerId) {
         }),
         prisma_1.prisma.ticketCheckIn.create({
             data: {
-                purchaseId: purchase.id,
+                purchaseId: checkedPurchase.id,
                 checkedInBy: organizerId,
             },
         }),
     ]);
     const attendance = await prisma_1.prisma.ticketPurchase.count({
         where: {
-            eventId: purchase.eventId,
+            eventId: checkedPurchase.eventId,
             checkedIn: true,
         },
     });
-    // Realtime attendance update
-    (0, realtime_1.attendanceUpdated)(purchase.eventId, {
+    const totalTickets = await prisma_1.prisma.ticketPurchase.count({
+        where: {
+            eventId: checkedPurchase.eventId,
+            status: "PAID",
+        },
+    });
+    (0, realtime_1.attendanceUpdated)(checkedPurchase.eventId, {
         checkedIn: attendance,
-        purchaseId: purchase.id,
-        attendeeId: purchase.userId,
-        ticketTypeId: purchase.ticketTypeId,
+        totalTickets,
+        remaining: totalTickets -
+            attendance,
+        purchaseId: checkedPurchase.id,
+        attendeeId: checkedPurchase.userId,
+        ticketTypeId: checkedPurchase.ticketTypeId,
+        staffId: organizerId,
         checkedInAt: new Date().toISOString(),
     });
-    // Notify attendee
-    (0, realtime_1.notifyAttendee)(purchase.userId, {
+    (0, realtime_1.notifyAttendee)(checkedPurchase.userId, {
         type: "CHECK_IN_SUCCESS",
         title: "Welcome!",
         message: "You have successfully checked in.",
-        eventId: purchase.eventId,
-        purchaseId: purchase.id,
+        eventId: checkedPurchase.eventId,
+        purchaseId: checkedPurchase.id,
         checkedInAt: new Date().toISOString(),
     });
     return {
         attendance,
-        purchase,
+        totalTickets,
+        remaining: totalTickets -
+            attendance,
+        purchase: checkedPurchase,
     };
 }

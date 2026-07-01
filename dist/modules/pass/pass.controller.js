@@ -5,8 +5,6 @@ exports.securePass = securePass;
 exports.verifyPass = verifyPass;
 exports.checkIn = checkIn;
 const pass_service_1 = require("./pass.service");
-const pass_service_2 = require("./pass.service");
-const pass_service_3 = require("./pass.service");
 async function getPass(req, res) {
     try {
         const pass = await (0, pass_service_1.getEventPass)(req.params.purchaseId, req.user.userId);
@@ -39,21 +37,22 @@ async function securePass(req, res) {
 }
 async function verifyPass(req, res) {
     try {
-        const result = await (0, pass_service_2.verifySecurePass)(req.body.token);
+        const result = await (0, pass_service_1.verifySecurePass)(req.body.token);
+        const purchase = result.purchase;
         return res.json({
             success: true,
             attendee: {
-                id: result.purchase.user.id,
-                name: `${result.purchase.user.firstName} ${result.purchase.user.lastName}`,
-                email: result.purchase.user.email,
+                id: purchase.user.id,
+                name: `${purchase.user.firstName} ${purchase.user.lastName}`,
+                email: purchase.user.email,
             },
             ticket: {
-                id: result.purchase.ticket.id,
-                name: result.purchase.ticket.name,
+                id: purchase.ticket.id,
+                name: purchase.ticket.name,
             },
             event: {
-                id: result.purchase.event.id,
-                title: result.purchase.event.title,
+                id: purchase.event.id,
+                title: purchase.event.title,
             },
             alreadyCheckedIn: result.alreadyCheckedIn,
         });
@@ -67,11 +66,16 @@ async function verifyPass(req, res) {
 }
 async function checkIn(req, res) {
     try {
-        const result = await (0, pass_service_3.checkInPass)(req.body.token, req.user.userId);
+        const result = await (0, pass_service_1.checkInPass)(req.body.token, req.user.userId);
+        const purchase = result.purchase;
         return res.json({
             success: true,
             attendance: result.attendance,
-            attendee: `${result.purchase.userId}`,
+            totalTickets: result.totalTickets,
+            remaining: result.remaining,
+            attendee: {
+                id: purchase.userId,
+            },
             message: "Attendee checked in successfully.",
         });
     }

@@ -35,10 +35,25 @@ enum PurchaseStatus {
 
 enum EventStaffRole {
   OWNER
-  MANAGER
+  OPERATIONS
   CHECK_IN
   SECURITY
-  VOLUNTEER
+  STAGE_MANAGER
+  VENDOR_MANAGER
+}
+
+enum StaffPermission {
+  SCAN_QR
+  VERIFY_PASS
+  SEARCH_ATTENDEE
+  VIEW_DASHBOARD
+  VIEW_ACTIVITY
+  SEND_NOTIFICATION
+  SEND_ANNOUNCEMENT
+  MANAGE_STAFF
+  MANAGE_VENDORS
+  VIEW_REPORTS
+  EDIT_EVENT
 }
 
 model User {
@@ -68,10 +83,8 @@ model User {
   registrations Registration[]
 
   deviceTokens DeviceToken[]
-  
-  notifications Notification[]
 
-  staff EventStaff[] @relation("EventStaffMember")
+  notifications Notification[]
 
   attendeeProfile AttendeeProfile?
 }
@@ -127,7 +140,7 @@ model Event {
   purchases TicketPurchase[]
 
   sessions Session[]
-  
+
   announcements Announcement[]
 
   isPublic Boolean @default(true)
@@ -168,9 +181,9 @@ model AttendeeProfile {
   skills Json?
 
   linkedin String?
-  company String?
+  company  String?
   jobTitle String?
-  avatar String?
+  avatar   String?
 
   bio String?
 
@@ -192,8 +205,8 @@ model TicketType {
   quantity Int
 
   description String?
-  color String?
-  benefits Json?
+  color       String?
+  benefits    Json?
 
   sold Int @default(0)
 
@@ -247,7 +260,7 @@ model TicketPurchase {
   amount Float
 
   paymentMethod String?
-  currency String @default("USD")
+  currency      String  @default("USD")
 
   stripeSessionId String?
 
@@ -270,13 +283,13 @@ model TicketPurchase {
 }
 
 model EventPass {
-  id         String   @id @default(cuid())
-  passNumber String   @unique
-  purchaseId String   @unique
-  isActive   Boolean  @default(true)
-  createdAt  DateTime @default(now())
+  id              String    @id @default(cuid())
+  passNumber      String    @unique
+  purchaseId      String    @unique
+  isActive        Boolean   @default(true)
+  createdAt       DateTime  @default(now())
   lastGeneratedAt DateTime?
-  expiresAt DateTime?
+  expiresAt       DateTime?
 
   purchase TicketPurchase @relation(fields: [purchaseId], references: [id])
 }
@@ -288,10 +301,11 @@ model TicketCheckIn {
 
   checkedInBy String
 
-  checkedInAt DateTime @default(now())
+  station String?
 
   deviceId String?
-  location String?
+
+  checkedInAt DateTime @default(now())
 
   purchase TicketPurchase @relation(fields: [purchaseId], references: [id])
 
@@ -299,35 +313,45 @@ model TicketCheckIn {
 }
 
 model EventStaff {
-  id         String         @id @default(cuid())
-  eventId    String
-  userId     String
-  role       EventStaffRole @default(OWNER)
-  invitedBy  String?
-  acceptedAt DateTime?
-  createdAt  DateTime       @default(now())
+  id String @id @default(cuid())
 
-  event Event @relation(fields: [eventId], references: [id])
+  eventId String
+
+  name String
+
+  phone String?
+
+  email String?
+
+  role EventStaffRole
+
+  station String?
+
+  accessCode String @unique
+
+  sessions OperationSession[]
+
+  permissions StaffPermission[]
 
   isActive Boolean @default(true)
 
-  user User @relation("EventStaffMember", fields: [userId], references: [id])
+  isRevoked Boolean @default(false)
 
-  @@unique([eventId, userId])
-}
+  invitedBy String?
 
-model DeviceToken {
-  id String @id @default(cuid())
+  acceptedAt DateTime?
 
-  userId String
+  expiresAt DateTime?
 
-  token String @unique
-
-  platform String
+  lastUsedAt DateTime?
 
   createdAt DateTime @default(now())
 
-  user User @relation(fields: [userId], references: [id])
+  event Event @relation(fields: [eventId], references: [id])
+
+  @@index([eventId])
+  @@index([accessCode])
+  @@index([eventId, isActive])
 }
 
 model Notification {
@@ -340,6 +364,20 @@ model Notification {
   body String
 
   read Boolean @default(false)
+
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+}
+
+model DeviceToken {
+  id String @id @default(cuid())
+
+  userId String
+
+  token String @unique
+
+  platform String
 
   createdAt DateTime @default(now())
 
@@ -404,4 +442,30 @@ model EventActivity {
   createdAt DateTime @default(now())
 
   event Event @relation(fields: [eventId], references: [id])
+}
+
+model OperationSession {
+  id String @id @default(cuid())
+
+  staffId String
+
+  token String @unique
+
+  deviceId String?
+
+  deviceName String?
+
+  ipAddress String?
+
+  startedAt DateTime @default(now())
+
+  lastSeenAt DateTime @updatedAt
+
+  endedAt DateTime?
+
+  isActive Boolean @default(true)
+
+  staff EventStaff @relation(fields: [staffId], references: [id])
+
+  @@index([staffId])
 }

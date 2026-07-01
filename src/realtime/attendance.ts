@@ -4,9 +4,16 @@ import { RealtimeEvents } from "./events";
 
 export interface AttendancePayload {
   checkedIn: number;
+  totalTickets: number;
+  remaining: number;
+
   purchaseId: string;
   attendeeId: string;
   ticketTypeId: string;
+
+  staffId: string;
+  station?: string | null;
+
   checkedInAt: string;
 }
 

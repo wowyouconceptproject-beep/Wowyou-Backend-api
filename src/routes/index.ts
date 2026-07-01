@@ -30,6 +30,8 @@ from "../modules/pass/pass.routes";
 
 import operationsRoutes from "../modules/operations/operations.routes";
 
+import staffRoutes from "../modules/events/staff.routes";
+
 const router = Router();
 
 router.get("/", (_req, res) => {
@@ -91,6 +93,11 @@ router.use(
 router.use(
   "/operations",
   operationsRoutes
+);
+
+router.use(
+  "/staff",
+  staffRoutes
 );
 
 export default router;
