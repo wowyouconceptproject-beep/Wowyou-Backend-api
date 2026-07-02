@@ -7,7 +7,9 @@ exports.publish = publish;
 exports.publicEvents = publicEvents;
 exports.register = register;
 exports.myRegistrations = myRegistrations;
+exports.attendees = attendees;
 const event_service_1 = require("./event.service");
+const attendees_service_1 = require("./attendees.service");
 async function create(req, res) {
     try {
         const event = await (0, event_service_1.createEvent)(req.user.userId, req.body);
@@ -104,6 +106,21 @@ async function myRegistrations(req, res) {
         return res.json({
             success: true,
             events,
+        });
+    }
+    catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error.message,
+        });
+    }
+}
+async function attendees(req, res) {
+    try {
+        const attendees = await (0, attendees_service_1.getEventAttendees)(req.user.userId, req.params.eventId);
+        return res.json({
+            success: true,
+            attendees,
         });
     }
     catch (error) {

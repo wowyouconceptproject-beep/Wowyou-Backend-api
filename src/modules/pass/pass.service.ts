@@ -6,6 +6,11 @@ import {
 } from "./pass.jwt";
 
 import {
+  activityCreated,
+  ActivityType,
+} from "../../realtime";
+
+import {
   attendanceUpdated,
   notifyAttendee,
 } from "../../realtime";
@@ -220,33 +225,53 @@ export async function checkInPass(
       },
     });
 
-  attendanceUpdated(
+attendanceUpdated({
+  eventId: checkedPurchase.eventId,
+
+  checkedIn: attendance,
+
+  totalTickets,
+
+  remaining:
+    totalTickets - attendance,
+
+  purchaseId:
+    checkedPurchase.id,
+
+  attendeeId:
+    checkedPurchase.userId,
+
+  ticketTypeId:
+    checkedPurchase.ticketTypeId,
+
+  staffId:
+    organizerId,
+
+  checkedInAt:
+    new Date().toISOString(),
+});
+
+  activityCreated({
+  type: ActivityType.CHECK_IN,
+
+  eventId:
     checkedPurchase.eventId,
-    {
-      checkedIn: attendance,
 
-      totalTickets,
+  title:
+    "Attendee Checked In",
 
-      remaining:
-        totalTickets -
-        attendance,
+  description:
+    `${checkedPurchase.user.firstName} ${checkedPurchase.user.lastName} checked in.`,
 
-      purchaseId:
-        checkedPurchase.id,
+  staffId:
+    organizerId,
 
-      attendeeId:
-        checkedPurchase.userId,
+  attendeeId:
+    checkedPurchase.userId,
 
-      ticketTypeId:
-        checkedPurchase.ticketTypeId,
-
-      staffId:
-        organizerId,
-
-      checkedInAt:
-        new Date().toISOString(),
-    }
-  );
+  timestamp:
+    new Date().toISOString(),
+});
 
   notifyAttendee(
     checkedPurchase.userId,

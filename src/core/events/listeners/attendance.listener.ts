@@ -27,36 +27,36 @@ eventBus.on(
           },
         });
 
-      attendanceUpdated(
-        payload.eventId,
-        {
+      attendanceUpdated({
+        eventId:
+          payload.eventId,
+
+        checkedIn,
+
+        totalTickets,
+
+        remaining:
+          totalTickets -
           checkedIn,
 
-          totalTickets,
+        purchaseId:
+          payload.purchaseId,
 
-          remaining:
-            totalTickets -
-            checkedIn,
+        attendeeId:
+          payload.attendeeId,
 
-          purchaseId:
-            payload.purchaseId,
+        ticketTypeId:
+          payload.ticketTypeId,
 
-          attendeeId:
-            payload.attendeeId,
+        staffId:
+          payload.staffId,
 
-          ticketTypeId:
-            payload.ticketTypeId,
+        station:
+          payload.station,
 
-          staffId:
-            payload.staffId,
-
-          station:
-            payload.station,
-
-          checkedInAt:
-            payload.checkedInAt,
-        }
-      );
+        checkedInAt:
+          payload.checkedInAt,
+      });
 
       console.log(
         `Attendance Updated: ${checkedIn}/${totalTickets}`

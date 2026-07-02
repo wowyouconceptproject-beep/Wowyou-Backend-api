@@ -12,6 +12,10 @@ import {
   getMyRegistrations,
 } from "./event.service";
 
+import {
+  getEventAttendees,
+} from "./attendees.service";
+
 export async function create(
   req: AuthRequest,
   res: Response
@@ -172,5 +176,32 @@ export async function myRegistrations(
       message:
         error.message,
     });
+  }
+}
+
+export async function attendees(
+  req: AuthRequest,
+  res: Response
+) {
+  try {
+    const attendees =
+      await getEventAttendees(
+        req.user!.userId,
+        req.params.eventId as string
+      );
+
+    return res.json({
+      success: true,
+      attendees,
+    });
+
+  } catch (error: any) {
+
+    return res.status(400).json({
+      success: false,
+      message:
+        error.message,
+    });
+
   }
 }

@@ -1,5 +1,7 @@
 import { prisma } from "../../lib/prisma";
 
+import { staffOffline } from "../../realtime";
+
 export async function heartbeat(
   token: string
 ) {
@@ -16,15 +18,39 @@ export async function heartbeat(
 export async function logout(
   token: string
 ) {
-  return prisma.operationSession.update({
-    where: {
-      token,
-    },
-    data: {
-      isActive: false,
-      endedAt: new Date(),
-    },
-  });
+  const session =
+    await prisma.operationSession.update({
+      where: {
+        token,
+      },
+
+      data: {
+        isActive: false,
+        endedAt: new Date(),
+      },
+
+      include: {
+        staff: true,
+      },
+    });
+
+  if (session.staff) {
+    staffOffline({
+      eventId:
+        session.staff.eventId,
+
+      id:
+        session.staff.id,
+
+      name:
+        session.staff.name,
+
+      role:
+        session.staff.role,
+    });
+  }
+
+  return session;
 }
 
 export async function onlineStaff(

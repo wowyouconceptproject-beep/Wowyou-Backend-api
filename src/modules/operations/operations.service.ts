@@ -2,6 +2,8 @@ import { prisma } from "../../lib/prisma";
 
 import { generateOpsToken } from "./ops.jwt";
 
+import { staffOnline } from "../../realtime";
+
 export async function access(
   accessCode: string,
   device: {
@@ -68,46 +70,59 @@ export async function access(
         staff.permissions,
     });
 
-  await prisma.$transaction(async (tx) => {
-    // End any existing active sessions
-    await tx.operationSession.updateMany({
-      where: {
-        staffId: staff.id,
-        isActive: true,
-      },
-      data: {
-        isActive: false,
-        endedAt: new Date(),
-      },
-    });
+  await prisma.$transaction(
+    async (tx) => {
+      // Close any previous sessions
+      await tx.operationSession.updateMany({
+        where: {
+          staffId: staff.id,
+          isActive: true,
+        },
+        data: {
+          isActive: false,
+          endedAt: new Date(),
+        },
+      });
 
-    // Create new session
-    await tx.operationSession.create({
-      data: {
-        staffId: staff.id,
+      // Create new session
+      await tx.operationSession.create({
+        data: {
+          staffId: staff.id,
 
-        token,
+          token,
 
-        deviceId:
-          device.deviceId,
+          deviceId:
+            device.deviceId,
 
-        deviceName:
-          device.deviceName,
+          deviceName:
+            device.deviceName,
 
-        ipAddress:
-          device.ipAddress,
-      },
-    });
+          ipAddress:
+            device.ipAddress,
+        },
+      });
 
-    // Update last used time
-    await tx.eventStaff.update({
-      where: {
-        id: staff.id,
-      },
-      data: {
-        lastUsedAt: new Date(),
-      },
-    });
+      // Update last activity
+      await tx.eventStaff.update({
+        where: {
+          id: staff.id,
+        },
+        data: {
+          lastUsedAt: new Date(),
+        },
+      });
+    }
+  );
+
+  // Emit realtime event AFTER transaction succeeds
+  staffOnline({
+    eventId: staff.eventId,
+
+    id: staff.id,
+
+    name: staff.name,
+
+    role: staff.role,
   });
 
   return {

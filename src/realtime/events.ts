@@ -1,6 +1,18 @@
 export const RealtimeEvents = {
-  AttendanceUpdated: "attendance.updated",
-  AttendeeCheckedIn: "attendee.checked_in",
-  Notification: "notification",
-  Announcement: "announcement",
+
+  AttendanceUpdated:
+    "attendance.updated",
+
+  ActivityCreated:
+    "activity.created",
+
+  StaffOnline:
+    "staff.online",
+
+  StaffOffline:
+    "staff.offline",
+
+  Notification:
+    "notification",
+
 } as const;

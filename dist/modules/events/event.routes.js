@@ -16,4 +16,5 @@ router.get("/public", event_controller_1.publicEvents);
 router.get("/my-registrations", auth_middleware_1.auth, event_controller_1.myRegistrations);
 router.get("/:id", auth_middleware_1.auth, event_controller_1.getEvent);
 router.use("/", staff_routes_1.default);
+router.get("/:eventId/attendees", auth_middleware_1.auth, event_controller_1.attendees);
 exports.default = router;

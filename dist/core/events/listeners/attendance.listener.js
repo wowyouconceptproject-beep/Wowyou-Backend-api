@@ -18,7 +18,8 @@ event_bus_1.eventBus.on(event_types_1.Events.ATTENDEE_CHECKED_IN, async (payload
                 status: "PAID",
             },
         });
-        (0, attendance_1.attendanceUpdated)(payload.eventId, {
+        (0, attendance_1.attendanceUpdated)({
+            eventId: payload.eventId,
             checkedIn,
             totalTickets,
             remaining: totalTickets -

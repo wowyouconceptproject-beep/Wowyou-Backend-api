@@ -4,6 +4,7 @@ exports.heartbeat = heartbeat;
 exports.logout = logout;
 exports.onlineStaff = onlineStaff;
 const prisma_1 = require("../../lib/prisma");
+const realtime_1 = require("../../realtime");
 async function heartbeat(token) {
     return prisma_1.prisma.operationSession.update({
         where: {
@@ -15,7 +16,7 @@ async function heartbeat(token) {
     });
 }
 async function logout(token) {
-    return prisma_1.prisma.operationSession.update({
+    const session = await prisma_1.prisma.operationSession.update({
         where: {
             token,
         },
@@ -23,7 +24,19 @@ async function logout(token) {
             isActive: false,
             endedAt: new Date(),
         },
+        include: {
+            staff: true,
+        },
     });
+    if (session.staff) {
+        (0, realtime_1.staffOffline)({
+            eventId: session.staff.eventId,
+            id: session.staff.id,
+            name: session.staff.name,
+            role: session.staff.role,
+        });
+    }
+    return session;
 }
 async function onlineStaff(eventId) {
     return prisma_1.prisma.operationSession.findMany({

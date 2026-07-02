@@ -3,6 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.access = access;
 const prisma_1 = require("../../lib/prisma");
 const ops_jwt_1 = require("./ops.jwt");
+const realtime_1 = require("../../realtime");
 async function access(accessCode, device) {
     const staff = await prisma_1.prisma.eventStaff.findUnique({
         where: {
@@ -37,7 +38,7 @@ async function access(accessCode, device) {
         permissions: staff.permissions,
     });
     await prisma_1.prisma.$transaction(async (tx) => {
-        // End any existing active sessions
+        // Close any previous sessions
         await tx.operationSession.updateMany({
             where: {
                 staffId: staff.id,
@@ -58,7 +59,7 @@ async function access(accessCode, device) {
                 ipAddress: device.ipAddress,
             },
         });
-        // Update last used time
+        // Update last activity
         await tx.eventStaff.update({
             where: {
                 id: staff.id,
@@ -67,6 +68,13 @@ async function access(accessCode, device) {
                 lastUsedAt: new Date(),
             },
         });
+    });
+    // Emit realtime event AFTER transaction succeeds
+    (0, realtime_1.staffOnline)({
+        eventId: staff.eventId,
+        id: staff.id,
+        name: staff.name,
+        role: staff.role,
     });
     return {
         token,

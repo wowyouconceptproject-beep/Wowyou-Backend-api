@@ -7,6 +7,7 @@ exports.checkInPass = checkInPass;
 const prisma_1 = require("../../lib/prisma");
 const pass_jwt_1 = require("./pass.jwt");
 const realtime_1 = require("../../realtime");
+const realtime_2 = require("../../realtime");
 async function getEventPass(purchaseId, userId) {
     const purchase = await prisma_1.prisma.ticketPurchase.findUnique({
         where: {
@@ -121,18 +122,27 @@ async function checkInPass(token, organizerId) {
             status: "PAID",
         },
     });
-    (0, realtime_1.attendanceUpdated)(checkedPurchase.eventId, {
+    (0, realtime_2.attendanceUpdated)({
+        eventId: checkedPurchase.eventId,
         checkedIn: attendance,
         totalTickets,
-        remaining: totalTickets -
-            attendance,
+        remaining: totalTickets - attendance,
         purchaseId: checkedPurchase.id,
         attendeeId: checkedPurchase.userId,
         ticketTypeId: checkedPurchase.ticketTypeId,
         staffId: organizerId,
         checkedInAt: new Date().toISOString(),
     });
-    (0, realtime_1.notifyAttendee)(checkedPurchase.userId, {
+    (0, realtime_1.activityCreated)({
+        type: realtime_1.ActivityType.CHECK_IN,
+        eventId: checkedPurchase.eventId,
+        title: "Attendee Checked In",
+        description: `${checkedPurchase.user.firstName} ${checkedPurchase.user.lastName} checked in.`,
+        staffId: organizerId,
+        attendeeId: checkedPurchase.userId,
+        timestamp: new Date().toISOString(),
+    });
+    (0, realtime_2.notifyAttendee)(checkedPurchase.userId, {
         type: "CHECK_IN_SUCCESS",
         title: "Welcome!",
         message: "You have successfully checked in.",

@@ -12,6 +12,7 @@ import {
   publicEvents,
   register,
   myRegistrations,
+  attendees,
 } from "./event.controller";
 
 const router = Router();
@@ -56,5 +57,13 @@ router.get(
   auth,
   getEvent
 );
+
 router.use("/", staffRoutes);
+
+router.get(
+  "/:eventId/attendees",
+  auth,
+  attendees
+);
+
 export default router;
