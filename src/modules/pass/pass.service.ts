@@ -5,15 +5,11 @@ import {
   verifyPassToken,
 } from "./pass.jwt";
 
-import {
-  activityCreated,
-  ActivityType,
-} from "../../realtime";
-
-import {
-  attendanceUpdated,
-  notifyAttendee,
-} from "../../realtime";
+/*
+|--------------------------------------------------------------------------
+| Get Event Pass
+|--------------------------------------------------------------------------
+*/
 
 export async function getEventPass(
   purchaseId: string,
@@ -47,6 +43,12 @@ export async function getEventPass(
 
   return purchase;
 }
+
+/*
+|--------------------------------------------------------------------------
+| Generate Secure Pass
+|--------------------------------------------------------------------------
+*/
 
 export async function generateSecurePass(
   purchaseId: string,
@@ -87,8 +89,10 @@ export async function generateSecurePass(
     generatePassToken({
       purchaseId:
         purchase.id,
+
       eventId:
         purchase.eventId,
+
       userId:
         purchase.userId,
     });
@@ -97,6 +101,12 @@ export async function generateSecurePass(
     token,
   };
 }
+
+/*
+|--------------------------------------------------------------------------
+| Verify Secure Pass
+|--------------------------------------------------------------------------
+*/
 
 export async function verifySecurePass(
   token: string
@@ -117,48 +127,11 @@ export async function verifySecurePass(
         user: true,
         event: true,
         ticket: true,
-      },
-    });
-
-  if (!purchase) {
-    throw new Error(
-      "Pass not found."
-    );
-  }
-
-  if (
-    purchase.status !== "PAID"
-  ) {
-    throw new Error(
-      "Ticket not paid."
-    );
-  }
-
-  return {
-    purchase,
-    alreadyCheckedIn:
-      purchase.checkedIn,
-  };
-}
-
-export async function checkInPass(
-  token: string,
-  organizerId: string
-) {
-  const payload =
-    verifyPassToken(token) as {
-      purchaseId: string;
-    };
-
-  const purchase =
-    await prisma.ticketPurchase.findUnique({
-      where: {
-        id: payload.purchaseId,
-      },
-      include: {
-        user: true,
-        event: true,
-        ticket: true,
+        checkIn: {
+          include: {
+            staff: true,
+          },
+        },
       },
     });
 
@@ -176,133 +149,27 @@ export async function checkInPass(
     );
   }
 
-  if (
-    purchase.checkedIn
-  ) {
-    throw new Error(
-      "Attendee has already checked in."
-    );
-  }
-
-  const checkedPurchase = purchase;
-
-  await prisma.$transaction([
-    prisma.ticketPurchase.update({
-      where: {
-        id: checkedPurchase.id,
-      },
-      data: {
-        checkedIn: true,
-        checkedInAt: new Date(),
-      },
-    }),
-
-    prisma.ticketCheckIn.create({
-      data: {
-        purchaseId:
-          checkedPurchase.id,
-        checkedInBy:
-          organizerId,
-      },
-    }),
-  ]);
-
-  const attendance =
-    await prisma.ticketPurchase.count({
-      where: {
-        eventId:
-          checkedPurchase.eventId,
-        checkedIn: true,
-      },
-    });
-
-  const totalTickets =
-    await prisma.ticketPurchase.count({
-      where: {
-        eventId:
-          checkedPurchase.eventId,
-        status: "PAID",
-      },
-    });
-
-attendanceUpdated({
-  eventId: checkedPurchase.eventId,
-
-  checkedIn: attendance,
-
-  totalTickets,
-
-  remaining:
-    totalTickets - attendance,
-
-  purchaseId:
-    checkedPurchase.id,
-
-  attendeeId:
-    checkedPurchase.userId,
-
-  ticketTypeId:
-    checkedPurchase.ticketTypeId,
-
-  staffId:
-    organizerId,
-
-  checkedInAt:
-    new Date().toISOString(),
-});
-
-  activityCreated({
-  type: ActivityType.CHECK_IN,
-
-  eventId:
-    checkedPurchase.eventId,
-
-  title:
-    "Attendee Checked In",
-
-  description:
-    `${checkedPurchase.user.firstName} ${checkedPurchase.user.lastName} checked in.`,
-
-  staffId:
-    organizerId,
-
-  attendeeId:
-    checkedPurchase.userId,
-
-  timestamp:
-    new Date().toISOString(),
-});
-
-  notifyAttendee(
-    checkedPurchase.userId,
-    {
-      type:
-        "CHECK_IN_SUCCESS",
-
-      title:
-        "Welcome!",
-
-      message:
-        "You have successfully checked in.",
-
-      eventId:
-        checkedPurchase.eventId,
-
-      purchaseId:
-        checkedPurchase.id,
-
-      checkedInAt:
-        new Date().toISOString(),
-    }
-  );
-
   return {
-    attendance,
-    totalTickets,
-    remaining:
-      totalTickets -
-      attendance,
-    purchase:
-      checkedPurchase,
+    purchase,
+
+    alreadyCheckedIn:
+      purchase.checkedIn,
+
+    checkedInBy:
+      purchase.checkIn
+        ? {
+            id:
+              purchase.checkIn.staff.id,
+
+            name:
+              purchase.checkIn.staff.name,
+
+            station:
+              purchase.checkIn.station,
+
+            checkedInAt:
+              purchase.checkIn.checkedInAt,
+          }
+        : null,
   };
 }

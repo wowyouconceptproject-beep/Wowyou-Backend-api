@@ -1,8 +1,27 @@
+import {
+  verifyPassToken,
+} from "../pass/pass.jwt";
+
 import { prisma } from "../../lib/prisma";
 
 import { generateOpsToken } from "./ops.jwt";
 
 import { staffOnline } from "../../realtime";
+
+import {
+  attendanceUpdated,
+  activityCreated,
+  notifyAttendee,
+  ActivityType,
+} from "../../realtime";
+
+import {
+  eventBus,
+} from "../../core/events/event-bus";
+
+import {
+  Events,
+} from "../../core/events/event.types";
 
 export async function access(
   accessCode: string,
@@ -149,4 +168,660 @@ export async function access(
         staff.event.status,
     },
   };
+}
+
+/*
+|--------------------------------------------------------------------------
+| Verify Pass
+|--------------------------------------------------------------------------
+*/
+
+export async function verifyPass(
+  token: string,
+  eventId: string
+) {
+  const payload =
+    verifyPassToken(token) as {
+      purchaseId: string;
+      eventId: string;
+      userId: string;
+    };
+
+  if (payload.eventId !== eventId) {
+    throw new Error(
+      "This pass belongs to another event."
+    );
+  }
+
+  const purchase =
+    await prisma.ticketPurchase.findUnique({
+      where: {
+        id: payload.purchaseId,
+      },
+      include: {
+        user: true,
+        ticket: true,
+        event: true,
+        checkIn: {
+          include: {
+            staff: true,
+          },
+        },
+      },
+    });
+
+  if (!purchase) {
+    throw new Error(
+      "Pass not found."
+    );
+  }
+
+  if (purchase.status !== "PAID") {
+    throw new Error(
+      "Ticket has not been paid."
+    );
+  }
+
+  return {
+    purchase,
+
+    alreadyCheckedIn:
+      purchase.checkedIn,
+
+    checkedInBy:
+      purchase.checkIn
+        ? {
+            id:
+              purchase.checkIn.staff.id,
+
+            name:
+              purchase.checkIn.staff.name,
+
+            station:
+              purchase.checkIn.station,
+
+            checkedInAt:
+              purchase.checkIn.checkedInAt,
+          }
+        : null,
+  };
+}
+
+/*
+|--------------------------------------------------------------------------
+| Complete Check In (Private)
+|--------------------------------------------------------------------------
+*/
+
+async function completeCheckIn(
+  purchaseId: string,
+  staff: {
+    id: string;
+    eventId: string;
+    station?: string | null;
+  }
+) {
+  const purchase =
+    await prisma.ticketPurchase.findUnique({
+      where: {
+        id: purchaseId,
+      },
+      include: {
+        user: true,
+        ticket: true,
+        event: true,
+      },
+    });
+
+  if (!purchase) {
+    throw new Error(
+      "Purchase not found."
+    );
+  }
+
+  if (purchase.eventId !== staff.eventId) {
+    throw new Error(
+      "Invalid event."
+    );
+  }
+
+  if (purchase.status !== "PAID") {
+    throw new Error(
+      "Ticket has not been paid."
+    );
+  }
+
+  if (purchase.checkedIn) {
+    throw new Error(
+      "Attendee has already checked in."
+    );
+  }
+
+  const now = new Date();
+
+  await prisma.$transaction([
+    prisma.ticketPurchase.update({
+      where: {
+        id: purchase.id,
+      },
+      data: {
+        checkedIn: true,
+        checkedInAt: now,
+      },
+    }),
+
+    prisma.ticketCheckIn.create({
+      data: {
+        purchaseId:
+          purchase.id,
+
+        checkedInBy:
+          staff.id,
+
+        station:
+          staff.station,
+      },
+    }),
+
+    prisma.eventActivity.create({
+      data: {
+        eventId:
+          purchase.eventId,
+
+        actorId:
+          staff.id,
+
+        attendeeId:
+          purchase.userId,
+
+        purchaseId:
+          purchase.id,
+
+        ticketTypeId:
+          purchase.ticketTypeId,
+
+        station:
+          staff.station,
+
+        type:
+          "CHECK_IN",
+
+        title:
+          "Attendee Checked In",
+
+        description:
+          `${purchase.user.firstName} ${purchase.user.lastName} checked in.`,
+      },
+    }),
+  ]);
+
+  const checkedIn =
+    await prisma.ticketPurchase.count({
+      where: {
+        eventId:
+          purchase.eventId,
+        checkedIn: true,
+      },
+    });
+
+  const totalTickets =
+    await prisma.ticketPurchase.count({
+      where: {
+        eventId:
+          purchase.eventId,
+        status: "PAID",
+      },
+    });
+
+  attendanceUpdated({
+    eventId:
+      purchase.eventId,
+
+    checkedIn,
+
+    totalTickets,
+
+    remaining:
+      totalTickets -
+      checkedIn,
+
+    purchaseId:
+      purchase.id,
+
+    attendeeId:
+      purchase.userId,
+
+    ticketTypeId:
+      purchase.ticketTypeId,
+
+    staffId:
+      staff.id,
+
+    checkedInAt:
+      now.toISOString(),
+  });
+
+  activityCreated({
+    type:
+      ActivityType.CHECK_IN,
+
+    eventId:
+      purchase.eventId,
+
+    title:
+      "Attendee Checked In",
+
+    description:
+      `${purchase.user.firstName} ${purchase.user.lastName} checked in.`,
+
+    staffId:
+      staff.id,
+
+    attendeeId:
+      purchase.userId,
+
+    timestamp:
+      now.toISOString(),
+  });
+
+  notifyAttendee(
+    purchase.userId,
+    {
+      type:
+        "CHECK_IN_SUCCESS",
+
+      title:
+        "Welcome!",
+
+      message:
+        "You have successfully checked in.",
+
+      eventId:
+        purchase.eventId,
+
+      purchaseId:
+        purchase.id,
+
+      checkedInAt:
+        now.toISOString(),
+    }
+  );
+
+  eventBus.emit(
+    Events.ATTENDEE_CHECKED_IN,
+    {
+      eventId:
+        purchase.eventId,
+
+      purchaseId:
+        purchase.id,
+
+      attendeeId:
+        purchase.userId,
+
+      ticketTypeId:
+        purchase.ticketTypeId,
+
+      staffId:
+        staff.id,
+
+      station:
+        staff.station,
+
+      attendance:
+        checkedIn,
+
+      checkedInAt:
+        now,
+    }
+  );
+
+  return {
+    success: true,
+
+    attendance:
+      checkedIn,
+
+    totalTickets,
+
+    remaining:
+      totalTickets -
+      checkedIn,
+
+    attendee: {
+      id:
+        purchase.user.id,
+
+      firstName:
+        purchase.user.firstName,
+
+      lastName:
+        purchase.user.lastName,
+
+      email:
+        purchase.user.email,
+    },
+
+    ticket: {
+      id:
+        purchase.ticket.id,
+
+      name:
+        purchase.ticket.name,
+
+      price:
+        purchase.ticket.price,
+    },
+
+    event: {
+      id:
+        purchase.event.id,
+
+      title:
+        purchase.event.title,
+
+      currency:
+        purchase.event.currency,
+    },
+  };
+}
+
+/*
+|--------------------------------------------------------------------------
+| QR Check In
+|--------------------------------------------------------------------------
+*/
+
+export async function checkIn(
+  token: string,
+  staff: {
+    id: string;
+    eventId: string;
+    station?: string | null;
+  }
+) {
+  const payload =
+    verifyPassToken(token) as {
+      purchaseId: string;
+      eventId: string;
+    };
+
+  if (payload.eventId !== staff.eventId) {
+    throw new Error(
+      "This ticket belongs to another event."
+    );
+  }
+
+  return completeCheckIn(
+    payload.purchaseId,
+    staff
+  );
+}
+
+/*
+|--------------------------------------------------------------------------
+| Manual Check In
+|--------------------------------------------------------------------------
+*/
+
+export async function manualCheckIn(
+  purchaseId: string,
+  staff: {
+    id: string;
+    eventId: string;
+    station?: string | null;
+  }
+) {
+  return completeCheckIn(
+    purchaseId,
+    staff
+  );
+}
+
+/*
+|--------------------------------------------------------------------------
+| Operations Dashboard
+|--------------------------------------------------------------------------
+*/
+
+export async function dashboard(
+  eventId: string
+) {
+  const [
+    event,
+    checkedIn,
+    totalTickets,
+    onlineStaff,
+    recentActivity,
+  ] = await Promise.all([
+
+    prisma.event.findUnique({
+      where: {
+        id: eventId,
+      },
+      select: {
+        id: true,
+        title: true,
+        venue: true,
+        coverImage: true,
+        capacity: true,
+        currency: true,
+        startDate: true,
+        endDate: true,
+        status: true,
+      },
+    }),
+
+    prisma.ticketPurchase.count({
+      where: {
+        eventId,
+        checkedIn: true,
+      },
+    }),
+
+    prisma.ticketPurchase.count({
+      where: {
+        eventId,
+        status: "PAID",
+      },
+    }),
+
+    prisma.operationSession.count({
+      where: {
+        isActive: true,
+        staff: {
+          eventId,
+        },
+      },
+    }),
+
+    prisma.eventActivity.findMany({
+      where: {
+        eventId,
+      },
+
+      orderBy: {
+        createdAt: "desc",
+      },
+
+      take: 20,
+    }),
+  ]);
+
+  if (!event) {
+    throw new Error(
+      "Event not found."
+    );
+  }
+
+  return {
+    event,
+
+    attendance: {
+      checkedIn,
+
+      totalTickets,
+
+      remaining:
+        Math.max(
+          totalTickets -
+            checkedIn,
+          0
+        ),
+
+      capacity:
+        event.capacity,
+    },
+
+    onlineStaff,
+
+    recentActivity,
+  };
+}
+
+/*
+|--------------------------------------------------------------------------
+| Undo Check In
+|--------------------------------------------------------------------------
+*/
+
+export async function undoCheckIn(
+  purchaseId: string,
+  staff: {
+    id: string;
+    eventId: string;
+  }
+) {
+  const purchase =
+    await prisma.ticketPurchase.findUnique({
+      where: {
+        id: purchaseId,
+      },
+    });
+
+  if (!purchase) {
+    throw new Error(
+      "Purchase not found."
+    );
+  }
+
+  if (
+    purchase.eventId !==
+    staff.eventId
+  ) {
+    throw new Error(
+      "Invalid event."
+    );
+  }
+
+  if (!purchase.checkedIn) {
+    throw new Error(
+      "Attendee has not checked in."
+    );
+  }
+
+  await prisma.$transaction([
+    prisma.ticketPurchase.update({
+      where: {
+        id: purchase.id,
+      },
+      data: {
+        checkedIn: false,
+        checkedInAt: null,
+      },
+    }),
+
+    prisma.ticketCheckIn.delete({
+      where: {
+        purchaseId:
+          purchase.id,
+      },
+    }),
+
+    prisma.eventActivity.create({
+      data: {
+        eventId:
+          purchase.eventId,
+
+        actorId:
+          staff.id,
+
+        attendeeId:
+          purchase.userId,
+
+        purchaseId:
+          purchase.id,
+
+        ticketTypeId:
+          purchase.ticketTypeId,
+
+        type:
+          "UNDO_CHECK_IN",
+
+        title:
+          "Check In Reversed",
+
+        description:
+          "Attendee check-in was reversed.",
+      },
+    }),
+  ]);
+
+  return {
+    success: true,
+  };
+}
+
+/*
+|--------------------------------------------------------------------------
+| Search Attendee
+|--------------------------------------------------------------------------
+*/
+
+export async function searchAttendee(
+  eventId: string,
+  query: string
+) {
+  return prisma.ticketPurchase.findMany({
+    where: {
+      eventId,
+
+      status: "PAID",
+
+      OR: [
+        {
+          user: {
+            firstName: {
+              contains: query,
+              mode: "insensitive",
+            },
+          },
+        },
+        {
+          user: {
+            lastName: {
+              contains: query,
+              mode: "insensitive",
+            },
+          },
+        },
+        {
+          user: {
+            email: {
+              contains: query,
+              mode: "insensitive",
+            },
+          },
+        },
+      ],
+    },
+
+    include: {
+      user: true,
+      ticket: true,
+      checkIn: true,
+    },
+
+    take: 20,
+  });
 }

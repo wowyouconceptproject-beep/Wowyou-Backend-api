@@ -3,13 +3,14 @@ import { Request, Response } from "express";
 import { OpsRequest } from "./ops.middleware";
 
 import {
-  access,
-} from "./operations.service";
-
-import {
   heartbeat,
   logout,
 } from "./session.service";
+
+import {
+  access,
+  dashboard,
+} from "./operations.service";
 
 /*
 |--------------------------------------------------------------------------
@@ -147,5 +148,38 @@ export async function signOut(
       message:
         error.message,
     });
+  }
+}
+
+/*
+|--------------------------------------------------------------------------
+| Dashboard
+|--------------------------------------------------------------------------
+*/
+
+export async function getDashboard(
+  req: OpsRequest,
+  res: Response
+) {
+  try {
+
+    const data =
+      await dashboard(
+        req.staff!.eventId
+      );
+
+    return res.json({
+      success: true,
+      dashboard: data,
+    });
+
+  } catch (error: any) {
+
+    return res.status(400).json({
+      success: false,
+      message:
+        error.message,
+    });
+
   }
 }

@@ -4,8 +4,9 @@ exports.login = login;
 exports.me = me;
 exports.keepAlive = keepAlive;
 exports.signOut = signOut;
-const operations_service_1 = require("./operations.service");
+exports.getDashboard = getDashboard;
 const session_service_1 = require("./session.service");
+const operations_service_1 = require("./operations.service");
 /*
 |--------------------------------------------------------------------------
 | Organizer Ops Login
@@ -95,6 +96,26 @@ async function signOut(req, res) {
         return res.json({
             success: true,
             message: "Logged out successfully.",
+        });
+    }
+    catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error.message,
+        });
+    }
+}
+/*
+|--------------------------------------------------------------------------
+| Dashboard
+|--------------------------------------------------------------------------
+*/
+async function getDashboard(req, res) {
+    try {
+        const data = await (0, operations_service_1.dashboard)(req.staff.eventId);
+        return res.json({
+            success: true,
+            dashboard: data,
         });
     }
     catch (error) {

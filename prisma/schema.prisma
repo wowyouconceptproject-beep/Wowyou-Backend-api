@@ -274,6 +274,8 @@ model TicketPurchase {
 
   checkedInAt DateTime?
 
+  activities EventActivity[]
+
   user User @relation(fields: [userId], references: [id])
 
   event Event @relation(fields: [eventId], references: [id])
@@ -309,7 +311,12 @@ model TicketCheckIn {
 
   purchase TicketPurchase @relation(fields: [purchaseId], references: [id])
 
-  organizer User @relation(fields: [checkedInBy], references: [id])
+  staff  EventStaff @relation(fields: [checkedInBy], references: [id])
+  User   User?      @relation(fields: [userId], references: [id])
+  userId String?
+
+  @@index([checkedInBy])
+  @@index([checkedInAt])
 }
 
 model EventStaff {
@@ -326,6 +333,8 @@ model EventStaff {
   role EventStaffRole
 
   station String?
+
+  checkIns TicketCheckIn[]
 
   accessCode String @unique
 
@@ -435,13 +444,31 @@ model EventActivity {
 
   actorId String?
 
+  attendeeId String?
+
+  purchaseId String?
+
+  ticketTypeId String?
+
+  station String?
+
   type String
+
+  title String
+
+  description String
 
   payload Json?
 
   createdAt DateTime @default(now())
 
-  event Event @relation(fields: [eventId], references: [id])
+  event            Event           @relation(fields: [eventId], references: [id])
+  TicketPurchase   TicketPurchase? @relation(fields: [ticketPurchaseId], references: [id])
+  ticketPurchaseId String?
+
+  @@index([eventId])
+  @@index([eventId, createdAt])
+  @@index([actorId])
 }
 
 model OperationSession {

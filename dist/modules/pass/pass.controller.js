@@ -3,8 +3,12 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.getPass = getPass;
 exports.securePass = securePass;
 exports.verifyPass = verifyPass;
-exports.checkIn = checkIn;
 const pass_service_1 = require("./pass.service");
+/*
+|--------------------------------------------------------------------------
+| Get Pass
+|--------------------------------------------------------------------------
+*/
 async function getPass(req, res) {
     try {
         const pass = await (0, pass_service_1.getEventPass)(req.params.purchaseId, req.user.userId);
@@ -20,6 +24,11 @@ async function getPass(req, res) {
         });
     }
 }
+/*
+|--------------------------------------------------------------------------
+| Generate Secure Pass
+|--------------------------------------------------------------------------
+*/
 async function securePass(req, res) {
     try {
         const result = await (0, pass_service_1.generateSecurePass)(req.params.purchaseId, req.user.userId);
@@ -35,6 +44,11 @@ async function securePass(req, res) {
         });
     }
 }
+/*
+|--------------------------------------------------------------------------
+| Verify Pass
+|--------------------------------------------------------------------------
+*/
 async function verifyPass(req, res) {
     try {
         const result = await (0, pass_service_1.verifySecurePass)(req.body.token);
@@ -55,28 +69,7 @@ async function verifyPass(req, res) {
                 title: purchase.event.title,
             },
             alreadyCheckedIn: result.alreadyCheckedIn,
-        });
-    }
-    catch (error) {
-        return res.status(400).json({
-            success: false,
-            message: error.message,
-        });
-    }
-}
-async function checkIn(req, res) {
-    try {
-        const result = await (0, pass_service_1.checkInPass)(req.body.token, req.user.userId);
-        const purchase = result.purchase;
-        return res.json({
-            success: true,
-            attendance: result.attendance,
-            totalTickets: result.totalTickets,
-            remaining: result.remaining,
-            attendee: {
-                id: purchase.userId,
-            },
-            message: "Attendee checked in successfully.",
+            checkedInBy: result.checkedInBy,
         });
     }
     catch (error) {

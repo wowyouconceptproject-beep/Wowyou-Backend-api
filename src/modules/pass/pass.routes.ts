@@ -6,11 +6,15 @@ import {
   getPass,
   securePass,
   verifyPass,
-  checkIn,
 } from "./pass.controller";
 
-const router =
-  Router();
+const router = Router();
+
+/*
+|--------------------------------------------------------------------------
+| Event Pass
+|--------------------------------------------------------------------------
+*/
 
 router.get(
   "/:purchaseId",
@@ -28,12 +32,6 @@ router.post(
   "/verify",
   auth,
   verifyPass
-);
-
-router.post(
-  "/check-in",
-  auth,
-  checkIn
 );
 
 export default router;

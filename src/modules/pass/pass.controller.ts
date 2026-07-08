@@ -6,8 +6,13 @@ import {
   generateSecurePass,
   getEventPass,
   verifySecurePass,
-  checkInPass,
 } from "./pass.service";
+
+/*
+|--------------------------------------------------------------------------
+| Get Pass
+|--------------------------------------------------------------------------
+*/
 
 export async function getPass(
   req: AuthRequest,
@@ -32,6 +37,12 @@ export async function getPass(
   }
 }
 
+/*
+|--------------------------------------------------------------------------
+| Generate Secure Pass
+|--------------------------------------------------------------------------
+*/
+
 export async function securePass(
   req: AuthRequest,
   res: Response
@@ -55,6 +66,12 @@ export async function securePass(
   }
 }
 
+/*
+|--------------------------------------------------------------------------
+| Verify Pass
+|--------------------------------------------------------------------------
+*/
+
 export async function verifyPass(
   req: AuthRequest,
   res: Response
@@ -73,9 +90,7 @@ export async function verifyPass(
 
       attendee: {
         id: purchase.user.id,
-
         name: `${purchase.user.firstName} ${purchase.user.lastName}`,
-
         email: purchase.user.email,
       },
 
@@ -91,54 +106,18 @@ export async function verifyPass(
 
       alreadyCheckedIn:
         result.alreadyCheckedIn,
+
+      checkedInBy:
+        result.checkedInBy,
     });
+
   } catch (error: any) {
+
     return res.status(400).json({
       success: false,
       message:
         error.message,
     });
-  }
-}
 
-export async function checkIn(
-  req: AuthRequest,
-  res: Response
-) {
-  try {
-    const result =
-      await checkInPass(
-        req.body.token,
-        req.user!.userId
-      );
-
-    const purchase =
-      result.purchase;
-
-    return res.json({
-      success: true,
-
-      attendance:
-        result.attendance,
-
-      totalTickets:
-        result.totalTickets,
-
-      remaining:
-        result.remaining,
-
-      attendee: {
-        id: purchase.userId,
-      },
-
-      message:
-        "Attendee checked in successfully.",
-    });
-  } catch (error: any) {
-    return res.status(400).json({
-      success: false,
-      message:
-        error.message,
-    });
   }
 }

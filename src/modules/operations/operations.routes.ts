@@ -19,6 +19,14 @@ import {
   Permissions,
 } from "./operations.permissions";
 
+import {
+  getDashboard,
+} from "./operations.controller";
+
+import {
+  activity,
+} from "./activity.controller";
+
 const router = Router();
 
 /*
@@ -83,6 +91,12 @@ router.post(
   // scanController.search
 );
 
+router.get(
+  "/dashboard",
+  opsAuth,
+  getDashboard
+);
+
 /*
 |--------------------------------------------------------------------------
 | Activity
@@ -94,8 +108,8 @@ router.get(
   opsAuth,
   requirePermission(
     Permissions.VIEW_ACTIVITY
-  )
-  // activityController.list
+  ),
+  activity
 );
 
 /*
