@@ -7,6 +7,7 @@ const permission_middleware_1 = require("./permission.middleware");
 const operations_permissions_1 = require("./operations.permissions");
 const operations_controller_2 = require("./operations.controller");
 const activity_controller_1 = require("./activity.controller");
+const operations_controller_3 = require("./operations.controller");
 const router = (0, express_1.Router)();
 /*
 |--------------------------------------------------------------------------
@@ -22,9 +23,7 @@ router.post("/logout", ops_middleware_1.opsAuth, operations_controller_1.signOut
 | Scanner
 |--------------------------------------------------------------------------
 */
-router.post("/scan", ops_middleware_1.opsAuth, (0, permission_middleware_1.requirePermission)(operations_permissions_1.Permissions.SCAN_QR)
-// scanController.scan
-);
+router.post("/scan", ops_middleware_1.opsAuth, (0, permission_middleware_1.requirePermission)(operations_permissions_1.Permissions.SCAN_QR), operations_controller_3.scan);
 router.post("/manual-checkin", ops_middleware_1.opsAuth, (0, permission_middleware_1.requirePermission)(operations_permissions_1.Permissions.MANUAL_CHECK_IN)
 // scanController.manualCheckIn
 );

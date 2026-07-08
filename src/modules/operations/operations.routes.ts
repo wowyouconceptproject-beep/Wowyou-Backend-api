@@ -27,6 +27,10 @@ import {
   activity,
 } from "./activity.controller";
 
+import {
+  scan,
+} from "./operations.controller";
+
 const router = Router();
 
 /*
@@ -69,8 +73,8 @@ router.post(
   opsAuth,
   requirePermission(
     Permissions.SCAN_QR
-  )
-  // scanController.scan
+  ),
+  scan
 );
 
 router.post(

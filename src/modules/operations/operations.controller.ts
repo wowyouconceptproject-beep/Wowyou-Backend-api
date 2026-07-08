@@ -10,6 +10,11 @@ import {
 import {
   access,
   dashboard,
+  verifyPass,
+  checkIn,
+  manualCheckIn,
+  searchAttendee,
+  undoCheckIn,
 } from "./operations.service";
 
 /*
@@ -172,6 +177,59 @@ export async function getDashboard(
       success: true,
       dashboard: data,
     });
+
+  } catch (error: any) {
+
+    return res.status(400).json({
+      success: false,
+      message:
+        error.message,
+    });
+
+  }
+}
+
+/*
+|--------------------------------------------------------------------------
+| Scan QR Pass
+|--------------------------------------------------------------------------
+*/
+
+export async function scan(
+  req: OpsRequest,
+  res: Response
+) {
+  try {
+
+    const { token } =
+      req.body as {
+        token: string;
+      };
+
+    if (!token) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "QR token is required.",
+      });
+    }
+
+    const result =
+      await checkIn(
+        token,
+        {
+          id:
+            req.staff!.id,
+
+          eventId:
+            req.staff!.eventId,
+
+          station:
+            req.staff!.station,
+        }
+      );
+
+    return res.json(result);
 
   } catch (error: any) {
 

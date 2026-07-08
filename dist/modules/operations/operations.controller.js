@@ -5,6 +5,7 @@ exports.me = me;
 exports.keepAlive = keepAlive;
 exports.signOut = signOut;
 exports.getDashboard = getDashboard;
+exports.scan = scan;
 const session_service_1 = require("./session.service");
 const operations_service_1 = require("./operations.service");
 /*
@@ -117,6 +118,34 @@ async function getDashboard(req, res) {
             success: true,
             dashboard: data,
         });
+    }
+    catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error.message,
+        });
+    }
+}
+/*
+|--------------------------------------------------------------------------
+| Scan QR Pass
+|--------------------------------------------------------------------------
+*/
+async function scan(req, res) {
+    try {
+        const { token } = req.body;
+        if (!token) {
+            return res.status(400).json({
+                success: false,
+                message: "QR token is required.",
+            });
+        }
+        const result = await (0, operations_service_1.checkIn)(token, {
+            id: req.staff.id,
+            eventId: req.staff.eventId,
+            station: req.staff.station,
+        });
+        return res.json(result);
     }
     catch (error) {
         return res.status(400).json({
