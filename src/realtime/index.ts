@@ -11,3 +11,5 @@ export * from "./events";
 export * from "./activity";
 
 export * from "./staff";
+
+export * from "./announcement";

@@ -21,3 +21,4 @@ __exportStar(require("./notifications"), exports);
 __exportStar(require("./events"), exports);
 __exportStar(require("./activity"), exports);
 __exportStar(require("./staff"), exports);
+__exportStar(require("./announcement"), exports);

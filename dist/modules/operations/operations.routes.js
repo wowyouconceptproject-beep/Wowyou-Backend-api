@@ -1,4 +1,7 @@
 "use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
 const operations_controller_1 = require("./operations.controller");
@@ -8,6 +11,7 @@ const operations_permissions_1 = require("./operations.permissions");
 const operations_controller_2 = require("./operations.controller");
 const activity_controller_1 = require("./activity.controller");
 const operations_controller_3 = require("./operations.controller");
+const announcement_routes_1 = __importDefault(require("./announcement.routes"));
 const router = (0, express_1.Router)();
 /*
 |--------------------------------------------------------------------------
@@ -45,4 +49,5 @@ router.get("/activity", ops_middleware_1.opsAuth, (0, permission_middleware_1.re
 router.post("/announcement", ops_middleware_1.opsAuth, (0, permission_middleware_1.requirePermission)(operations_permissions_1.Permissions.SEND_ANNOUNCEMENT)
 // announcementController.create
 );
+router.use("/announcements", announcement_routes_1.default);
 exports.default = router;

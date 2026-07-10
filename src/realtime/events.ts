@@ -6,6 +6,15 @@ export const RealtimeEvents = {
   ActivityCreated:
     "activity.created",
 
+  AnnouncementCreated:
+    "announcement.created",
+
+  AnnouncementUpdated:
+    "announcement.updated",
+
+  AnnouncementDeleted:
+    "announcement.deleted",
+
   StaffOnline:
     "staff.online",
 

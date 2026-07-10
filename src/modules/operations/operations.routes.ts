@@ -31,6 +31,9 @@ import {
   scan,
 } from "./operations.controller";
 
+import announcementRoutes
+  from "./announcement.routes";
+
 const router = Router();
 
 /*
@@ -129,6 +132,11 @@ router.post(
     Permissions.SEND_ANNOUNCEMENT
   )
   // announcementController.create
+);
+
+router.use(
+  "/announcements",
+  announcementRoutes
 );
 
 export default router;
