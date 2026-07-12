@@ -1,5 +1,11 @@
 import { prisma } from "../../lib/prisma";
 
+/*
+|--------------------------------------------------------------------------
+| List Activity
+|--------------------------------------------------------------------------
+*/
+
 export async function listActivity(
   eventId: string,
   limit = 50

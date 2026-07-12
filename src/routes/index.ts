@@ -32,6 +32,8 @@ import operationsRoutes from "../modules/operations/operations.routes";
 
 import staffRoutes from "../modules/events/staff.routes";
 
+import vendorRoutes from "../modules/vendor/vendor.routes";
+
 const router = Router();
 
 router.get("/", (_req, res) => {
@@ -99,5 +101,11 @@ router.use(
   "/staff",
   staffRoutes
 );
+
+router.use(
+  "/vendors",
+  vendorRoutes,
+);
+
 
 export default router;

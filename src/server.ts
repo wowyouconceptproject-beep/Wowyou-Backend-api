@@ -8,6 +8,8 @@ import routes from "./routes";
 
 import { initializeSocket } from "./realtime/socket";
 
+import discoveryRoutes from "./modules/discovery/discovery.routes";
+
 app.get("/health", (_req, res) => {
   return res.status(200).json({
     success: true,
@@ -17,6 +19,11 @@ app.get("/health", (_req, res) => {
 });
 
 app.use(routes);
+
+app.use(
+  "/discovery",
+  discoveryRoutes,
+);
 
 const PORT = Number(
   process.env.PORT || 5000

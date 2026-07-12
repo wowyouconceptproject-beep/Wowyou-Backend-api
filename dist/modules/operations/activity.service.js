@@ -2,6 +2,11 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.listActivity = listActivity;
 const prisma_1 = require("../../lib/prisma");
+/*
+|--------------------------------------------------------------------------
+| List Activity
+|--------------------------------------------------------------------------
+*/
 async function listActivity(eventId, limit = 50) {
     const activities = await prisma_1.prisma.eventActivity.findMany({
         where: {

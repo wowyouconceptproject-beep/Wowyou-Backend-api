@@ -10,4 +10,6 @@ exports.RealtimeEvents = {
     StaffOnline: "staff.online",
     StaffOffline: "staff.offline",
     Notification: "notification",
+    VendorApplicationCreated: "vendor.application.created",
+    VendorApplicationUpdated: "vendor.application.updated",
 };

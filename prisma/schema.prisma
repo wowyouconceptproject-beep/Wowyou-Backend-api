@@ -77,6 +77,28 @@ enum StaffPermission {
   EDIT_EVENT
 }
 
+enum EventCategory {
+  BUSINESS
+  TECHNOLOGY
+  STARTUP
+  MUSIC
+  CONCERT
+  COMEDY
+  CHURCH
+  CONFERENCE
+  SPORTS
+  FESTIVAL
+  EXHIBITION
+  EDUCATION
+  FOOD
+  FASHION
+  HEALTH
+  FAMILY
+  CHARITY
+  GOVERNMENT
+  OTHER
+}
+
 model User {
   id String @id @default(cuid())
 
@@ -144,6 +166,26 @@ model Event {
   capacity Int
 
   currency String @default("USD")
+
+  category EventCategory?
+
+  featuredImage String?
+
+  views Int @default(0)
+
+  wishlistCount Int @default(0)
+
+  shareCount Int @default(0)
+
+  homepageScore Float @default(0)
+
+  featuredUntil DateTime?
+
+  vendorApplicationsOpen Boolean @default(false)
+
+  vendorApplicationDeadline DateTime?
+
+  maxVendorSlots Int?
 
   startDate DateTime
   endDate   DateTime
@@ -246,6 +288,9 @@ model VendorApplication {
 
   eventId String
 
+  // Future-proof: nullable for now until Vendor accounts exist
+  vendorId String?
+
   businessName String
 
   category String
@@ -260,11 +305,24 @@ model VendorApplication {
 
   boothSize String?
 
+  message String?
+
   status VendorStatus @default(PENDING)
+
+  reviewedAt DateTime?
+
+  approvedAt DateTime?
+
+  rejectedAt DateTime?
 
   createdAt DateTime @default(now())
 
   event Event @relation(fields: [eventId], references: [id])
+
+  @@index([eventId])
+  @@index([status])
+  @@index([email])
+  @@index([vendorId])
 }
 
 model TicketPurchase {

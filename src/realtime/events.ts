@@ -1,5 +1,4 @@
 export const RealtimeEvents = {
-
   AttendanceUpdated:
     "attendance.updated",
 
@@ -24,4 +23,12 @@ export const RealtimeEvents = {
   Notification:
     "notification",
 
+  VendorApplicationCreated:
+    "vendor.application.created",
+
+  VendorApplicationUpdated:
+    "vendor.application.updated",
 } as const;
+
+export type RealtimeEvent =
+  (typeof RealtimeEvents)[keyof typeof RealtimeEvents];
