@@ -17,9 +17,35 @@ export async function listActivity(
       },
 
       include: {
-        TicketPurchase: {
+        purchase: {
           select: {
             id: true,
+          },
+        },
+
+        ticketType: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+
+        actor: {
+          select: {
+            id: true,
+            name: true,
+            role: true,
+          },
+        },
+
+        attendee: {
+          include: {
+            user: {
+              select: {
+                firstName: true,
+                lastName: true,
+              },
+            },
           },
         },
       },
@@ -31,36 +57,35 @@ export async function listActivity(
       take: limit,
     });
 
-  return activities.map(
-    (activity) => ({
-      id: activity.id,
+  return activities.map((activity) => ({
+    id: activity.id,
 
-      type:
-        activity.type,
+    type: activity.type,
 
-      title:
-        activity.title,
+    title: activity.title,
 
-      description:
-        activity.description,
+    description: activity.description,
 
-      actorId:
-        activity.actorId,
+    actorId: activity.actorId,
 
-      attendeeId:
-        activity.attendeeId,
+    actorName: activity.actor?.name ?? null,
 
-      purchaseId:
-        activity.purchaseId,
+    actorRole: activity.actor?.role ?? null,
 
-      ticketTypeId:
-        activity.ticketTypeId,
+    attendeeId: activity.attendeeId,
 
-      station:
-        activity.station,
+    attendeeName: activity.attendee
+      ? `${activity.attendee.user.firstName} ${activity.attendee.user.lastName}`
+      : null,
 
-      createdAt:
-        activity.createdAt,
-    }),
-  );
+    purchaseId: activity.purchaseId,
+
+    ticketTypeId: activity.ticketTypeId,
+
+    ticketTypeName: activity.ticketType?.name ?? null,
+
+    station: activity.station,
+
+    createdAt: activity.createdAt,
+  }));
 }

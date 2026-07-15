@@ -705,33 +705,43 @@ model Connection {
 model EventActivity {
   id String @id @default(cuid())
 
+  /*
+  |--------------------------------------------------------------------------
+  | Parent
+  |--------------------------------------------------------------------------
+  */
+
   eventId String
 
-  /**
-   * |--------------------------------------------------------------------------
-   * | Relationships
-   * |--------------------------------------------------------------------------
-   */
+  event Event @relation(fields: [eventId], references: [id])
+
+  /*
+  |--------------------------------------------------------------------------
+  | Relationships
+  |--------------------------------------------------------------------------
+  */
 
   actorId String?
-  actor   EventStaff? @relation(fields: [actorId], references: [id])
+
+  actor EventStaff? @relation(fields: [actorId], references: [id])
 
   attendeeId String?
-  attendee   Attendee? @relation(fields: [attendeeId], references: [id])
+
+  attendee Attendee? @relation(fields: [attendeeId], references: [id])
 
   purchaseId String?
-  purchase   TicketPurchase? @relation(fields: [purchaseId], references: [id])
+
+  purchase TicketPurchase? @relation(fields: [purchaseId], references: [id])
 
   ticketTypeId String?
-  ticketType   TicketType? @relation(fields: [ticketTypeId], references: [id])
 
-  /**
-   * |--------------------------------------------------------------------------
-   * | Metadata
-   * |--------------------------------------------------------------------------
-   */
+  ticketType TicketType? @relation(fields: [ticketTypeId], references: [id])
 
-  station String?
+  /*
+  |--------------------------------------------------------------------------
+  | Activity
+  |--------------------------------------------------------------------------
+  */
 
   type String
 
@@ -739,24 +749,30 @@ model EventActivity {
 
   description String
 
+  station String?
+
   payload Json?
+
+  /*
+  |--------------------------------------------------------------------------
+  | Metadata
+  |--------------------------------------------------------------------------
+  */
 
   createdAt DateTime @default(now())
 
-  /**
-   * |--------------------------------------------------------------------------
-   * | Parent
-   * |--------------------------------------------------------------------------
-   */
-
-  event Event @relation(fields: [eventId], references: [id])
-
   @@index([eventId])
+
   @@index([eventId, createdAt])
+
   @@index([actorId])
+
   @@index([attendeeId])
+
   @@index([purchaseId])
+
   @@index([ticketTypeId])
+
   @@index([type])
 }
 
