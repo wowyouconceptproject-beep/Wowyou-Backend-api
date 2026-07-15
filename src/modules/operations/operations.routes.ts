@@ -5,6 +5,8 @@ import {
   me,
   keepAlive,
   signOut,
+  getDashboard,
+  scan,
 } from "./operations.controller";
 
 import {
@@ -19,21 +21,6 @@ import {
   Permissions,
 } from "./operations.permissions";
 
-import {
-  getDashboard,
-} from "./operations.controller";
-
-import {
-  activity,
-} from "./activity.controller";
-
-import {
-  scan,
-} from "./operations.controller";
-
-import announcementRoutes
-  from "./announcement.routes";
-
 const router = Router();
 
 /*
@@ -44,25 +31,25 @@ const router = Router();
 
 router.post(
   "/access",
-  login
+  login,
 );
 
 router.get(
   "/me",
   opsAuth,
-  me
+  me,
 );
 
 router.post(
   "/heartbeat",
   opsAuth,
-  keepAlive
+  keepAlive,
 );
 
 router.post(
   "/logout",
   opsAuth,
-  signOut
+  signOut,
 );
 
 /*
@@ -75,68 +62,33 @@ router.post(
   "/scan",
   opsAuth,
   requirePermission(
-    Permissions.SCAN_QR
+    Permissions.SCAN_QR,
   ),
-  scan
+  scan,
 );
 
 router.post(
   "/manual-checkin",
   opsAuth,
   requirePermission(
-    Permissions.MANUAL_CHECK_IN
-  )
-  // scanController.manualCheckIn
+    Permissions.MANUAL_CHECK_IN,
+  ),
+  // manualCheckIn
 );
 
 router.post(
   "/search",
   opsAuth,
   requirePermission(
-    Permissions.SEARCH_ATTENDEE
-  )
-  // scanController.search
+    Permissions.SEARCH_ATTENDEE,
+  ),
+  // searchAttendee
 );
 
 router.get(
   "/dashboard",
   opsAuth,
-  getDashboard
-);
-
-/*
-|--------------------------------------------------------------------------
-| Activity
-|--------------------------------------------------------------------------
-*/
-
-router.get(
-  "/activity",
-  opsAuth,
-  requirePermission(
-    Permissions.VIEW_ACTIVITY
-  ),
-  activity
-);
-
-/*
-|--------------------------------------------------------------------------
-| Announcements
-|--------------------------------------------------------------------------
-*/
-
-router.post(
-  "/announcement",
-  opsAuth,
-  requirePermission(
-    Permissions.SEND_ANNOUNCEMENT
-  )
-  // announcementController.create
-);
-
-router.use(
-  "/announcements",
-  announcementRoutes
+  getDashboard,
 );
 
 export default router;

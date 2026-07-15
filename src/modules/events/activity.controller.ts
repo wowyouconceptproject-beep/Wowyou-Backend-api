@@ -1,6 +1,7 @@
-import { Response } from "express";
-
-import { OpsRequest } from "./ops.middleware";
+import {
+  Request,
+  Response,
+} from "express";
 
 import {
   listActivity,
@@ -13,10 +14,20 @@ import {
 */
 
 export async function activity(
-  req: OpsRequest,
-  res: Response
+  req: Request,
+  res: Response,
 ) {
   try {
+    const eventId =
+  String(req.params.eventId);
+
+    if (!eventId) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Event ID is required.",
+      });
+    }
 
     const limit =
       Number(req.query.limit) ||
@@ -24,8 +35,8 @@ export async function activity(
 
     const result =
       await listActivity(
-        req.staff!.eventId,
-        limit
+        eventId,
+        limit,
       );
 
     return res.json({

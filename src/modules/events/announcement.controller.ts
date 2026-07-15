@@ -1,6 +1,10 @@
-import { Response } from "express";
+import {
+  Response,
+} from "express";
 
-import { OpsRequest } from "./ops.middleware";
+import {
+  AuthRequest,
+} from "../auth/auth.middleware";
 
 import {
   listAnnouncements,
@@ -11,38 +15,61 @@ import {
 
 /*
 |--------------------------------------------------------------------------
+| Resolve Event
+|--------------------------------------------------------------------------
+*/
+
+function resolveEventId(
+  req: AuthRequest,
+) {
+  return req.params.eventId as string;
+}
+
+/*
+|--------------------------------------------------------------------------
 | List Announcements
 |--------------------------------------------------------------------------
 */
 
 export async function announcements(
-  req: OpsRequest,
-  res: Response
+  req: AuthRequest,
+  res: Response,
 ) {
   try {
+    const eventId =
+      resolveEventId(req);
+
+    if (!eventId) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Event ID is required.",
+      });
+    }
+
     const limit =
       Number(req.query.limit) ||
       50;
 
     const result =
       await listAnnouncements(
-        req.staff!.eventId,
-        limit
+        eventId,
+        limit,
       );
 
     return res.json({
       success: true,
-
-      announcements:
-        result,
+      announcements: result,
     });
+
   } catch (error: any) {
+
     return res.status(400).json({
       success: false,
-
       message:
         error.message,
     });
+
   }
 }
 
@@ -53,16 +80,36 @@ export async function announcements(
 */
 
 export async function create(
-  req: OpsRequest,
-  res: Response
+  req: AuthRequest,
+  res: Response,
 ) {
   try {
+    const eventId =
+      resolveEventId(req);
+
+    if (!eventId) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Event ID is required.",
+      });
+    }
+
+    if (!req.user) {
+      return res.status(401).json({
+        success: false,
+        message:
+          "Unauthorized.",
+      });
+    }
+
     const result =
       await createAnnouncement(
-        req.staff!.eventId,
+        eventId,
 
         {
-          id: req.staff!.id,
+          id:
+            req.user.userId,
         },
 
         {
@@ -87,25 +134,25 @@ export async function create(
           expiresAt:
             req.body.expiresAt
               ? new Date(
-                  req.body.expiresAt
+                  req.body.expiresAt,
                 )
               : null,
-        }
+        },
       );
 
     return res.status(201).json({
       success: true,
-
-      announcement:
-        result,
+      announcement: result,
     });
+
   } catch (error: any) {
+
     return res.status(400).json({
       success: false,
-
       message:
         error.message,
     });
+
   }
 }
 
@@ -116,34 +163,43 @@ export async function create(
 */
 
 export async function pin(
-  req: OpsRequest,
-  res: Response
+  req: AuthRequest,
+  res: Response,
 ) {
   try {
+    const eventId =
+      resolveEventId(req);
+
+    if (!eventId) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Event ID is required.",
+      });
+    }
+
     const result =
       await pinAnnouncement(
-        req.staff!.eventId,
-
+        eventId,
         req.params.id as string,
-
         Boolean(
-          req.body.isPinned
-        )
+          req.body.isPinned,
+        ),
       );
 
     return res.json({
       success: true,
-
-      announcement:
-        result,
+      announcement: result,
     });
+
   } catch (error: any) {
+
     return res.status(400).json({
       success: false,
-
       message:
         error.message,
     });
+
   }
 }
 
@@ -154,26 +210,38 @@ export async function pin(
 */
 
 export async function remove(
-  req: OpsRequest,
-  res: Response
+  req: AuthRequest,
+  res: Response,
 ) {
   try {
+    const eventId =
+      resolveEventId(req);
+
+    if (!eventId) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Event ID is required.",
+      });
+    }
+
     const result =
       await deleteAnnouncement(
-        req.staff!.eventId,
-
-        req.params.id as string
+        eventId,
+        req.params.id as string,
       );
 
     return res.json(
-      result
+      result,
     );
+
   } catch (error: any) {
+
     return res.status(400).json({
       success: false,
-
       message:
         error.message,
     });
+
   }
 }

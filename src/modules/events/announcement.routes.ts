@@ -1,8 +1,6 @@
 import { Router } from "express";
 
-import {
-  opsAuth,
-} from "./ops.middleware";
+import { auth } from "../auth/auth.middleware";
 
 import {
   announcements,
@@ -11,8 +9,7 @@ import {
   remove,
 } from "./announcement.controller";
 
-const router =
-  Router();
+const router = Router();
 
 /*
 |--------------------------------------------------------------------------
@@ -21,9 +18,9 @@ const router =
 */
 
 router.get(
-  "/",
-  opsAuth,
-  announcements
+  "/:eventId/announcements",
+  auth,
+  announcements,
 );
 
 /*
@@ -33,9 +30,9 @@ router.get(
 */
 
 router.post(
-  "/",
-  opsAuth,
-  create
+  "/:eventId/announcements",
+  auth,
+  create,
 );
 
 /*
@@ -45,9 +42,9 @@ router.post(
 */
 
 router.patch(
-  "/:id/pin",
-  opsAuth,
-  pin
+  "/:eventId/announcements/:id/pin",
+  auth,
+  pin,
 );
 
 /*
@@ -57,9 +54,9 @@ router.patch(
 */
 
 router.delete(
-  "/:id",
-  opsAuth,
-  remove
+  "/:eventId/announcements/:id",
+  auth,
+  remove,
 );
 
 export default router;

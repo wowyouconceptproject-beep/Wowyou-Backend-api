@@ -8,12 +8,20 @@ import { prisma } from "../../lib/prisma";
 
 export async function listActivity(
   eventId: string,
-  limit = 50
+  limit = 50,
 ) {
   const activities =
     await prisma.eventActivity.findMany({
       where: {
         eventId,
+      },
+
+      include: {
+        TicketPurchase: {
+          select: {
+            id: true,
+          },
+        },
       },
 
       orderBy: {
@@ -27,9 +35,11 @@ export async function listActivity(
     (activity) => ({
       id: activity.id,
 
-      type: activity.type,
+      type:
+        activity.type,
 
-      title: activity.title,
+      title:
+        activity.title,
 
       description:
         activity.description,
@@ -51,6 +61,6 @@ export async function listActivity(
 
       createdAt:
         activity.createdAt,
-    })
+    }),
   );
 }

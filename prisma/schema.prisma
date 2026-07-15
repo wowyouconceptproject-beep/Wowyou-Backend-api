@@ -14,6 +14,13 @@ enum UserRole {
   ATTENDEE
 }
 
+enum AttendeeStatus {
+  REGISTERED
+  CHECKED_IN
+  CHECKED_OUT
+  CANCELLED
+}
+
 enum EventStatus {
   DRAFT
   PUBLISHED
@@ -117,19 +124,39 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  ticketCheckIns TicketCheckIn[]
+  /**
+   * |--------------------------------------------------------------------------
+   * | Organization
+   * |--------------------------------------------------------------------------
+   */
 
   organization Organization?
 
-  purchases TicketPurchase[]
+  /**
+   * |--------------------------------------------------------------------------
+   * | Attendee
+   * |--------------------------------------------------------------------------
+   */
+
+  attendeeProfile AttendeeProfile?
+
+  attendees Attendee[]
 
   registrations Registration[]
+
+  purchases TicketPurchase[]
+
+  ticketCheckIns TicketCheckIn[]
+
+  /**
+   * |--------------------------------------------------------------------------
+   * | Notifications
+   * |--------------------------------------------------------------------------
+   */
 
   deviceTokens DeviceToken[]
 
   notifications Notification[]
-
-  attendeeProfile AttendeeProfile?
 }
 
 model Organization {
@@ -156,20 +183,41 @@ model Organization {
 model Event {
   id String @id @default(cuid())
 
-  title       String
+  /**
+   * |--------------------------------------------------------------------------
+   * | Basic Information
+   * |--------------------------------------------------------------------------
+   */
+
+  title String
+
   description String
 
   venue String
 
   coverImage String?
 
+  featuredImage String?
+
+  category EventCategory?
+
   capacity Int
 
   currency String @default("USD")
 
-  category EventCategory?
+  startDate DateTime
 
-  featuredImage String?
+  endDate DateTime
+
+  status EventStatus @default(DRAFT)
+
+  isPublic Boolean @default(true)
+
+  /**
+   * |--------------------------------------------------------------------------
+   * | Discovery
+   * |--------------------------------------------------------------------------
+   */
 
   views Int @default(0)
 
@@ -181,41 +229,61 @@ model Event {
 
   featuredUntil DateTime?
 
+  /**
+   * |--------------------------------------------------------------------------
+   * | Vendor Marketplace
+   * |--------------------------------------------------------------------------
+   */
+
   vendorApplicationsOpen Boolean @default(false)
 
   vendorApplicationDeadline DateTime?
 
   maxVendorSlots Int?
 
-  startDate DateTime
-  endDate   DateTime
-
-  status EventStatus @default(DRAFT)
+  /**
+   * |--------------------------------------------------------------------------
+   * | Ownership
+   * |--------------------------------------------------------------------------
+   */
 
   organizationId String
 
+  organization Organization @relation(fields: [organizationId], references: [id])
+
+  /**
+   * |--------------------------------------------------------------------------
+   * | Event Data
+   * |--------------------------------------------------------------------------
+   */
+
   tickets TicketType[]
+
+  attendees Attendee[]
+
+  purchases TicketPurchase[]
+
+  registrations Registration[]
 
   staff EventStaff[]
 
   activities EventActivity[]
 
-  purchases TicketPurchase[]
+  announcements Announcement[]
 
   sessions Session[]
 
-  announcements Announcement[]
+  vendorApplications VendorApplication[]
 
-  isPublic Boolean @default(true)
-
-  registrations Registration[]
-
-  organization Organization @relation(fields: [organizationId], references: [id])
+  /**
+   * |--------------------------------------------------------------------------
+   * | Metadata
+   * |--------------------------------------------------------------------------
+   */
 
   createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
 
-  VendorApplication VendorApplication[]
+  updatedAt DateTime @updatedAt
 }
 
 model Registration {
@@ -237,21 +305,51 @@ model AttendeeProfile {
 
   userId String @unique
 
-  profession String?
-  industry   String?
+  /**
+   * |--------------------------------------------------------------------------
+   * | Professional Information
+   * |--------------------------------------------------------------------------
+   */
 
-  goals  Json?
+  profession String?
+
+  industry String?
+
+  company String?
+
+  jobTitle String?
+
+  /**
+   * |--------------------------------------------------------------------------
+   * | Networking
+   * |--------------------------------------------------------------------------
+   */
+
+  goals Json?
+
   skills Json?
 
   linkedin String?
-  company  String?
-  jobTitle String?
-  avatar   String?
+
+  avatar String?
 
   bio String?
 
+  /**
+   * |--------------------------------------------------------------------------
+   * | Metadata
+   * |--------------------------------------------------------------------------
+   */
+
   createdAt DateTime @default(now())
+
   updatedAt DateTime @updatedAt
+
+  /**
+   * |--------------------------------------------------------------------------
+   * | Relations
+   * |--------------------------------------------------------------------------
+   */
 
   user User @relation(fields: [userId], references: [id])
 }
@@ -259,28 +357,64 @@ model AttendeeProfile {
 model TicketType {
   id String @id @default(cuid())
 
+  /**
+   * |--------------------------------------------------------------------------
+   * | Parent
+   * |--------------------------------------------------------------------------
+   */
+
   eventId String
 
+  event Event @relation(fields: [eventId], references: [id])
+
+  /**
+   * |--------------------------------------------------------------------------
+   * | Ticket Information
+   * |--------------------------------------------------------------------------
+   */
+
   name String
+
+  description String?
+
+  color String?
+
+  benefits Json?
+
+  /**
+   * |--------------------------------------------------------------------------
+   * | Pricing
+   * |--------------------------------------------------------------------------
+   */
 
   price Float
 
   quantity Int
 
-  description String?
-  color       String?
-  benefits    Json?
-
   sold Int @default(0)
-
-  purchases TicketPurchase[]
 
   isActive Boolean @default(true)
 
-  event Event @relation(fields: [eventId], references: [id])
+  /**
+   * |--------------------------------------------------------------------------
+   * | Relations
+   * |--------------------------------------------------------------------------
+   */
+
+  attendees Attendee[]
+
+  purchases TicketPurchase[]
+
+  /**
+   * |--------------------------------------------------------------------------
+   * | Metadata
+   * |--------------------------------------------------------------------------
+   */
 
   createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+
+  updatedAt     DateTime        @updatedAt
+  EventActivity EventActivity[]
 }
 
 model VendorApplication {
@@ -328,39 +462,73 @@ model VendorApplication {
 model TicketPurchase {
   id String @id @default(cuid())
 
+  /**
+   * |--------------------------------------------------------------------------
+   * | Ownership
+   * |--------------------------------------------------------------------------
+   */
+
   userId String
 
   eventId String
 
   ticketTypeId String
 
+  /**
+   * |--------------------------------------------------------------------------
+   * | Purchase
+   * |--------------------------------------------------------------------------
+   */
+
   quantity Int
 
   amount Float
 
+  currency String @default("USD")
+
   paymentMethod String?
-  currency      String  @default("USD")
 
   stripeSessionId String?
 
-  checkIn TicketCheckIn?
-
   status PurchaseStatus @default(PENDING)
 
-  createdAt DateTime @default(now())
+  /**
+   * |--------------------------------------------------------------------------
+   * | Check-In
+   * |--------------------------------------------------------------------------
+   */
 
   checkedIn Boolean @default(false)
 
   checkedInAt DateTime?
 
-  activities EventActivity[]
+  /**
+   * |--------------------------------------------------------------------------
+   * | Relations
+   * |--------------------------------------------------------------------------
+   */
 
   user User @relation(fields: [userId], references: [id])
 
   event Event @relation(fields: [eventId], references: [id])
 
-  ticket    TicketType @relation(fields: [ticketTypeId], references: [id])
+  ticket TicketType @relation(fields: [ticketTypeId], references: [id])
+
+  attendees Attendee[]
+
+  checkIn TicketCheckIn?
+
+  activities EventActivity[]
+
   EventPass EventPass?
+
+  /**
+   * |--------------------------------------------------------------------------
+   * | Metadata
+   * |--------------------------------------------------------------------------
+   */
+
+  createdAt DateTime @default(now())
 }
 
 model EventPass {
@@ -435,8 +603,9 @@ model EventStaff {
 
   createdAt DateTime @default(now())
 
-  event        Event          @relation(fields: [eventId], references: [id])
-  Announcement Announcement[]
+  event         Event           @relation(fields: [eventId], references: [id])
+  Announcement  Announcement[]
+  EventActivity EventActivity[]
 
   @@index([eventId])
   @@index([accessCode])
@@ -538,13 +707,29 @@ model EventActivity {
 
   eventId String
 
+  /**
+   * |--------------------------------------------------------------------------
+   * | Relationships
+   * |--------------------------------------------------------------------------
+   */
+
   actorId String?
+  actor   EventStaff? @relation(fields: [actorId], references: [id])
 
   attendeeId String?
+  attendee   Attendee? @relation(fields: [attendeeId], references: [id])
 
   purchaseId String?
+  purchase   TicketPurchase? @relation(fields: [purchaseId], references: [id])
 
   ticketTypeId String?
+  ticketType   TicketType? @relation(fields: [ticketTypeId], references: [id])
+
+  /**
+   * |--------------------------------------------------------------------------
+   * | Metadata
+   * |--------------------------------------------------------------------------
+   */
 
   station String?
 
@@ -558,13 +743,21 @@ model EventActivity {
 
   createdAt DateTime @default(now())
 
-  event            Event           @relation(fields: [eventId], references: [id])
-  TicketPurchase   TicketPurchase? @relation(fields: [ticketPurchaseId], references: [id])
-  ticketPurchaseId String?
+  /**
+   * |--------------------------------------------------------------------------
+   * | Parent
+   * |--------------------------------------------------------------------------
+   */
+
+  event Event @relation(fields: [eventId], references: [id])
 
   @@index([eventId])
   @@index([eventId, createdAt])
   @@index([actorId])
+  @@index([attendeeId])
+  @@index([purchaseId])
+  @@index([ticketTypeId])
+  @@index([type])
 }
 
 model OperationSession {
@@ -591,4 +784,86 @@ model OperationSession {
   staff EventStaff @relation(fields: [staffId], references: [id])
 
   @@index([staffId])
+}
+
+model Attendee {
+  id String @id @default(cuid())
+
+  /**
+   * |--------------------------------------------------------------------------
+   * | Relationships
+   * |--------------------------------------------------------------------------
+   */
+
+  eventId String
+
+  userId String
+
+  purchaseId String?
+
+  ticketTypeId String?
+
+  /**
+   * |--------------------------------------------------------------------------
+   * | Attendance
+   * |--------------------------------------------------------------------------
+   */
+
+  status AttendeeStatus @default(REGISTERED)
+
+  checkedIn Boolean @default(false)
+
+  checkedInAt DateTime?
+
+  checkedOutAt DateTime?
+
+  checkInStation String?
+
+  /**
+   * |--------------------------------------------------------------------------
+   * | Networking
+   * |--------------------------------------------------------------------------
+   */
+
+  isNetworkingEnabled Boolean @default(true)
+
+  /**
+   * |--------------------------------------------------------------------------
+   * | Metadata
+   * |--------------------------------------------------------------------------
+   */
+
+  createdAt DateTime @default(now())
+
+  updatedAt DateTime @updatedAt
+
+  /**
+   * |--------------------------------------------------------------------------
+   * | Relations
+   * |--------------------------------------------------------------------------
+   */
+
+  event Event @relation(fields: [eventId], references: [id])
+
+  user User @relation(fields: [userId], references: [id])
+
+  purchase TicketPurchase? @relation(fields: [purchaseId], references: [id])
+
+  ticketType TicketType? @relation(fields: [ticketTypeId], references: [id])
+
+  activities EventActivity[]
+
+  /**
+   * |--------------------------------------------------------------------------
+   * | Constraints
+   * |--------------------------------------------------------------------------
+   */
+
+  @@unique([eventId, userId])
+  @@index([eventId])
+  @@index([userId])
+  @@index([purchaseId])
+  @@index([ticketTypeId])
+  @@index([status])
+  @@index([checkedIn])
 }
