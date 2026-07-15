@@ -3,6 +3,8 @@ import { Router } from "express";
 import { auth } from "../auth/auth.middleware";
 
 import staffRoutes from "./staff.routes";
+import activityRoutes from "./activity.routes";
+import announcementRoutes from "./announcement.routes";
 
 import {
   create,
@@ -20,50 +22,69 @@ const router = Router();
 router.post(
   "/",
   auth,
-  create
+  create,
 );
 
 router.patch(
   "/:id/publish",
   auth,
-  publish
+  publish,
 );
 
 router.post(
   "/:id/register",
   auth,
-  register
+  register,
 );
 
 router.get(
   "/my",
   auth,
-  myEvents
+  myEvents,
 );
 
 router.get(
   "/public",
-  publicEvents
+  publicEvents,
 );
 
 router.get(
   "/my-registrations",
   auth,
-  myRegistrations
+  myRegistrations,
 );
 
 router.get(
   "/:id",
   auth,
-  getEvent
+  getEvent,
 );
-
-router.use("/", staffRoutes);
 
 router.get(
   "/:eventId/attendees",
   auth,
-  attendees
+  attendees,
+);
+
+/*
+|--------------------------------------------------------------------------
+| Event Modules
+|--------------------------------------------------------------------------
+*/
+
+router.use(
+  "/",
+  staffRoutes,
+);
+
+router.use(
+  "/",
+  activityRoutes,
+);
+
+router.use(
+  "/",
+  announcementRoutes,
 );
 
 export default router;
