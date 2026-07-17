@@ -13,9 +13,32 @@ async function listActivity(eventId, limit = 50) {
             eventId,
         },
         include: {
-            TicketPurchase: {
+            purchase: {
                 select: {
                     id: true,
+                },
+            },
+            ticketType: {
+                select: {
+                    id: true,
+                    name: true,
+                },
+            },
+            actor: {
+                select: {
+                    id: true,
+                    name: true,
+                    role: true,
+                },
+            },
+            attendee: {
+                include: {
+                    user: {
+                        select: {
+                            firstName: true,
+                            lastName: true,
+                        },
+                    },
                 },
             },
         },
@@ -30,9 +53,15 @@ async function listActivity(eventId, limit = 50) {
         title: activity.title,
         description: activity.description,
         actorId: activity.actorId,
+        actorName: activity.actor?.name ?? null,
+        actorRole: activity.actor?.role ?? null,
         attendeeId: activity.attendeeId,
+        attendeeName: activity.attendee
+            ? `${activity.attendee.user.firstName} ${activity.attendee.user.lastName}`
+            : null,
         purchaseId: activity.purchaseId,
         ticketTypeId: activity.ticketTypeId,
+        ticketTypeName: activity.ticketType?.name ?? null,
         station: activity.station,
         createdAt: activity.createdAt,
     }));

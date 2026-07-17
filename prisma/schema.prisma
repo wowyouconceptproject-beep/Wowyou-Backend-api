@@ -168,6 +168,8 @@ model Organization {
 
   logo String?
 
+  website String?
+
   ownerId String @unique
 
   owner User @relation(fields: [ownerId], references: [id])

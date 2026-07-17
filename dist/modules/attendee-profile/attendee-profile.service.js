@@ -4,6 +4,11 @@ exports.createProfile = createProfile;
 exports.getMyProfile = getMyProfile;
 exports.updateProfile = updateProfile;
 const prisma_1 = require("../../lib/prisma");
+/*
+|--------------------------------------------------------------------------
+| Create Profile
+|--------------------------------------------------------------------------
+*/
 async function createProfile(userId, data) {
     const existing = await prisma_1.prisma.attendeeProfile.findUnique({
         where: {
@@ -18,12 +23,20 @@ async function createProfile(userId, data) {
             userId,
             profession: data.profession,
             industry: data.industry,
+            company: data.company,
+            jobTitle: data.jobTitle,
+            linkedin: data.linkedin,
             goals: data.goals,
             skills: data.skills,
             bio: data.bio,
         },
     });
 }
+/*
+|--------------------------------------------------------------------------
+| Get My Profile
+|--------------------------------------------------------------------------
+*/
 async function getMyProfile(userId) {
     return prisma_1.prisma.attendeeProfile.findUnique({
         where: {
@@ -31,11 +44,25 @@ async function getMyProfile(userId) {
         },
     });
 }
+/*
+|--------------------------------------------------------------------------
+| Update Profile
+|--------------------------------------------------------------------------
+*/
 async function updateProfile(userId, data) {
     return prisma_1.prisma.attendeeProfile.update({
         where: {
             userId,
         },
-        data,
+        data: {
+            profession: data.profession,
+            industry: data.industry,
+            company: data.company,
+            jobTitle: data.jobTitle,
+            linkedin: data.linkedin,
+            goals: data.goals,
+            skills: data.skills,
+            bio: data.bio,
+        },
     });
 }

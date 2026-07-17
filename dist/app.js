@@ -7,11 +7,13 @@ const express_1 = __importDefault(require("express"));
 const cors_1 = __importDefault(require("cors"));
 const helmet_1 = __importDefault(require("helmet"));
 const morgan_1 = __importDefault(require("morgan"));
+const search_1 = require("./modules/search");
 const app = (0, express_1.default)();
 app.use((0, cors_1.default)({
     origin: true,
     credentials: true,
 }));
+app.use("/search", search_1.searchRoutes);
 app.use((0, helmet_1.default)());
 app.use((0, morgan_1.default)("dev"));
 app.use("/stripe/webhook", express_1.default.raw({

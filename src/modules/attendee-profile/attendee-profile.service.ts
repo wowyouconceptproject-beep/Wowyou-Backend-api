@@ -1,14 +1,23 @@
 import { prisma } from "../../lib/prisma";
 
+/*
+|--------------------------------------------------------------------------
+| Create Profile
+|--------------------------------------------------------------------------
+*/
+
 export async function createProfile(
   userId: string,
   data: {
     profession?: string;
     industry?: string;
+    company?: string;
+    jobTitle?: string;
+    linkedin?: string;
     goals?: any;
     skills?: any;
     bio?: string;
-  }
+  },
 ) {
   const existing =
     await prisma.attendeeProfile.findUnique({
@@ -19,26 +28,49 @@ export async function createProfile(
 
   if (existing) {
     throw new Error(
-      "Profile already exists"
+      "Profile already exists",
     );
   }
 
   return prisma.attendeeProfile.create({
     data: {
       userId,
+
       profession:
         data.profession,
+
       industry:
         data.industry,
-      goals: data.goals,
-      skills: data.skills,
-      bio: data.bio,
+
+      company:
+        data.company,
+
+      jobTitle:
+        data.jobTitle,
+
+      linkedin:
+        data.linkedin,
+
+      goals:
+        data.goals,
+
+      skills:
+        data.skills,
+
+      bio:
+        data.bio,
     },
   });
 }
 
+/*
+|--------------------------------------------------------------------------
+| Get My Profile
+|--------------------------------------------------------------------------
+*/
+
 export async function getMyProfile(
-  userId: string
+  userId: string,
 ) {
   return prisma.attendeeProfile.findUnique({
     where: {
@@ -47,20 +79,54 @@ export async function getMyProfile(
   });
 }
 
+/*
+|--------------------------------------------------------------------------
+| Update Profile
+|--------------------------------------------------------------------------
+*/
+
 export async function updateProfile(
   userId: string,
   data: {
     profession?: string;
     industry?: string;
+    company?: string;
+    jobTitle?: string;
+    linkedin?: string;
     goals?: any;
     skills?: any;
     bio?: string;
-  }
+  },
 ) {
   return prisma.attendeeProfile.update({
     where: {
       userId,
     },
-    data,
+
+    data: {
+      profession:
+        data.profession,
+
+      industry:
+        data.industry,
+
+      company:
+        data.company,
+
+      jobTitle:
+        data.jobTitle,
+
+      linkedin:
+        data.linkedin,
+
+      goals:
+        data.goals,
+
+      skills:
+        data.skills,
+
+      bio:
+        data.bio,
+    },
   });
 }
