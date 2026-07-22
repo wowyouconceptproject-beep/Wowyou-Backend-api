@@ -6,6 +6,8 @@ import staffRoutes from "./staff.routes";
 import activityRoutes from "./activity.routes";
 import announcementRoutes from "./announcement.routes";
 
+import { NetworkingController } from "../networking/networking.controller";
+
 import {
   create,
   myEvents,
@@ -18,6 +20,9 @@ import {
 } from "./event.controller";
 
 const router = Router();
+
+const networkingController =
+  new NetworkingController();
 
 router.post(
   "/",
@@ -64,6 +69,14 @@ router.get(
   "/:eventId/attendees",
   auth,
   attendees,
+);
+
+router.get(
+  "/:eventId/networking",
+  auth,
+  networkingController.getMatches.bind(
+    networkingController,
+  ),
 );
 
 /*

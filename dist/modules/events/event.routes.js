@@ -8,8 +8,10 @@ const auth_middleware_1 = require("../auth/auth.middleware");
 const staff_routes_1 = __importDefault(require("./staff.routes"));
 const activity_routes_1 = __importDefault(require("./activity.routes"));
 const announcement_routes_1 = __importDefault(require("./announcement.routes"));
+const networking_controller_1 = require("../networking/networking.controller");
 const event_controller_1 = require("./event.controller");
 const router = (0, express_1.Router)();
+const networkingController = new networking_controller_1.NetworkingController();
 router.post("/", auth_middleware_1.auth, event_controller_1.create);
 router.patch("/:id/publish", auth_middleware_1.auth, event_controller_1.publish);
 router.post("/:id/register", auth_middleware_1.auth, event_controller_1.register);
@@ -18,6 +20,7 @@ router.get("/public", event_controller_1.publicEvents);
 router.get("/my-registrations", auth_middleware_1.auth, event_controller_1.myRegistrations);
 router.get("/:id", auth_middleware_1.auth, event_controller_1.getEvent);
 router.get("/:eventId/attendees", auth_middleware_1.auth, event_controller_1.attendees);
+router.get("/:eventId/networking", auth_middleware_1.auth, networkingController.getMatches.bind(networkingController));
 /*
 |--------------------------------------------------------------------------
 | Event Modules

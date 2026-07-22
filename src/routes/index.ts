@@ -34,6 +34,11 @@ import staffRoutes from "../modules/events/staff.routes";
 
 import vendorRoutes from "../modules/vendor/vendor.routes";
 
+import settingsRoutes from "./settings/settings.routes";
+
+import networkingRoutes
+  from "../modules/networking/networking.routes";
+
 const router = Router();
 
 router.get("/", (_req, res) => {
@@ -106,6 +111,12 @@ router.use(
   "/vendors",
   vendorRoutes,
 );
+
+router.use(
+  "/settings",
+  settingsRoutes,
+);
+
 
 
 export default router;

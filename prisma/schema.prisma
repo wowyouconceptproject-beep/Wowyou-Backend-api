@@ -119,6 +119,8 @@ model User {
 
   role UserRole
 
+  settings UserSettings?
+
   isActive Boolean @default(true)
 
   createdAt DateTime @default(now())
@@ -884,4 +886,22 @@ model Attendee {
   @@index([ticketTypeId])
   @@index([status])
   @@index([checkedIn])
+}
+
+model UserSettings {
+  id String @id @default(cuid())
+
+  userId String @unique
+  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  avatar String?
+
+  bio String?
+
+  pushNotifications Boolean @default(true)
+  emailNotifications Boolean @default(true)
+  smsNotifications Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
