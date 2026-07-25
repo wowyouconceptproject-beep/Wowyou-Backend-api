@@ -6,7 +6,9 @@ import staffRoutes from "./staff.routes";
 import activityRoutes from "./activity.routes";
 import announcementRoutes from "./announcement.routes";
 
-import { NetworkingController } from "../networking/networking.controller";
+import {
+  NetworkingController,
+} from "../networking/networking.controller";
 
 import {
   create,
@@ -24,23 +26,23 @@ const router = Router();
 const networkingController =
   new NetworkingController();
 
+/*
+|--------------------------------------------------------------------------
+| Event Creation
+|--------------------------------------------------------------------------
+*/
+
 router.post(
   "/",
   auth,
   create,
 );
 
-router.patch(
-  "/:id/publish",
-  auth,
-  publish,
-);
-
-router.post(
-  "/:id/register",
-  auth,
-  register,
-);
+/*
+|--------------------------------------------------------------------------
+| Organizer Events
+|--------------------------------------------------------------------------
+*/
 
 router.get(
   "/my",
@@ -49,8 +51,38 @@ router.get(
 );
 
 router.get(
+  "/:id",
+  auth,
+  getEvent,
+);
+
+router.patch(
+  "/:id/publish",
+  auth,
+  publish,
+);
+
+/*
+|--------------------------------------------------------------------------
+| Public Discovery
+|--------------------------------------------------------------------------
+*/
+
+router.get(
   "/public",
   publicEvents,
+);
+
+/*
+|--------------------------------------------------------------------------
+| Attendee Registration
+|--------------------------------------------------------------------------
+*/
+
+router.post(
+  "/:id/register",
+  auth,
+  register,
 );
 
 router.get(
@@ -59,11 +91,11 @@ router.get(
   myRegistrations,
 );
 
-router.get(
-  "/:id",
-  auth,
-  getEvent,
-);
+/*
+|--------------------------------------------------------------------------
+| Event Attendees
+|--------------------------------------------------------------------------
+*/
 
 router.get(
   "/:eventId/attendees",
@@ -71,12 +103,20 @@ router.get(
   attendees,
 );
 
+/*
+|--------------------------------------------------------------------------
+| Networking
+|--------------------------------------------------------------------------
+*/
+
 router.get(
   "/:eventId/networking",
   auth,
-  networkingController.getMatches.bind(
-    networkingController,
-  ),
+  networkingController
+    .getMatches
+    .bind(
+      networkingController,
+    ),
 );
 
 /*

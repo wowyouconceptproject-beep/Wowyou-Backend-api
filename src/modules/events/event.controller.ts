@@ -1,6 +1,11 @@
-import { Request, Response } from "express";
+import {
+  Request,
+  Response,
+} from "express";
 
-import { AuthRequest } from "../auth/auth.middleware";
+import {
+  AuthRequest,
+} from "../auth/auth.middleware";
 
 import {
   createEvent,
@@ -16,15 +21,61 @@ import {
   getEventAttendees,
 } from "./attendees.service";
 
+/**
+ * |--------------------------------------------------------------------------
+ * | Create Event
+ * |--------------------------------------------------------------------------
+ */
+
 export async function create(
   req: AuthRequest,
   res: Response
 ) {
   try {
+    const {
+      title,
+      description,
+
+      venue,
+      venueAddress,
+      city,
+      country,
+
+      coverImage,
+      category,
+
+      capacity,
+      currency,
+
+      startDate,
+      endDate,
+
+      isPublic,
+    } = req.body;
+
     const event =
       await createEvent(
         req.user!.userId,
-        req.body
+        {
+          title,
+          description,
+
+          venue,
+          venueAddress,
+          city,
+          country,
+
+          coverImage,
+          category,
+
+          capacity,
+          currency,
+
+          startDate,
+          endDate,
+
+          isPublic,
+        }
       );
 
     return res.status(201).json({
@@ -32,6 +83,11 @@ export async function create(
       event,
     });
   } catch (error: any) {
+    console.error(
+      "CREATE EVENT ERROR:",
+      error
+    );
+
     return res.status(400).json({
       success: false,
       message:
@@ -39,6 +95,12 @@ export async function create(
     });
   }
 }
+
+/**
+ * |--------------------------------------------------------------------------
+ * | Organizer Events
+ * |--------------------------------------------------------------------------
+ */
 
 export async function myEvents(
   req: AuthRequest,
@@ -63,39 +125,23 @@ export async function myEvents(
   }
 }
 
+/**
+ * |--------------------------------------------------------------------------
+ * | Single Organizer Event
+ * |--------------------------------------------------------------------------
+ */
+
 export async function getEvent(
   req: AuthRequest,
   res: Response
 ) {
   try {
     const event =
-  await getEventById(
-    req.user!.userId,
-    String(req.params.id)
-  );
-
-    return res.json({
-      success: true,
-      event,
-    });
-  } catch (error: any) {
-    return res.status(400).json({
-      success: false,
-      message:
-        error.message,
-    });
-  }
-}
-
-export async function publish(
-  req: AuthRequest,
-  res: Response
-) {
-  try {
-    const event =
-      await publishEvent(
+      await getEventById(
         req.user!.userId,
-        String(req.params.id)
+        String(
+          req.params.id
+        )
       );
 
     return res.json({
@@ -110,6 +156,44 @@ export async function publish(
     });
   }
 }
+
+/**
+ * |--------------------------------------------------------------------------
+ * | Publish Event
+ * |--------------------------------------------------------------------------
+ */
+
+export async function publish(
+  req: AuthRequest,
+  res: Response
+) {
+  try {
+    const event =
+      await publishEvent(
+        req.user!.userId,
+        String(
+          req.params.id
+        )
+      );
+
+    return res.json({
+      success: true,
+      event,
+    });
+  } catch (error: any) {
+    return res.status(400).json({
+      success: false,
+      message:
+        error.message,
+    });
+  }
+}
+
+/**
+ * |--------------------------------------------------------------------------
+ * | Public Events
+ * |--------------------------------------------------------------------------
+ */
 
 export async function publicEvents(
   _req: Request,
@@ -132,6 +216,12 @@ export async function publicEvents(
   }
 }
 
+/**
+ * |--------------------------------------------------------------------------
+ * | Register For Event
+ * |--------------------------------------------------------------------------
+ */
+
 export async function register(
   req: AuthRequest,
   res: Response
@@ -139,7 +229,9 @@ export async function register(
   try {
     await registerForEvent(
       req.user!.userId,
-      String(req.params.id)
+      String(
+        req.params.id
+      )
     );
 
     return res.json({
@@ -155,6 +247,12 @@ export async function register(
     });
   }
 }
+
+/**
+ * |--------------------------------------------------------------------------
+ * | My Registrations
+ * |--------------------------------------------------------------------------
+ */
 
 export async function myRegistrations(
   req: AuthRequest,
@@ -179,6 +277,12 @@ export async function myRegistrations(
   }
 }
 
+/**
+ * |--------------------------------------------------------------------------
+ * | Event Attendees
+ * |--------------------------------------------------------------------------
+ */
+
 export async function attendees(
   req: AuthRequest,
   res: Response
@@ -187,21 +291,19 @@ export async function attendees(
     const attendees =
       await getEventAttendees(
         req.user!.userId,
-        req.params.eventId as string
+        req.params
+          .eventId as string
       );
 
     return res.json({
       success: true,
       attendees,
     });
-
   } catch (error: any) {
-
     return res.status(400).json({
       success: false,
       message:
         error.message,
     });
-
   }
 }

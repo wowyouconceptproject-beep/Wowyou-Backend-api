@@ -199,6 +199,12 @@ model Event {
 
   venue String
 
+  venueAddress String?
+
+  city String?
+
+  country String?
+
   coverImage String?
 
   featuredImage String?

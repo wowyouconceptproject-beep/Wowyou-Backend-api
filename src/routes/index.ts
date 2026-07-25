@@ -39,6 +39,8 @@ import settingsRoutes from "./settings/settings.routes";
 import networkingRoutes
   from "../modules/networking/networking.routes";
 
+import mediaRoutes from "../modules/media/media.routes";
+
 const router = Router();
 
 router.get("/", (_req, res) => {
@@ -117,6 +119,10 @@ router.use(
   settingsRoutes,
 );
 
+router.use(
+  "/media",
+  mediaRoutes
+);
 
 
 export default router;

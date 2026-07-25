@@ -1,3 +1,7 @@
+import {
+  EventCategory,
+} from "@prisma/client";
+
 import { prisma } from "../../lib/prisma";
 
 export async function createEvent(
@@ -5,11 +9,22 @@ export async function createEvent(
   data: {
     title: string;
     description: string;
+
     venue: string;
+    venueAddress?: string;
+    city?: string;
+    country?: string;
+
+    coverImage?: string;
+    category?: EventCategory;
+
     capacity: number;
     currency?: string;
+
     startDate: string;
     endDate: string;
+
+    isPublic?: boolean;
   }
 ) {
   const organization =
@@ -47,23 +62,60 @@ export async function createEvent(
     );
   }
 
+  if (
+    endDate <= startDate
+  ) {
+    throw new Error(
+      "End date must be after start date"
+    );
+  }
+
   return prisma.$transaction(
     async (tx) => {
       const event =
         await tx.event.create({
           data: {
-            title: data.title,
+            title:
+              data.title,
+
             description:
               data.description,
-            venue: data.venue,
-            capacity: Number(
-              data.capacity
-            ),
+
+            venue:
+              data.venue,
+
+            venueAddress:
+              data.venueAddress,
+
+            city:
+              data.city,
+
+            country:
+              data.country,
+
+            coverImage:
+              data.coverImage,
+
+            category:
+              data.category,
+
+            capacity:
+              Number(
+                data.capacity
+              ),
+
             currency:
               data.currency ??
               "USD",
+
             startDate,
+
             endDate,
+
+            isPublic:
+              data.isPublic ??
+              true,
+
             organizationId:
               organization.id,
           },

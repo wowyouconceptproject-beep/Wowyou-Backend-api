@@ -12,15 +12,47 @@ const networking_controller_1 = require("../networking/networking.controller");
 const event_controller_1 = require("./event.controller");
 const router = (0, express_1.Router)();
 const networkingController = new networking_controller_1.NetworkingController();
+/*
+|--------------------------------------------------------------------------
+| Event Creation
+|--------------------------------------------------------------------------
+*/
 router.post("/", auth_middleware_1.auth, event_controller_1.create);
-router.patch("/:id/publish", auth_middleware_1.auth, event_controller_1.publish);
-router.post("/:id/register", auth_middleware_1.auth, event_controller_1.register);
+/*
+|--------------------------------------------------------------------------
+| Organizer Events
+|--------------------------------------------------------------------------
+*/
 router.get("/my", auth_middleware_1.auth, event_controller_1.myEvents);
-router.get("/public", event_controller_1.publicEvents);
-router.get("/my-registrations", auth_middleware_1.auth, event_controller_1.myRegistrations);
 router.get("/:id", auth_middleware_1.auth, event_controller_1.getEvent);
+router.patch("/:id/publish", auth_middleware_1.auth, event_controller_1.publish);
+/*
+|--------------------------------------------------------------------------
+| Public Discovery
+|--------------------------------------------------------------------------
+*/
+router.get("/public", event_controller_1.publicEvents);
+/*
+|--------------------------------------------------------------------------
+| Attendee Registration
+|--------------------------------------------------------------------------
+*/
+router.post("/:id/register", auth_middleware_1.auth, event_controller_1.register);
+router.get("/my-registrations", auth_middleware_1.auth, event_controller_1.myRegistrations);
+/*
+|--------------------------------------------------------------------------
+| Event Attendees
+|--------------------------------------------------------------------------
+*/
 router.get("/:eventId/attendees", auth_middleware_1.auth, event_controller_1.attendees);
-router.get("/:eventId/networking", auth_middleware_1.auth, networkingController.getMatches.bind(networkingController));
+/*
+|--------------------------------------------------------------------------
+| Networking
+|--------------------------------------------------------------------------
+*/
+router.get("/:eventId/networking", auth_middleware_1.auth, networkingController
+    .getMatches
+    .bind(networkingController));
 /*
 |--------------------------------------------------------------------------
 | Event Modules

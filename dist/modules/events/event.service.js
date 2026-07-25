@@ -25,17 +25,27 @@ async function createEvent(userId, data) {
     if (isNaN(endDate.getTime())) {
         throw new Error(`Invalid endDate: ${data.endDate}`);
     }
+    if (endDate <= startDate) {
+        throw new Error("End date must be after start date");
+    }
     return prisma_1.prisma.$transaction(async (tx) => {
         const event = await tx.event.create({
             data: {
                 title: data.title,
                 description: data.description,
                 venue: data.venue,
+                venueAddress: data.venueAddress,
+                city: data.city,
+                country: data.country,
+                coverImage: data.coverImage,
+                category: data.category,
                 capacity: Number(data.capacity),
                 currency: data.currency ??
                     "USD",
                 startDate,
                 endDate,
+                isPublic: data.isPublic ??
+                    true,
                 organizationId: organization.id,
             },
         });

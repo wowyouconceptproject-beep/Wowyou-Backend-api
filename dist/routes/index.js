@@ -18,6 +18,7 @@ const operations_routes_1 = __importDefault(require("../modules/operations/opera
 const staff_routes_1 = __importDefault(require("../modules/events/staff.routes"));
 const vendor_routes_1 = __importDefault(require("../modules/vendor/vendor.routes"));
 const settings_routes_1 = __importDefault(require("./settings/settings.routes"));
+const media_routes_1 = __importDefault(require("../modules/media/media.routes"));
 const router = (0, express_1.Router)();
 router.get("/", (_req, res) => {
     res.json({
@@ -39,4 +40,5 @@ router.use("/operations", operations_routes_1.default);
 router.use("/staff", staff_routes_1.default);
 router.use("/vendors", vendor_routes_1.default);
 router.use("/settings", settings_routes_1.default);
+router.use("/media", media_routes_1.default);
 exports.default = router;
