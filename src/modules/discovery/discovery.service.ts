@@ -12,32 +12,27 @@ import { mapDiscoveryEvent } from "./discovery.mapper";
 
 export async function getDiscoveryFeed() {
   const [
-  hero,
-  featured,
-  trending,
-  upcoming,
-  categories,
-] = await Promise.all([
-  getHeroEvents(),
-  getFeaturedEvent(),
-  getTrendingEvents(),
-  getUpcomingEvents(),
-  getCategories(),
-]);
+    hero,
+    featured,
+    trending,
+    upcoming,
+    categories,
+  ] = await Promise.all([
+    getHeroEvents(),
+    getFeaturedEvent(),
+    getTrendingEvents(),
+    getUpcomingEvents(),
+    getCategories(),
+  ]);
 
   return {
     hero,
-
     featured,
-
     categories,
-
     trending,
-
     upcoming,
 
     topVendors: [],
-
     vendorReviews: [],
   };
 }
