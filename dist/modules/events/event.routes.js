@@ -32,6 +32,7 @@ router.patch("/:id/publish", auth_middleware_1.auth, event_controller_1.publish)
 |--------------------------------------------------------------------------
 */
 router.get("/public", event_controller_1.publicEvents);
+router.get("/public/:id", event_controller_1.getPublicEvent);
 /*
 |--------------------------------------------------------------------------
 | Attendee Registration

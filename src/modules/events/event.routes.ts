@@ -15,6 +15,7 @@ import {
   myEvents,
   getEvent,
   publish,
+  getPublicEvent,
   publicEvents,
   register,
   myRegistrations,
@@ -71,6 +72,11 @@ router.patch(
 router.get(
   "/public",
   publicEvents,
+);
+
+router.get(
+  "/public/:id",
+  getPublicEvent,
 );
 
 /*

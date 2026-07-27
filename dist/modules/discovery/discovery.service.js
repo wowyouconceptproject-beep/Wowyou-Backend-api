@@ -10,7 +10,7 @@ const discovery_mapper_1 = require("./discovery.mapper");
 |--------------------------------------------------------------------------
 */
 async function getDiscoveryFeed() {
-    const [hero, featured, categories, trending, upcoming,] = await Promise.all([
+    const [hero, featured, trending, upcoming, categories,] = await Promise.all([
         getHeroEvents(),
         getFeaturedEvent(),
         getTrendingEvents(),

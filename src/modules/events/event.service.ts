@@ -239,6 +239,42 @@ export async function getPublicEvents() {
   });
 }
 
+export async function getPublicEventById(
+  eventId: string,
+) {
+  const event =
+    await prisma.event.findFirst({
+      where: {
+        id: eventId,
+
+        status: "PUBLISHED",
+
+        isPublic: true,
+      },
+
+      include: {
+        organization: {
+          select: {
+            id: true,
+            name: true,
+            slug: true,
+            logo: true,
+          },
+        },
+
+        tickets: true,
+      },
+    });
+
+  if (!event) {
+    throw new Error(
+      "Event not found",
+    );
+  }
+
+  return event;
+}
+
 export async function registerForEvent(
   userId: string,
   eventId: string

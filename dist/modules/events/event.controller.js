@@ -4,6 +4,7 @@ exports.create = create;
 exports.myEvents = myEvents;
 exports.getEvent = getEvent;
 exports.publish = publish;
+exports.getPublicEvent = getPublicEvent;
 exports.publicEvents = publicEvents;
 exports.register = register;
 exports.myRegistrations = myRegistrations;
@@ -101,6 +102,21 @@ async function publish(req, res) {
     }
     catch (error) {
         return res.status(400).json({
+            success: false,
+            message: error.message,
+        });
+    }
+}
+async function getPublicEvent(req, res) {
+    try {
+        const event = await (0, event_service_1.getPublicEventById)(String(req.params.id));
+        return res.json({
+            success: true,
+            event,
+        });
+    }
+    catch (error) {
+        return res.status(404).json({
             success: false,
             message: error.message,
         });

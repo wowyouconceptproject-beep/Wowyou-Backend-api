@@ -5,6 +5,7 @@ exports.getMyEvents = getMyEvents;
 exports.getEventById = getEventById;
 exports.publishEvent = publishEvent;
 exports.getPublicEvents = getPublicEvents;
+exports.getPublicEventById = getPublicEventById;
 exports.registerForEvent = registerForEvent;
 exports.getMyRegistrations = getMyRegistrations;
 const prisma_1 = require("../../lib/prisma");
@@ -132,6 +133,30 @@ async function getPublicEvents() {
             startDate: "asc",
         },
     });
+}
+async function getPublicEventById(eventId) {
+    const event = await prisma_1.prisma.event.findFirst({
+        where: {
+            id: eventId,
+            status: "PUBLISHED",
+            isPublic: true,
+        },
+        include: {
+            organization: {
+                select: {
+                    id: true,
+                    name: true,
+                    slug: true,
+                    logo: true,
+                },
+            },
+            tickets: true,
+        },
+    });
+    if (!event) {
+        throw new Error("Event not found");
+    }
+    return event;
 }
 async function registerForEvent(userId, eventId) {
     const event = await prisma_1.prisma.event.findUnique({

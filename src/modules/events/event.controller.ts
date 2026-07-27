@@ -11,6 +11,7 @@ import {
   createEvent,
   getMyEvents,
   getEventById,
+  getPublicEventById,
   publishEvent,
   getPublicEvents,
   registerForEvent,
@@ -183,6 +184,30 @@ export async function publish(
   } catch (error: any) {
     return res.status(400).json({
       success: false,
+      message:
+        error.message,
+    });
+  }
+}
+
+export async function getPublicEvent(
+  req: Request,
+  res: Response,
+) {
+  try {
+    const event =
+      await getPublicEventById(
+        String(req.params.id),
+      );
+
+    return res.json({
+      success: true,
+      event,
+    });
+  } catch (error: any) {
+    return res.status(404).json({
+      success: false,
+
       message:
         error.message,
     });
