@@ -217,26 +217,45 @@ export async function publishEvent(
 }
 
 export async function getPublicEvents() {
-  return prisma.event.findMany({
-    where: {
-      status: "PUBLISHED",
-      isPublic: true,
-    },
-    include: {
-      organization: {
-        select: {
-          id: true,
-          name: true,
-          slug: true,
-          logo: true,
+  const events =
+    await prisma.event.findMany({
+      where: {
+        status: "PUBLISHED",
+
+        endDate: {
+          gt: new Date(),
         },
       },
-      tickets: true,
-    },
-    orderBy: {
-      startDate: "asc",
-    },
-  });
+
+      include: {
+        tickets: {
+          where: {
+            isActive: true,
+          },
+
+          select: {
+            id: true,
+            name: true,
+            description: true,
+            color: true,
+            price: true,
+            quantity: true,
+            sold: true,
+            isActive: true,
+          },
+
+          orderBy: {
+            price: "asc",
+          },
+        },
+      },
+
+      orderBy: {
+        startDate: "asc",
+      },
+    });
+
+  return events;
 }
 
 export async function getPublicEventById(

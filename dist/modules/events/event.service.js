@@ -113,26 +113,38 @@ async function publishEvent(userId, eventId) {
     });
 }
 async function getPublicEvents() {
-    return prisma_1.prisma.event.findMany({
+    const events = await prisma_1.prisma.event.findMany({
         where: {
             status: "PUBLISHED",
-            isPublic: true,
+            endDate: {
+                gt: new Date(),
+            },
         },
         include: {
-            organization: {
+            tickets: {
+                where: {
+                    isActive: true,
+                },
                 select: {
                     id: true,
                     name: true,
-                    slug: true,
-                    logo: true,
+                    description: true,
+                    color: true,
+                    price: true,
+                    quantity: true,
+                    sold: true,
+                    isActive: true,
+                },
+                orderBy: {
+                    price: "asc",
                 },
             },
-            tickets: true,
         },
         orderBy: {
             startDate: "asc",
         },
     });
+    return events;
 }
 async function getPublicEventById(eventId) {
     const event = await prisma_1.prisma.event.findFirst({

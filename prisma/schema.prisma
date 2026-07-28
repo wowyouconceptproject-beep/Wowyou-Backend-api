@@ -478,10 +478,8 @@ model TicketPurchase {
    * |--------------------------------------------------------------------------
    */
 
-  userId String
-
-  eventId String
-
+  userId       String
+  eventId      String
   ticketTypeId String
 
   /**
@@ -491,16 +489,28 @@ model TicketPurchase {
    */
 
   quantity Int
-
-  amount Float
-
+  amount   Float
   currency String @default("USD")
 
-  paymentMethod String?
+  status PurchaseStatus @default(PENDING)
+
+  /**
+   * |--------------------------------------------------------------------------
+   * | Payment
+   * |--------------------------------------------------------------------------
+   */
+
+  paymentProvider  String?
+  paymentReference String? @unique
+  paymentMethod    String?
+
+  /**
+   * |--------------------------------------------------------------------------
+   * | Legacy Stripe
+   * |--------------------------------------------------------------------------
+   */
 
   stripeSessionId String?
-
-  status PurchaseStatus @default(PENDING)
 
   /**
    * |--------------------------------------------------------------------------
@@ -508,8 +518,7 @@ model TicketPurchase {
    * |--------------------------------------------------------------------------
    */
 
-  checkedIn Boolean @default(false)
-
+  checkedIn   Boolean   @default(false)
   checkedInAt DateTime?
 
   /**
@@ -518,10 +527,8 @@ model TicketPurchase {
    * |--------------------------------------------------------------------------
    */
 
-  user User @relation(fields: [userId], references: [id])
-
-  event Event @relation(fields: [eventId], references: [id])
-
+  user   User       @relation(fields: [userId], references: [id])
+  event  Event      @relation(fields: [eventId], references: [id])
   ticket TicketType @relation(fields: [ticketTypeId], references: [id])
 
   attendees Attendee[]
@@ -539,6 +546,21 @@ model TicketPurchase {
    */
 
   createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  /**
+   * |--------------------------------------------------------------------------
+   * | Indexes
+   * |--------------------------------------------------------------------------
+   */
+
+  @@index([userId])
+  @@index([eventId])
+  @@index([ticketTypeId])
+  @@index([status])
+  @@index([userId, status])
+  @@index([eventId, status])
+  @@index([paymentProvider])
 }
 
 model EventPass {
@@ -715,21 +737,21 @@ model Connection {
 model EventActivity {
   id String @id @default(cuid())
 
-  /*
-  |--------------------------------------------------------------------------
-  | Parent
-  |--------------------------------------------------------------------------
-  */
+  /**
+   * |--------------------------------------------------------------------------
+   * | Parent
+   * |--------------------------------------------------------------------------
+   */
 
   eventId String
 
   event Event @relation(fields: [eventId], references: [id])
 
-  /*
-  |--------------------------------------------------------------------------
-  | Relationships
-  |--------------------------------------------------------------------------
-  */
+  /**
+   * |--------------------------------------------------------------------------
+   * | Relationships
+   * |--------------------------------------------------------------------------
+   */
 
   actorId String?
 
@@ -747,11 +769,11 @@ model EventActivity {
 
   ticketType TicketType? @relation(fields: [ticketTypeId], references: [id])
 
-  /*
-  |--------------------------------------------------------------------------
-  | Activity
-  |--------------------------------------------------------------------------
-  */
+  /**
+   * |--------------------------------------------------------------------------
+   * | Activity
+   * |--------------------------------------------------------------------------
+   */
 
   type String
 
@@ -763,26 +785,20 @@ model EventActivity {
 
   payload Json?
 
-  /*
-  |--------------------------------------------------------------------------
-  | Metadata
-  |--------------------------------------------------------------------------
-  */
+  /**
+   * |--------------------------------------------------------------------------
+   * | Metadata
+   * |--------------------------------------------------------------------------
+   */
 
   createdAt DateTime @default(now())
 
   @@index([eventId])
-
   @@index([eventId, createdAt])
-
   @@index([actorId])
-
   @@index([attendeeId])
-
   @@index([purchaseId])
-
   @@index([ticketTypeId])
-
   @@index([type])
 }
 
@@ -898,15 +914,15 @@ model UserSettings {
   id String @id @default(cuid())
 
   userId String @unique
-  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   avatar String?
 
   bio String?
 
-  pushNotifications Boolean @default(true)
+  pushNotifications  Boolean @default(true)
   emailNotifications Boolean @default(true)
-  smsNotifications Boolean @default(false)
+  smsNotifications   Boolean @default(false)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
