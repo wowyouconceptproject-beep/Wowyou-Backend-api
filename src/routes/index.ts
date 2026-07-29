@@ -85,7 +85,7 @@ router.use(
 );
 
 router.use(
-  "/purchases",
+  "/purchase",
   purchaseRoutes
 );
 
