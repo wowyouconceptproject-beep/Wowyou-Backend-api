@@ -181,44 +181,34 @@ export async function issuePurchase(
       */
 
       await tx.eventActivity.create({
-        data: {
-          eventId:
-            purchase.eventId,
+  data: {
+    eventId:
+      purchase.eventId,
 
-          userId:
-            purchase.userId,
+    purchaseId:
+      purchase.id,
 
-          purchaseId:
-            purchase.id,
+    type:
+      "PASS_ISSUED",
 
-          type:
-            "PASS_ISSUED",
+    title:
+      "Ticket Issued",
 
-          title:
-            "Ticket Issued",
+    description:
+      `${purchase.quantity} pass${purchase.quantity === 1 ? "" : "es"} issued.`,
 
-          description:
-            `${purchase.quantity} pass${
-              purchase.quantity === 1
-                ? ""
-                : "es"
-            } issued.`,
+    payload: {
+      paymentProvider:
+        purchase.paymentProvider,
 
-          metadata: {
-            paymentProvider:
-              purchase.paymentProvider,
+      quantity:
+        purchase.quantity,
 
-            quantity:
-              purchase.quantity,
-
-            ticketType:
-              purchase.ticket.name,
-
-            passCount:
-              passes.length,
-          },
-        },
-      });
+      ticketType:
+        purchase.ticket.name,
+    },
+  },
+});
 
       return passes;
     },

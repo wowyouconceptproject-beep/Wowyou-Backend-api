@@ -189,6 +189,12 @@ export async function generateSecurePass(
 |
 */
 
+/*
+|--------------------------------------------------------------------------
+| Verify Secure Pass
+|--------------------------------------------------------------------------
+*/
+
 export async function verifySecurePass(
   token: string,
 ) {
@@ -225,6 +231,19 @@ export async function verifySecurePass(
 
             ticket: true,
 
+            passes: {
+              where: {
+                isActive: true,
+
+                isRevoked: false,
+              },
+
+              orderBy: {
+                createdAt:
+                  "asc",
+              },
+            },
+
             checkIn: {
               include: {
                 staff: true,
@@ -235,6 +254,13 @@ export async function verifySecurePass(
       },
     });
 
+  if (!pass) {
+    throw new Error(
+      "Pass not found.",
+    );
+  }
+
+  
   /*
   |--------------------------------------------------------------------------
   | Pass

@@ -41,6 +41,8 @@ import networkingRoutes
 
 import mediaRoutes from "../modules/media/media.routes";
 
+import capacityRoutes from "../modules/operations/capacity/capacity.routes";
+
 const router = Router();
 
 router.get("/", (_req, res) => {
@@ -122,6 +124,11 @@ router.use(
 router.use(
   "/media",
   mediaRoutes
+);
+
+router.use(
+  "/operations/capacity",
+  capacityRoutes,
 );
 
 

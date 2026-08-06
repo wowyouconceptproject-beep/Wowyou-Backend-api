@@ -131,18 +131,14 @@ async function issuePurchase(purchaseId) {
         await tx.eventActivity.create({
             data: {
                 eventId: purchase.eventId,
-                userId: purchase.userId,
                 purchaseId: purchase.id,
                 type: "PASS_ISSUED",
                 title: "Ticket Issued",
-                description: `${purchase.quantity} pass${purchase.quantity === 1
-                    ? ""
-                    : "es"} issued.`,
-                metadata: {
+                description: `${purchase.quantity} pass${purchase.quantity === 1 ? "" : "es"} issued.`,
+                payload: {
                     paymentProvider: purchase.paymentProvider,
                     quantity: purchase.quantity,
                     ticketType: purchase.ticket.name,
-                    passCount: passes.length,
                 },
             },
         });

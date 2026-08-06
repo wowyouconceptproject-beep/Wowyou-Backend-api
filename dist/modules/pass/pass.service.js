@@ -104,6 +104,11 @@ async function generateSecurePass(purchaseId, userId) {
 | • JWT Pass Tokens
 |
 */
+/*
+|--------------------------------------------------------------------------
+| Verify Secure Pass
+|--------------------------------------------------------------------------
+*/
 async function verifySecurePass(token) {
     const payload = (0, pass_jwt_1.verifyPassToken)(token);
     const pass = await prisma_1.prisma.eventPass.findUnique({
@@ -116,6 +121,15 @@ async function verifySecurePass(token) {
                     user: true,
                     event: true,
                     ticket: true,
+                    passes: {
+                        where: {
+                            isActive: true,
+                            isRevoked: false,
+                        },
+                        orderBy: {
+                            createdAt: "asc",
+                        },
+                    },
                     checkIn: {
                         include: {
                             staff: true,
@@ -125,6 +139,9 @@ async function verifySecurePass(token) {
             },
         },
     });
+    if (!pass) {
+        throw new Error("Pass not found.");
+    }
     /*
     |--------------------------------------------------------------------------
     | Pass

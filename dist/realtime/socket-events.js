@@ -1,9 +1,4 @@
 "use strict";
-/*
-|--------------------------------------------------------------------------
-| Socket Commands
-|--------------------------------------------------------------------------
-*/
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.SocketEvents = void 0;
 exports.SocketEvents = {
@@ -18,4 +13,10 @@ exports.SocketEvents = {
     LeaveAttendee: "leave-attendee",
     JoinOrganizer: "join-organizer",
     LeaveOrganizer: "leave-organizer",
+    /*
+    |--------------------------------------------------------------------------
+    | Capacity
+    |--------------------------------------------------------------------------
+    */
+    CapacityUpdated: "capacity-updated",
 };

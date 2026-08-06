@@ -1,9 +1,3 @@
-/*
-|--------------------------------------------------------------------------
-| Socket Commands
-|--------------------------------------------------------------------------
-*/
-
 export const SocketEvents = {
   /*
   |--------------------------------------------------------------------------
@@ -19,7 +13,12 @@ export const SocketEvents = {
 
   JoinOrganizer: "join-organizer",
   LeaveOrganizer: "leave-organizer",
-} as const;
 
-export type SocketEvent =
-  (typeof SocketEvents)[keyof typeof SocketEvents];
+  /*
+  |--------------------------------------------------------------------------
+  | Capacity
+  |--------------------------------------------------------------------------
+  */
+
+  CapacityUpdated: "capacity-updated",
+} as const;
