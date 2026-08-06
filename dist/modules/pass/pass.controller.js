@@ -11,10 +11,11 @@ const pass_service_1 = require("./pass.service");
 */
 async function getPass(req, res) {
     try {
-        const pass = await (0, pass_service_1.getEventPass)(req.params.purchaseId, req.user.userId);
+        const purchase = await (0, pass_service_1.getEventPass)(req.params.purchaseId, req.user.userId);
         return res.json({
             success: true,
-            pass,
+            purchase,
+            passes: purchase.passes,
         });
     }
     catch (error) {
@@ -34,7 +35,8 @@ async function securePass(req, res) {
         const result = await (0, pass_service_1.generateSecurePass)(req.params.purchaseId, req.user.userId);
         return res.json({
             success: true,
-            token: result.token,
+            purchase: result.purchase,
+            passes: result.passes,
         });
     }
     catch (error) {
@@ -52,21 +54,21 @@ async function securePass(req, res) {
 async function verifyPass(req, res) {
     try {
         const result = await (0, pass_service_1.verifySecurePass)(req.body.token);
-        const purchase = result.purchase;
         return res.json({
             success: true,
-            attendee: {
-                id: purchase.user.id,
-                name: `${purchase.user.firstName} ${purchase.user.lastName}`,
-                email: purchase.user.email,
-            },
-            ticket: {
-                id: purchase.ticket.id,
-                name: purchase.ticket.name,
-            },
-            event: {
-                id: purchase.event.id,
-                title: purchase.event.title,
+            attendee: result.attendee,
+            ticket: result.ticket,
+            event: result.event,
+            pass: {
+                id: result.pass.id,
+                passNumber: result.pass.passNumber,
+                qrToken: result.pass.qrToken,
+                nfcToken: result.pass.nfcToken,
+                active: result.pass.isActive,
+                revoked: result.pass.isRevoked,
+                nfcEnabled: result.pass.nfcEnabled,
+                issuedAt: result.pass.issuedAt,
+                expiresAt: result.pass.expiresAt,
             },
             alreadyCheckedIn: result.alreadyCheckedIn,
             checkedInBy: result.checkedInBy,

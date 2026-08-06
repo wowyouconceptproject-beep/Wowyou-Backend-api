@@ -489,7 +489,9 @@ model TicketPurchase {
    */
 
   quantity Int
-  amount   Float
+
+  amount Float
+
   currency String @default("USD")
 
   status PurchaseStatus @default(PENDING)
@@ -500,25 +502,26 @@ model TicketPurchase {
    * |--------------------------------------------------------------------------
    */
 
-  paymentProvider  String?
+  paymentProvider String?
+
   paymentReference String? @unique
-  paymentMethod    String?
+
+  paymentMethod String?
+
+  gatewayStatus String?
+
+  paymentCompletedAt DateTime?
+
+  paymentFailedAt DateTime?
 
   /**
    * |--------------------------------------------------------------------------
-   * | Legacy Stripe
+   * | Check In
    * |--------------------------------------------------------------------------
    */
 
-  stripeSessionId String?
+  checkedIn Boolean @default(false)
 
-  /**
-   * |--------------------------------------------------------------------------
-   * | Check-In
-   * |--------------------------------------------------------------------------
-   */
-
-  checkedIn   Boolean   @default(false)
   checkedInAt DateTime?
 
   /**
@@ -527,8 +530,10 @@ model TicketPurchase {
    * |--------------------------------------------------------------------------
    */
 
-  user   User       @relation(fields: [userId], references: [id])
-  event  Event      @relation(fields: [eventId], references: [id])
+  user User @relation(fields: [userId], references: [id])
+
+  event Event @relation(fields: [eventId], references: [id])
+
   ticket TicketType @relation(fields: [ticketTypeId], references: [id])
 
   attendees Attendee[]
@@ -537,7 +542,7 @@ model TicketPurchase {
 
   activities EventActivity[]
 
-  EventPass EventPass?
+  passes EventPass[]
 
   /**
    * |--------------------------------------------------------------------------
@@ -546,6 +551,7 @@ model TicketPurchase {
    */
 
   createdAt DateTime @default(now())
+
   updatedAt DateTime @updatedAt
 
   /**
@@ -558,21 +564,100 @@ model TicketPurchase {
   @@index([eventId])
   @@index([ticketTypeId])
   @@index([status])
+  @@index([paymentProvider])
+  @@index([paymentReference])
+  @@index([paymentCompletedAt])
   @@index([userId, status])
   @@index([eventId, status])
-  @@index([paymentProvider])
 }
 
 model EventPass {
-  id              String    @id @default(cuid())
-  passNumber      String    @unique
-  purchaseId      String    @unique
-  isActive        Boolean   @default(true)
-  createdAt       DateTime  @default(now())
+  id String @id @default(cuid())
+
+  /**
+   * |--------------------------------------------------------------------------
+   * | Identity
+   * |--------------------------------------------------------------------------
+   */
+
+  passNumber String @unique
+
+  qrToken String @unique
+
+  nfcToken String @unique
+
+  /**
+   * |--------------------------------------------------------------------------
+   * | Ownership
+   * |--------------------------------------------------------------------------
+   */
+
+  purchaseId String
+
+  /**
+   * |--------------------------------------------------------------------------
+   * | Status
+   * |--------------------------------------------------------------------------
+   */
+
+  isActive Boolean @default(true)
+
+  isRevoked Boolean @default(false)
+
+  revokedAt DateTime?
+
+  /**
+   * |--------------------------------------------------------------------------
+   * | Generation
+   * |--------------------------------------------------------------------------
+   */
+
+  issuedAt DateTime @default(now())
+
   lastGeneratedAt DateTime?
-  expiresAt       DateTime?
+
+  expiresAt DateTime?
+
+  /**
+   * |--------------------------------------------------------------------------
+   * | NFC
+   * |--------------------------------------------------------------------------
+   */
+
+  nfcEnabled Boolean @default(true)
+
+  lastNfcReadAt DateTime?
+
+  /**
+   * |--------------------------------------------------------------------------
+   * | Relations
+   * |--------------------------------------------------------------------------
+   */
 
   purchase TicketPurchase @relation(fields: [purchaseId], references: [id])
+
+  /**
+   * |--------------------------------------------------------------------------
+   * | Metadata
+   * |--------------------------------------------------------------------------
+   */
+
+  createdAt DateTime @default(now())
+
+  updatedAt DateTime @updatedAt
+
+  /**
+   * |--------------------------------------------------------------------------
+   * | Indexes
+   * |--------------------------------------------------------------------------
+   */
+
+  @@index([purchaseId])
+  @@index([passNumber])
+  @@index([qrToken])
+  @@index([nfcToken])
+  @@index([isActive])
+  @@index([issuedAt])
 }
 
 model TicketCheckIn {

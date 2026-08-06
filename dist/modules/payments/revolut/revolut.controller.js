@@ -3,6 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.webhook = webhook;
 const prisma_1 = require("../../../lib/prisma");
 const revolut_service_1 = require("./revolut.service");
+const ticket_issuance_service_1 = require("../../purchases/ticket-issuance.service");
 /*
 |--------------------------------------------------------------------------
 | Revolut Webhook
@@ -196,14 +197,7 @@ async function webhook(req, res) {
         | Complete Purchase
         |--------------------------------------------------------------------------
         */
-        await prisma_1.prisma.ticketPurchase.update({
-            where: {
-                id: purchase.id,
-            },
-            data: {
-                status: "PAID",
-            },
-        });
+        await (0, ticket_issuance_service_1.issuePurchase)(purchase.id);
         console.log("REVOLUT PAYMENT COMPLETED:", {
             purchaseId: purchase.id,
             orderId,

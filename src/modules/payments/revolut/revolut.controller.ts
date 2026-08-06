@@ -10,6 +10,8 @@ import {
   verifyRevolutWebhook,
 } from "./revolut.service";
 
+import { issuePurchase } from "../../purchases/ticket-issuance.service";
+
 import {
   RevolutWebhookPayload,
 } from "./revolut.types";
@@ -325,17 +327,9 @@ export async function webhook(
     |--------------------------------------------------------------------------
     */
 
-    await prisma.ticketPurchase.update({
-      where: {
-        id:
-          purchase.id,
-      },
-
-      data: {
-        status:
-          "PAID",
-      },
-    });
+    await issuePurchase(
+  purchase.id,
+);
 
     console.log(
       "REVOLUT PAYMENT COMPLETED:",

@@ -33,7 +33,7 @@ router.use("/events", event_routes_1.default);
 router.use("/attendee-profile", attendee_profile_routes_1.default);
 router.use("/tickets", ticket_routes_1.default);
 router.use("/revenue", revenue_routes_1.default);
-router.use("/purchases", purchase_routes_1.default);
+router.use("/purchase", purchase_routes_1.default);
 router.use("/stripe", stripe_routes_1.default);
 router.use("/passes", pass_routes_1.default);
 router.use("/operations", operations_routes_1.default);

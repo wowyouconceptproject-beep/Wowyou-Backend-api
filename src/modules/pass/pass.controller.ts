@@ -16,23 +16,29 @@ import {
 
 export async function getPass(
   req: AuthRequest,
-  res: Response
+  res: Response,
 ) {
   try {
-    const pass =
+    const purchase =
       await getEventPass(
         req.params.purchaseId as string,
-        req.user!.userId
+        req.user!.userId,
       );
 
     return res.json({
       success: true,
-      pass,
+
+      purchase,
+
+      passes:
+        purchase.passes,
     });
   } catch (error: any) {
     return res.status(400).json({
       success: false,
-      message: error.message,
+
+      message:
+        error.message,
     });
   }
 }
@@ -45,23 +51,30 @@ export async function getPass(
 
 export async function securePass(
   req: AuthRequest,
-  res: Response
+  res: Response,
 ) {
   try {
     const result =
       await generateSecurePass(
         req.params.purchaseId as string,
-        req.user!.userId
+        req.user!.userId,
       );
 
     return res.json({
       success: true,
-      token: result.token,
+
+      purchase:
+        result.purchase,
+
+      passes:
+        result.passes,
     });
   } catch (error: any) {
     return res.status(400).json({
       success: false,
-      message: error.message,
+
+      message:
+        error.message,
     });
   }
 }
@@ -74,34 +87,53 @@ export async function securePass(
 
 export async function verifyPass(
   req: AuthRequest,
-  res: Response
+  res: Response,
 ) {
   try {
     const result =
       await verifySecurePass(
-        req.body.token
+        req.body.token,
       );
-
-    const purchase =
-      result.purchase;
 
     return res.json({
       success: true,
 
-      attendee: {
-        id: purchase.user.id,
-        name: `${purchase.user.firstName} ${purchase.user.lastName}`,
-        email: purchase.user.email,
-      },
+      attendee:
+        result.attendee,
 
-      ticket: {
-        id: purchase.ticket.id,
-        name: purchase.ticket.name,
-      },
+      ticket:
+        result.ticket,
 
-      event: {
-        id: purchase.event.id,
-        title: purchase.event.title,
+      event:
+        result.event,
+
+      pass: {
+        id:
+          result.pass.id,
+
+        passNumber:
+          result.pass.passNumber,
+
+        qrToken:
+          result.pass.qrToken,
+
+        nfcToken:
+          result.pass.nfcToken,
+
+        active:
+          result.pass.isActive,
+
+        revoked:
+          result.pass.isRevoked,
+
+        nfcEnabled:
+          result.pass.nfcEnabled,
+
+        issuedAt:
+          result.pass.issuedAt,
+
+        expiresAt:
+          result.pass.expiresAt,
       },
 
       alreadyCheckedIn:
@@ -110,14 +142,12 @@ export async function verifyPass(
       checkedInBy:
         result.checkedInBy,
     });
-
   } catch (error: any) {
-
     return res.status(400).json({
       success: false,
+
       message:
         error.message,
     });
-
   }
 }

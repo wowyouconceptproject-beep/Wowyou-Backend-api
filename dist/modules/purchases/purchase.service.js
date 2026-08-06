@@ -6,14 +6,17 @@ exports.getMyEvents = getMyEvents;
 exports.getMyEvent = getMyEvent;
 const prisma_1 = require("../../lib/prisma");
 const revolut_service_1 = require("../payments/revolut/revolut.service");
+const ticket_issuance_service_1 = require("./ticket-issuance.service");
 /*
 |--------------------------------------------------------------------------
 | Currency Minor Units
 |--------------------------------------------------------------------------
 */
 function toMinorUnits(amount, currency) {
-    const normalizedCurrency = currency.trim().toUpperCase();
-    const zeroDecimalCurrencies = new Set([
+    const normalized = currency
+        .trim()
+        .toUpperCase();
+    const zeroDecimal = new Set([
         "BIF",
         "CLP",
         "DJF",
@@ -31,7 +34,7 @@ function toMinorUnits(amount, currency) {
         "XOF",
         "XPF",
     ]);
-    if (zeroDecimalCurrencies.has(normalizedCurrency)) {
+    if (zeroDecimal.has(normalized)) {
         return Math.round(amount);
     }
     return Math.round(amount * 100);
@@ -44,14 +47,14 @@ function toMinorUnits(amount, currency) {
 async function createPurchase(userId, ticketTypeId, quantity) {
     /*
     |--------------------------------------------------------------------------
-    | Validate Input
+    | Validation
     |--------------------------------------------------------------------------
     */
     if (!userId) {
         throw new Error("User ID is required.");
     }
     if (!ticketTypeId) {
-        throw new Error("Ticket type ID is required.");
+        throw new Error("Ticket type is required.");
     }
     if (!Number.isInteger(quantity) ||
         quantity < 1) {
@@ -75,29 +78,19 @@ async function createPurchase(userId, ticketTypeId, quantity) {
     }
     /*
     |--------------------------------------------------------------------------
-    | Ticket Availability
+    | Availability
     |--------------------------------------------------------------------------
     */
     if (!ticket.isActive) {
         throw new Error("Ticket unavailable.");
     }
-    /*
-    |--------------------------------------------------------------------------
-    | Event Availability
-    |--------------------------------------------------------------------------
-    */
     if (ticket.event.status !==
         "PUBLISHED") {
-        throw new Error("This event is not currently available.");
+        throw new Error("This event is not published.");
     }
-    /*
-    |--------------------------------------------------------------------------
-    | Prevent Purchase For Ended Events
-    |--------------------------------------------------------------------------
-    */
     const now = new Date();
-    if (ticket.event.endDate &&
-        new Date(ticket.event.endDate) <= now) {
+    if (ticket.event.endDate <=
+        now) {
         throw new Error("This event has already ended.");
     }
     /*
@@ -105,33 +98,25 @@ async function createPurchase(userId, ticketTypeId, quantity) {
     | Inventory
     |--------------------------------------------------------------------------
     */
-    const remainingTickets = ticket.quantity -
+    const remaining = ticket.quantity -
         ticket.sold;
-    if (remainingTickets <= 0) {
+    if (remaining <= 0) {
         throw new Error("This ticket is sold out.");
     }
     if (quantity >
-        remainingTickets) {
-        throw new Error(`Only ${remainingTickets} ticket${remainingTickets === 1
+        remaining) {
+        throw new Error(`Only ${remaining} ticket${remaining === 1
             ? ""
             : "s"} remaining.`);
     }
     /*
-    |--------------------------------------------------------------------------
-    | Currency
-    |--------------------------------------------------------------------------
-    */
+   |--------------------------------------------------------------------------
+   | Amount
+   |--------------------------------------------------------------------------
+   */
     const currency = ticket.event.currency
-        ?.trim()
+        .trim()
         .toUpperCase();
-    if (!currency) {
-        throw new Error("Event currency is missing.");
-    }
-    /*
-    |--------------------------------------------------------------------------
-    | Calculate Amount
-    |--------------------------------------------------------------------------
-    */
     const unitPrice = Number(ticket.price);
     if (!Number.isFinite(unitPrice) ||
         unitPrice < 0) {
@@ -146,17 +131,17 @@ async function createPurchase(userId, ticketTypeId, quantity) {
     |--------------------------------------------------------------------------
     | Free Ticket
     |--------------------------------------------------------------------------
-    |
-    | Free tickets do not need Revolut.
-    |
-    | Inventory and purchase creation happen inside one transaction.
-    |
     */
     if (amount === 0) {
+        /*
+        |--------------------------------------------------------------------------
+        | Transaction
+        |--------------------------------------------------------------------------
+        */
         const purchase = await prisma_1.prisma.$transaction(async (tx) => {
             /*
             |--------------------------------------------------------------------------
-            | Reload Ticket Inside Transaction
+            | Reload Ticket
             |--------------------------------------------------------------------------
             */
             const currentTicket = await tx.ticketType.findUnique({
@@ -170,6 +155,11 @@ async function createPurchase(userId, ticketTypeId, quantity) {
             if (!currentTicket.isActive) {
                 throw new Error("Ticket unavailable.");
             }
+            /*
+            |--------------------------------------------------------------------------
+            | Inventory Check
+            |--------------------------------------------------------------------------
+            */
             const remaining = currentTicket.quantity -
                 currentTicket.sold;
             if (remaining <
@@ -182,10 +172,10 @@ async function createPurchase(userId, ticketTypeId, quantity) {
             }
             /*
             |--------------------------------------------------------------------------
-            | Atomic Inventory Claim
+            | Reserve Inventory
             |--------------------------------------------------------------------------
             */
-            const inventoryUpdate = await tx.ticketType.updateMany({
+            const inventory = await tx.ticketType.updateMany({
                 where: {
                     id: ticketTypeId,
                     isActive: true,
@@ -200,13 +190,13 @@ async function createPurchase(userId, ticketTypeId, quantity) {
                     },
                 },
             });
-            if (inventoryUpdate.count !==
+            if (inventory.count !==
                 1) {
-                throw new Error("This ticket is sold out or there are not enough tickets remaining.");
+                throw new Error("Ticket inventory changed. Please try again.");
             }
             /*
             |--------------------------------------------------------------------------
-            | Create Free Purchase
+            | Create Purchase
             |--------------------------------------------------------------------------
             */
             return tx.ticketPurchase.create({
@@ -217,29 +207,37 @@ async function createPurchase(userId, ticketTypeId, quantity) {
                     quantity,
                     amount,
                     currency,
-                    paymentProvider: null,
+                    paymentProvider: "FREE",
                     paymentReference: null,
                     paymentMethod: "FREE",
+                    gatewayStatus: "COMPLETED",
                     status: "PAID",
+                    paymentCompletedAt: new Date(),
                 },
             });
         });
+        /*
+        |--------------------------------------------------------------------------
+        | Issue Event Passes
+        |--------------------------------------------------------------------------
+        */
+        const passes = await (0, ticket_issuance_service_1.issuePurchase)(purchase.id);
         return {
             purchase,
+            passes,
             checkoutUrl: null,
             paymentRequired: false,
         };
     }
     /*
-    |--------------------------------------------------------------------------
-    | Paid Purchase
-    |--------------------------------------------------------------------------
-    |
-    | Do NOT increment sold here.
-    |
-    | Payment has not happened yet.
-    |
-    */
+  |--------------------------------------------------------------------------
+  | Paid Ticket
+  |--------------------------------------------------------------------------
+  |
+  | Create a pending purchase first.
+  | Inventory is NOT reserved until payment succeeds.
+  |
+  */
     const purchase = await prisma_1.prisma.ticketPurchase.create({
         data: {
             userId,
@@ -251,12 +249,13 @@ async function createPurchase(userId, ticketTypeId, quantity) {
             paymentProvider: "REVOLUT",
             paymentReference: null,
             paymentMethod: null,
+            gatewayStatus: "PENDING",
             status: "PENDING",
         },
     });
     /*
     |--------------------------------------------------------------------------
-    | Revolut Amount
+    | Convert Amount
     |--------------------------------------------------------------------------
     */
     const revolutAmount = toMinorUnits(amount, currency);
@@ -326,6 +325,7 @@ async function createPurchase(userId, ticketTypeId, quantity) {
         */
         return {
             purchase: updatedPurchase,
+            passes: [],
             checkoutUrl: order.checkout_url,
             paymentRequired: true,
         };
@@ -334,7 +334,7 @@ async function createPurchase(userId, ticketTypeId, quantity) {
         console.error("REVOLUT PURCHASE ERROR:", error);
         /*
         |--------------------------------------------------------------------------
-        | Clean Up Pending Purchase
+        | Cleanup Pending Purchase
         |--------------------------------------------------------------------------
         */
         try {
@@ -370,10 +370,12 @@ async function getMyTickets(userId) {
                     id: true,
                     title: true,
                     venue: true,
-                    startDate: true,
-                    endDate: true,
+                    city: true,
+                    country: true,
                     coverImage: true,
                     featuredImage: true,
+                    startDate: true,
+                    endDate: true,
                     currency: true,
                 },
             },
@@ -382,6 +384,15 @@ async function getMyTickets(userId) {
                     id: true,
                     name: true,
                     price: true,
+                },
+            },
+            passes: {
+                where: {
+                    isActive: true,
+                    isRevoked: false,
+                },
+                orderBy: {
+                    createdAt: "asc",
                 },
             },
             user: {
@@ -399,6 +410,7 @@ async function getMyTickets(userId) {
                     },
                 },
             },
+            checkIn: true,
         },
         orderBy: {
             createdAt: "desc",
@@ -418,40 +430,40 @@ async function getMyEvents(userId) {
         },
         include: {
             event: {
-                select: {
-                    id: true,
-                    title: true,
-                    description: true,
-                    venue: true,
-                    coverImage: true,
-                    featuredImage: true,
-                    startDate: true,
-                    endDate: true,
-                    currency: true,
-                },
-            },
-            ticket: {
-                select: {
-                    id: true,
-                    name: true,
-                    price: true,
-                },
-            },
-            user: {
-                select: {
-                    id: true,
-                    firstName: true,
-                    lastName: true,
-                    attendeeProfile: {
-                        select: {
-                            avatar: true,
-                            profession: true,
-                            company: true,
-                            jobTitle: true,
+                include: {
+                    announcements: {
+                        where: {
+                            OR: [
+                                {
+                                    expiresAt: null,
+                                },
+                                {
+                                    expiresAt: {
+                                        gt: new Date(),
+                                    },
+                                },
+                            ],
                         },
+                        orderBy: [
+                            {
+                                isPinned: "desc",
+                            },
+                            {
+                                createdAt: "desc",
+                            },
+                        ],
+                        take: 5,
                     },
                 },
             },
+            ticket: true,
+            passes: {
+                where: {
+                    isActive: true,
+                    isRevoked: false,
+                },
+            },
+            checkIn: true,
         },
         orderBy: {
             event: {
@@ -466,9 +478,6 @@ async function getMyEvents(userId) {
 |--------------------------------------------------------------------------
 */
 async function getMyEvent(userId, purchaseId) {
-    if (!purchaseId) {
-        throw new Error("Purchase ID is required.");
-    }
     const purchase = await prisma_1.prisma.ticketPurchase.findFirst({
         where: {
             id: purchaseId,
@@ -478,11 +487,6 @@ async function getMyEvent(userId, purchaseId) {
         include: {
             event: {
                 include: {
-                    /*
-                    |--------------------------------------------------------------------------
-                    | Announcements
-                    |--------------------------------------------------------------------------
-                    */
                     announcements: {
                         where: {
                             OR: [
@@ -496,15 +500,6 @@ async function getMyEvent(userId, purchaseId) {
                                 },
                             ],
                         },
-                        include: {
-                            author: {
-                                select: {
-                                    id: true,
-                                    name: true,
-                                    role: true,
-                                },
-                            },
-                        },
                         orderBy: [
                             {
                                 isPinned: "desc",
@@ -513,71 +508,34 @@ async function getMyEvent(userId, purchaseId) {
                                 createdAt: "desc",
                             },
                         ],
-                        take: 20,
                     },
-                    /*
-                    |--------------------------------------------------------------------------
-                    | Event Activity
-                    |--------------------------------------------------------------------------
-                    */
-                    activities: {
-                        include: {
-                            actor: {
-                                select: {
-                                    id: true,
-                                    name: true,
-                                    role: true,
-                                },
-                            },
-                            attendee: {
-                                include: {
-                                    user: {
-                                        select: {
-                                            firstName: true,
-                                            lastName: true,
-                                        },
-                                    },
-                                },
-                            },
-                            ticketType: {
-                                select: {
-                                    id: true,
-                                    name: true,
-                                },
-                            },
-                            purchase: {
-                                select: {
-                                    id: true,
-                                },
-                            },
-                        },
+                    sessions: {
                         orderBy: {
-                            createdAt: "desc",
+                            startTime: "asc",
                         },
-                        take: 30,
                     },
                 },
             },
             ticket: true,
+            passes: {
+                where: {
+                    isActive: true,
+                    isRevoked: false,
+                },
+            },
+            checkIn: {
+                include: {
+                    staff: true,
+                },
+            },
+            activities: {
+                orderBy: {
+                    createdAt: "desc",
+                },
+            },
             user: {
-                select: {
-                    id: true,
-                    firstName: true,
-                    lastName: true,
-                    email: true,
-                    attendeeProfile: {
-                        select: {
-                            profession: true,
-                            industry: true,
-                            company: true,
-                            jobTitle: true,
-                            avatar: true,
-                            bio: true,
-                            linkedin: true,
-                            goals: true,
-                            skills: true,
-                        },
-                    },
+                include: {
+                    attendeeProfile: true,
                 },
             },
         },
