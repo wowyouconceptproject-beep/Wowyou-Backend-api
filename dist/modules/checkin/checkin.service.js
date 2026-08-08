@@ -157,6 +157,23 @@ async function performCheckIn(input) {
                     updatedEvent.capacity) *
                     100).toFixed(2)),
         });
+        /*
+|--------------------------------------------------------------------------
+| Notify Attendee
+|--------------------------------------------------------------------------
+*/
+        (0, socket_1.getIO)()
+            .to((0, rooms_1.attendeeRoom)(purchase.userId))
+            .emit(socket_events_1.SocketEvents.PassCheckedIn, {
+            passId: purchase.passes[0]?.id,
+            purchaseId: purchase.id,
+            attendeeId: purchase.userId,
+            checkedIn: true,
+            checkedInAt: checkIn.checkedInAt,
+            checkedInBy: input.staffId,
+            station: input.station,
+            status: "CHECKED_IN",
+        });
         return {
             success: true,
             alreadyCheckedIn: false,

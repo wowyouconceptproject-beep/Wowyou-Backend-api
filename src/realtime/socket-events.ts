@@ -1,9 +1,4 @@
 export const SocketEvents = {
-  /*
-  |--------------------------------------------------------------------------
-  | Connection
-  |--------------------------------------------------------------------------
-  */
 
   JoinEvent: "join-event",
   LeaveEvent: "leave-event",
@@ -16,9 +11,24 @@ export const SocketEvents = {
 
   /*
   |--------------------------------------------------------------------------
+  | Pass
+  |--------------------------------------------------------------------------
+  */
+
+  PassIssued: "pass-issued",
+
+  PassCheckedIn: "pass-checked-in",
+
+  PassRevoked: "pass-revoked",
+
+  /*
+  |--------------------------------------------------------------------------
   | Capacity
   |--------------------------------------------------------------------------
   */
 
   CapacityUpdated: "capacity-updated",
+
+  EventStatusChanged: "event-status-changed",
+
 } as const;

@@ -22,7 +22,8 @@ function initializeSocket(server) {
         */
         socket.on(socket_events_1.SocketEvents.JoinEvent, ({ eventId, token, }) => {
             const user = (0, socket_auth_1.verifySocketToken)(token);
-            if (!user) {
+            if (!user ||
+                !eventId) {
                 socket.emit("socket.error", {
                     message: "Unauthorized",
                 });
@@ -47,30 +48,32 @@ function initializeSocket(server) {
         |--------------------------------------------------------------------------
         | Join Attendee
         |--------------------------------------------------------------------------
+        | Uses authenticated JWT identity.
+        | Client no longer sends attendeeId.
+        |--------------------------------------------------------------------------
         */
-        socket.on(socket_events_1.SocketEvents.JoinAttendee, ({ attendeeId, token, }) => {
+        socket.on(socket_events_1.SocketEvents.JoinAttendee, ({ token, }) => {
             const user = (0, socket_auth_1.verifySocketToken)(token);
-            if (!user ||
-                !attendeeId) {
+            if (!user) {
                 socket.emit("socket.error", {
                     message: "Unauthorized",
                 });
                 return;
             }
             socket.user = user;
-            socket.join((0, rooms_1.attendeeRoom)(attendeeId));
-            console.log(`${user.userId} joined ${(0, rooms_1.attendeeRoom)(attendeeId)}`);
+            socket.join((0, rooms_1.attendeeRoom)(user.userId));
+            console.log(`${user.userId} joined ${(0, rooms_1.attendeeRoom)(user.userId)}`);
         });
         /*
         |--------------------------------------------------------------------------
         | Leave Attendee
         |--------------------------------------------------------------------------
         */
-        socket.on(socket_events_1.SocketEvents.LeaveAttendee, (attendeeId) => {
-            if (!attendeeId)
+        socket.on(socket_events_1.SocketEvents.LeaveAttendee, () => {
+            if (!socket.user)
                 return;
-            socket.leave((0, rooms_1.attendeeRoom)(attendeeId));
-            console.log(`${socket.id} left ${(0, rooms_1.attendeeRoom)(attendeeId)}`);
+            socket.leave((0, rooms_1.attendeeRoom)(socket.user.userId));
+            console.log(`${socket.user.userId} left ${(0, rooms_1.attendeeRoom)(socket.user.userId)}`);
         });
         /*
         |--------------------------------------------------------------------------

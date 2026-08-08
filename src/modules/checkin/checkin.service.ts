@@ -8,6 +8,7 @@ import {
 
 import {
   eventRoom,
+  attendeeRoom,
 } from "../../realtime/rooms";
 
 import {
@@ -283,6 +284,47 @@ export async function performCheckIn(
                   ),
           },
         );
+
+        /*
+|--------------------------------------------------------------------------
+| Notify Attendee
+|--------------------------------------------------------------------------
+*/
+
+getIO()
+  .to(
+    attendeeRoom(
+      purchase.userId,
+    ),
+  )
+  .emit(
+    SocketEvents.PassCheckedIn,
+    {
+      passId:
+        purchase.passes[0]?.id,
+
+      purchaseId:
+        purchase.id,
+
+      attendeeId:
+        purchase.userId,
+
+      checkedIn:
+        true,
+
+      checkedInAt:
+        checkIn.checkedInAt,
+
+      checkedInBy:
+        input.staffId,
+
+      station:
+        input.station,
+
+      status:
+        "CHECKED_IN",
+    },
+  );
 
       return {
         success: true,

@@ -12,7 +12,6 @@ import {
 
 import {
   verifySocketToken,
-  SocketUser,
 } from "../middleware/socket-auth";
 
 let io: Server;
@@ -41,42 +40,47 @@ export function initializeSocket(
       */
 
       socket.on(
-  SocketEvents.JoinEvent,
-  ({
-    eventId,
-    token,
-  }: {
-    eventId: string;
-    token: string;
-  }) => {
-    const user =
-      verifySocketToken(
-        token
-      );
+        SocketEvents.JoinEvent,
+        ({
+          eventId,
+          token,
+        }: {
+          eventId: string;
+          token: string;
+        }) => {
+          const user =
+            verifySocketToken(
+              token
+            );
 
-    if (!user) {
-      socket.emit(
-        "socket.error",
-        {
-          message:
-            "Unauthorized",
+          if (
+            !user ||
+            !eventId
+          ) {
+            socket.emit(
+              "socket.error",
+              {
+                message:
+                  "Unauthorized",
+              }
+            );
+
+            return;
+          }
+
+          socket.user = user;
+
+          socket.join(
+            eventRoom(eventId)
+          );
+
+          console.log(
+            `${user.userId} joined ${eventRoom(
+              eventId
+            )}`
+          );
         }
       );
-
-      return;
-    }
-
-    socket.user = user;
-
-    socket.join(
-      eventRoom(eventId)
-    );
-
-    console.log(
-      `${user.userId} joined ${eventRoom(eventId)}`
-    );
-  }
-);
 
       /*
       |--------------------------------------------------------------------------
@@ -87,7 +91,8 @@ export function initializeSocket(
       socket.on(
         SocketEvents.LeaveEvent,
         (eventId: string) => {
-          if (!eventId) return;
+          if (!eventId)
+            return;
 
           socket.leave(
             eventRoom(eventId)
@@ -105,15 +110,16 @@ export function initializeSocket(
       |--------------------------------------------------------------------------
       | Join Attendee
       |--------------------------------------------------------------------------
+      | Uses authenticated JWT identity.
+      | Client no longer sends attendeeId.
+      |--------------------------------------------------------------------------
       */
 
       socket.on(
         SocketEvents.JoinAttendee,
         ({
-          attendeeId,
           token,
         }: {
-          attendeeId: string;
           token: string;
         }) => {
           const user =
@@ -121,10 +127,7 @@ export function initializeSocket(
               token
             );
 
-          if (
-            !user ||
-            !attendeeId
-          ) {
+          if (!user) {
             socket.emit(
               "socket.error",
               {
@@ -140,13 +143,13 @@ export function initializeSocket(
 
           socket.join(
             attendeeRoom(
-              attendeeId
+              user.userId
             )
           );
 
           console.log(
             `${user.userId} joined ${attendeeRoom(
-              attendeeId
+              user.userId
             )}`
           );
         }
@@ -160,21 +163,19 @@ export function initializeSocket(
 
       socket.on(
         SocketEvents.LeaveAttendee,
-        (
-          attendeeId: string
-        ) => {
-          if (!attendeeId)
+        () => {
+          if (!socket.user)
             return;
 
           socket.leave(
             attendeeRoom(
-              attendeeId
+              socket.user.userId
             )
           );
 
           console.log(
-            `${socket.id} left ${attendeeRoom(
-              attendeeId
+            `${socket.user.userId} left ${attendeeRoom(
+              socket.user.userId
             )}`
           );
         }
