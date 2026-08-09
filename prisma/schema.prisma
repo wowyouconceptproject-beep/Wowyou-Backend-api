@@ -1024,3 +1024,31 @@ model UserSettings {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
+
+model LegalConsent {
+  id String @id @default(cuid())
+
+  userId String
+
+  fullName String
+  email    String
+  role     String
+
+  policyVersion String
+  acceptedAt    DateTime @default(now())
+
+  ipAddress     String?
+  deviceVersion String?
+
+  policiesAccepted Json
+
+  consentStatus        String  @default("ACCEPTED")
+  reacceptanceRequired Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([policyVersion])
+  @@index([acceptedAt])
+}
