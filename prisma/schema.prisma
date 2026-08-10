@@ -106,6 +106,19 @@ enum EventCategory {
   OTHER
 }
 
+enum LegalConsentType {
+  POLICY
+  COOKIE
+}
+
+enum LegalConsentStatus {
+  ACCEPTED
+  ACCEPTED_ALL
+  REJECTED_NON_ESSENTIAL
+  CUSTOMISED
+  REQUIRES_REACCEPTANCE
+}
+
 model User {
   id String @id @default(cuid())
 
@@ -1028,27 +1041,77 @@ model UserSettings {
 model LegalConsent {
   id String @id @default(cuid())
 
-  userId String
+  // Account information
+  userId String?
 
-  fullName String
-  email    String
-  role     String
+  fullName String?
+  email    String?
+  role     String?
 
+  // POLICY = platform legal/policy acceptance
+  // COOKIE = website/webapp cookie consent
+  consentType LegalConsentType @default(POLICY)
+
+  // Policy / consent version
+  // Examples:
+  // "v1.0"
+  // "Cookie Policy v1.0"
   policyVersion String
-  acceptedAt    DateTime @default(now())
+
+  // Policies accepted by the user
+  //
+  // Example:
+  // {
+  //   "terms": true,
+  //   "privacy": true,
+  //   "acceptableUse": true,
+  //   "refunds": true,
+  //   "ai": true,
+  //   "dpa": true,
+  //   "marketplace": false,
+  //   "subprocessors": true
+  // }
+  policiesAccepted Json?
+
+  // Cookie categories accepted
+  //
+  // Example:
+  // {
+  //   "analytics": true,
+  //   "functional": true,
+  //   "aiPersonalisation": false,
+  //   "marketing": false
+  // }
+  cookieCategories Json?
+
+  // Overall consent status
+  consentStatus LegalConsentStatus @default(ACCEPTED)
+
+  // Strictly necessary cookies are always active.
+  strictlyNecessary Boolean @default(true)
+
+  // Audit information
+  acceptedAt DateTime @default(now())
 
   ipAddress     String?
   deviceVersion String?
+  consentSource String?
 
-  policiesAccepted Json
-
-  consentStatus        String  @default("ACCEPTED")
+  // Used when a newer policy version requires
+  // the user to accept the policies again.
   reacceptanceRequired Boolean @default(false)
+
+  // Used when cookie consent is subsequently withdrawn.
+  withdrawnAt DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([userId])
+  @@index([email])
   @@index([policyVersion])
+  @@index([consentType])
+  @@index([consentStatus])
   @@index([acceptedAt])
+  @@index([consentSource])
 }

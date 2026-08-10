@@ -1,56 +1,96 @@
 import { prisma } from "../../lib/prisma";
 
 import {
+  CURRENT_COOKIE_POLICY_VERSION,
   CURRENT_POLICIES,
   CURRENT_POLICY_VERSION,
+  COOKIE_CATEGORIES,
 } from "./legal.constants";
 
 interface RecordConsentInput {
-  userId: string;
-  fullName: string;
-  email: string;
-  role: string;
+  userId?: string;
+  fullName?: string;
+  email?: string;
+  role?: string;
+
+  consentType?: "POLICY" | "COOKIE";
+
   ipAddress?: string;
   deviceVersion?: string;
+  consentSource?: string;
+
+  policiesAccepted?: Record<string, boolean>;
+
+  cookieCategories?: Record<string, boolean>;
+
+  consentStatus?:
+    | "ACCEPTED"
+    | "ACCEPTED_ALL"
+    | "REJECTED_NON_ESSENTIAL"
+    | "CUSTOMISED";
+
+  reacceptanceRequired?: boolean;
 }
 
 export async function recordLegalConsent(
   input: RecordConsentInput,
 ) {
+  const consentType =
+    input.consentType ?? "POLICY";
+
+  const isCookieConsent =
+    consentType === "COOKIE";
+
+  const policyVersion = isCookieConsent
+    ? CURRENT_COOKIE_POLICY_VERSION
+    : CURRENT_POLICY_VERSION;
+
   const consent =
     await prisma.legalConsent.create({
       data: {
-        userId:
-          input.userId,
+        userId: input.userId,
 
-        fullName:
-          input.fullName,
+        fullName: input.fullName,
+        email: input.email,
+        role: input.role,
 
-        email:
-          input.email,
+        consentType,
 
-        role:
-          input.role,
+        policyVersion,
 
-        policyVersion:
-          CURRENT_POLICY_VERSION,
+        acceptedAt: new Date(),
 
-        acceptedAt:
-          new Date(),
+        ipAddress: input.ipAddress,
 
-        ipAddress:
-          input.ipAddress,
+        deviceVersion: input.deviceVersion,
 
-        deviceVersion:
-          input.deviceVersion,
+        consentSource:
+          input.consentSource,
 
-        policiesAccepted:
-          [...CURRENT_POLICIES],
+        ...(input.policiesAccepted !==
+        undefined
+          ? {
+              policiesAccepted:
+                input.policiesAccepted,
+            }
+          : {}),
+
+        ...(input.cookieCategories !==
+        undefined
+          ? {
+              cookieCategories:
+                input.cookieCategories,
+            }
+          : {}),
 
         consentStatus:
+          input.consentStatus ??
           "ACCEPTED",
 
+        strictlyNecessary: true,
+
         reacceptanceRequired:
+          input.reacceptanceRequired ??
           false,
       },
     });
@@ -60,17 +100,37 @@ export async function recordLegalConsent(
 
 export async function hasCurrentConsent(
   userId: string,
+  consentType:
+    | "POLICY"
+    | "COOKIE" = "POLICY",
 ) {
+  const policyVersion =
+    consentType === "COOKIE"
+      ? CURRENT_COOKIE_POLICY_VERSION
+      : CURRENT_POLICY_VERSION;
+
   const consent =
     await prisma.legalConsent.findFirst({
       where: {
         userId,
-        policyVersion:
-          CURRENT_POLICY_VERSION,
+        consentType,
+        policyVersion,
+
         consentStatus:
-          "ACCEPTED",
-        reacceptanceRequired:
-          false,
+          consentType === "POLICY"
+            ? "ACCEPTED"
+            : {
+                in: [
+                  "ACCEPTED",
+                  "ACCEPTED_ALL",
+                  "REJECTED_NON_ESSENTIAL",
+                  "CUSTOMISED",
+                ],
+              },
+
+        reacceptanceRequired: false,
+
+        withdrawnAt: null,
       },
 
       orderBy: {
@@ -87,6 +147,29 @@ export function getCurrentPolicies() {
       CURRENT_POLICY_VERSION,
 
     policies:
-      [...CURRENT_POLICIES],
+      CURRENT_POLICIES.map(
+        (policy) => ({
+          key: policy.key,
+          name: policy.name,
+          required: policy.required,
+        }),
+      ),
+  };
+}
+
+export function getCurrentCookiePolicy() {
+  return {
+    version:
+      CURRENT_COOKIE_POLICY_VERSION,
+
+    categories:
+      COOKIE_CATEGORIES.map(
+        (category) => ({
+          key: category.key,
+          name: category.name,
+          required:
+            category.required,
+        }),
+      ),
   };
 }
