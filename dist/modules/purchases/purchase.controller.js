@@ -1,6 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.create = create;
+exports.paymentStatus = paymentStatus;
 exports.myTickets = myTickets;
 exports.myEvents = myEvents;
 exports.getMyEvent = getMyEvent;
@@ -84,6 +85,51 @@ async function create(req, res) {
             success: false,
             message: error?.message ??
                 "Unable to create purchase.",
+        });
+    }
+}
+/*
+|--------------------------------------------------------------------------
+| Payment Status
+|--------------------------------------------------------------------------
+*/
+async function paymentStatus(req, res) {
+    try {
+        const userId = req.user?.userId;
+        if (!userId) {
+            return res.status(401).json({
+                success: false,
+                message: "Authentication required.",
+            });
+        }
+        const purchaseId = Array.isArray(req.params.purchaseId)
+            ? req.params.purchaseId[0]
+            : req.params.purchaseId;
+        if (!purchaseId) {
+            return res.status(400).json({
+                success: false,
+                message: "Purchase ID is required.",
+            });
+        }
+        const purchase = await (0, purchase_service_1.getPurchasePaymentStatus)(userId, purchaseId);
+        return res.status(200).json({
+            success: true,
+            purchase,
+        });
+    }
+    catch (error) {
+        console.error("PAYMENT STATUS ERROR:", error);
+        if (error?.message ===
+            "Purchase not found.") {
+            return res.status(404).json({
+                success: false,
+                message: "Purchase not found.",
+            });
+        }
+        return res.status(400).json({
+            success: false,
+            message: error?.message ??
+                "Unable to load payment status.",
         });
     }
 }

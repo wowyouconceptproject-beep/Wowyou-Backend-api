@@ -10,6 +10,7 @@ const router = (0, express_1.Router)();
 |--------------------------------------------------------------------------
 */
 router.post("/create", auth_middleware_1.auth, purchase_controller_1.create);
+router.get("/:purchaseId/status", auth_middleware_1.auth, purchase_controller_1.paymentStatus);
 /*
 |--------------------------------------------------------------------------
 | Legacy

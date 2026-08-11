@@ -6,6 +6,10 @@ import {
   webhook,
 } from "./revolut.controller";
 
+import {
+  paymentReturn,
+} from "./revolut-return.controller";
+
 const router =
   Router();
 
@@ -23,6 +27,20 @@ const router =
 router.post(
   "/webhook",
   webhook,
+);
+
+/*
+|--------------------------------------------------------------------------
+| Payment Return
+|--------------------------------------------------------------------------
+|
+| Revolut redirects the customer here after checkout.
+|
+*/
+
+router.get(
+  "/return",
+  paymentReturn,
 );
 
 export default router;

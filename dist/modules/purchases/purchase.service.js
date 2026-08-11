@@ -2,6 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.createPurchase = createPurchase;
 exports.getMyTickets = getMyTickets;
+exports.getPurchasePaymentStatus = getPurchasePaymentStatus;
 exports.getMyEvents = getMyEvents;
 exports.getMyEvent = getMyEvent;
 const prisma_1 = require("../../lib/prisma");
@@ -291,7 +292,7 @@ async function createPurchase(userId, ticketTypeId, quantity) {
             ticketTypeId,
             description: `${ticket.event.title} - ${ticket.name}`,
             redirectUrl: paymentReturnUrl
-                ? `${paymentReturnUrl}/tickets/payment-return?purchase=${encodeURIComponent(purchase.id)}`
+                ? `${paymentReturnUrl}?purchase=${encodeURIComponent(purchase.id)}`
                 : undefined,
         });
         /*
@@ -416,6 +417,69 @@ async function getMyTickets(userId) {
             createdAt: "desc",
         },
     });
+}
+/*
+|--------------------------------------------------------------------------
+| Purchase Payment Status
+|--------------------------------------------------------------------------
+*/
+async function getPurchasePaymentStatus(userId, purchaseId) {
+    const purchase = await prisma_1.prisma.ticketPurchase.findFirst({
+        where: {
+            id: purchaseId,
+            userId,
+        },
+        select: {
+            id: true,
+            status: true,
+            gatewayStatus: true,
+            paymentProvider: true,
+            paymentReference: true,
+            paymentCompletedAt: true,
+            amount: true,
+            currency: true,
+            quantity: true,
+            event: {
+                select: {
+                    id: true,
+                    title: true,
+                },
+            },
+            ticket: {
+                select: {
+                    id: true,
+                    name: true,
+                },
+            },
+            passes: {
+                where: {
+                    isActive: true,
+                    isRevoked: false,
+                },
+                select: {
+                    id: true,
+                },
+            },
+        },
+    });
+    if (!purchase) {
+        throw new Error("Purchase not found.");
+    }
+    return {
+        id: purchase.id,
+        status: purchase.status,
+        gatewayStatus: purchase.gatewayStatus,
+        paymentProvider: purchase.paymentProvider,
+        paymentReference: purchase.paymentReference,
+        paymentCompletedAt: purchase.paymentCompletedAt,
+        amount: purchase.amount,
+        currency: purchase.currency,
+        quantity: purchase.quantity,
+        event: purchase.event,
+        ticket: purchase.ticket,
+        passes: purchase.passes,
+        hasPass: purchase.passes.length > 0,
+    };
 }
 /*
 |--------------------------------------------------------------------------

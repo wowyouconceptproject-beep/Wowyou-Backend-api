@@ -6,6 +6,7 @@ import {
   createPurchase,
   getMyTickets,
   getMyEvents,
+  getPurchasePaymentStatus,
   getMyEvent as getMyEventService,
 } from "./purchase.service";
 
@@ -135,6 +136,79 @@ export async function create(
       message:
         error?.message ??
         "Unable to create purchase.",
+    });
+  }
+}
+
+/*
+|--------------------------------------------------------------------------
+| Payment Status
+|--------------------------------------------------------------------------
+*/
+
+export async function paymentStatus(
+  req: AuthRequest,
+  res: Response,
+) {
+  try {
+    const userId =
+      req.user?.userId;
+
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message:
+          "Authentication required.",
+      });
+    }
+
+    const purchaseId =
+      Array.isArray(
+        req.params.purchaseId,
+      )
+        ? req.params.purchaseId[0]
+        : req.params.purchaseId;
+
+    if (!purchaseId) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Purchase ID is required.",
+      });
+    }
+
+    const purchase =
+      await getPurchasePaymentStatus(
+        userId,
+        purchaseId,
+      );
+
+    return res.status(200).json({
+      success: true,
+      purchase,
+    });
+  } catch (error: any) {
+    console.error(
+      "PAYMENT STATUS ERROR:",
+      error,
+    );
+
+    if (
+      error?.message ===
+      "Purchase not found."
+    ) {
+      return res.status(404).json({
+        success: false,
+        message:
+          "Purchase not found.",
+      });
+    }
+
+    return res.status(400).json({
+      success: false,
+      message:
+        error?.message ??
+        "Unable to load payment status.",
     });
   }
 }
