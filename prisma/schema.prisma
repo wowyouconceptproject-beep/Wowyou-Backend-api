@@ -214,6 +214,10 @@ model Event {
 
   venueAddress String?
 
+  venueLatitude Float?
+
+  venueLongitude Float?
+
   city String?
 
   country String?

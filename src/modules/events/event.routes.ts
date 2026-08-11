@@ -1,6 +1,10 @@
-import { Router } from "express";
+import {
+  Router,
+} from "express";
 
-import { auth } from "../auth/auth.middleware";
+import {
+  auth,
+} from "../auth/auth.middleware";
 
 import staffRoutes from "./staff.routes";
 import activityRoutes from "./activity.routes";
@@ -22,7 +26,8 @@ import {
   attendees,
 } from "./event.controller";
 
-const router = Router();
+const router =
+  Router();
 
 const networkingController =
   new NetworkingController();
@@ -37,6 +42,33 @@ router.post(
   "/",
   auth,
   create,
+);
+
+/*
+|--------------------------------------------------------------------------
+| Public Discovery
+|--------------------------------------------------------------------------
+|
+| IMPORTANT:
+| These routes MUST appear before /:id.
+|
+| Otherwise /public can be interpreted as:
+|
+| /:id
+|
+| and sent to the authenticated organizer
+| event handler.
+|
+*/
+
+router.get(
+  "/public",
+  publicEvents,
+);
+
+router.get(
+  "/public/:id",
+  getPublicEvent,
 );
 
 /*
@@ -61,22 +93,6 @@ router.patch(
   "/:id/publish",
   auth,
   publish,
-);
-
-/*
-|--------------------------------------------------------------------------
-| Public Discovery
-|--------------------------------------------------------------------------
-*/
-
-router.get(
-  "/public",
-  publicEvents,
-);
-
-router.get(
-  "/public/:id",
-  getPublicEvent,
 );
 
 /*

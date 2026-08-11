@@ -30,7 +30,7 @@ import {
 
 export async function create(
   req: AuthRequest,
-  res: Response
+  res: Response,
 ) {
   try {
     const {
@@ -39,6 +39,8 @@ export async function create(
 
       venue,
       venueAddress,
+      venueLatitude,
+      venueLongitude,
       city,
       country,
 
@@ -63,6 +65,23 @@ export async function create(
 
           venue,
           venueAddress,
+
+          venueLatitude:
+            venueLatitude !== undefined &&
+            venueLatitude !== null
+              ? Number(
+                  venueLatitude,
+                )
+              : undefined,
+
+          venueLongitude:
+            venueLongitude !== undefined &&
+            venueLongitude !== null
+              ? Number(
+                  venueLongitude,
+                )
+              : undefined,
+
           city,
           country,
 
@@ -76,7 +95,7 @@ export async function create(
           endDate,
 
           isPublic,
-        }
+        },
       );
 
     return res.status(201).json({
@@ -86,7 +105,7 @@ export async function create(
   } catch (error: any) {
     console.error(
       "CREATE EVENT ERROR:",
-      error
+      error,
     );
 
     return res.status(400).json({
@@ -332,3 +351,4 @@ export async function attendees(
     });
   }
 }
+

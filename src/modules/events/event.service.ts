@@ -12,6 +12,8 @@ export async function createEvent(
 
     venue: string;
     venueAddress?: string;
+    venueLatitude?: number;
+    venueLongitude?: number;
     city?: string;
     country?: string;
 
@@ -25,7 +27,7 @@ export async function createEvent(
     endDate: string;
 
     isPublic?: boolean;
-  }
+  },
 ) {
   const organization =
     await prisma.organization.findUnique({
@@ -36,7 +38,7 @@ export async function createEvent(
 
   if (!organization) {
     throw new Error(
-      "Organization not found"
+      "Organization not found",
     );
   }
 
@@ -50,7 +52,7 @@ export async function createEvent(
     isNaN(startDate.getTime())
   ) {
     throw new Error(
-      `Invalid startDate: ${data.startDate}`
+      `Invalid startDate: ${data.startDate}`,
     );
   }
 
@@ -58,7 +60,7 @@ export async function createEvent(
     isNaN(endDate.getTime())
   ) {
     throw new Error(
-      `Invalid endDate: ${data.endDate}`
+      `Invalid endDate: ${data.endDate}`,
     );
   }
 
@@ -66,7 +68,31 @@ export async function createEvent(
     endDate <= startDate
   ) {
     throw new Error(
-      "End date must be after start date"
+      "End date must be after start date",
+    );
+  }
+
+  if (
+    data.venueLatitude !== undefined &&
+    (
+      data.venueLatitude < -90 ||
+      data.venueLatitude > 90
+    )
+  ) {
+    throw new Error(
+      "Invalid venue latitude.",
+    );
+  }
+
+  if (
+    data.venueLongitude !== undefined &&
+    (
+      data.venueLongitude < -180 ||
+      data.venueLongitude > 180
+    )
+  ) {
+    throw new Error(
+      "Invalid venue longitude.",
     );
   }
 
@@ -87,6 +113,12 @@ export async function createEvent(
             venueAddress:
               data.venueAddress,
 
+            venueLatitude:
+              data.venueLatitude,
+
+            venueLongitude:
+              data.venueLongitude,
+
             city:
               data.city,
 
@@ -101,7 +133,7 @@ export async function createEvent(
 
             capacity:
               Number(
-                data.capacity
+                data.capacity,
               ),
 
             currency:
@@ -122,12 +154,12 @@ export async function createEvent(
         });
 
       return event;
-    }
+    },
   );
 }
 
 export async function getMyEvents(
-  userId: string
+  userId: string,
 ) {
   const organization =
     await prisma.organization.findUnique({
@@ -153,7 +185,7 @@ export async function getMyEvents(
 
 export async function getEventById(
   userId: string,
-  eventId: string
+  eventId: string,
 ) {
   const organization =
     await prisma.organization.findUnique({
@@ -164,7 +196,7 @@ export async function getEventById(
 
   if (!organization) {
     throw new Error(
-      "Organization not found"
+      "Organization not found",
     );
   }
 
@@ -182,7 +214,7 @@ export async function getEventById(
 
   if (!event) {
     throw new Error(
-      "Event not found"
+      "Event not found",
     );
   }
 
@@ -191,7 +223,7 @@ export async function getEventById(
 
 export async function publishEvent(
   userId: string,
-  eventId: string
+  eventId: string,
 ) {
   const organization =
     await prisma.organization.findUnique({
@@ -202,16 +234,32 @@ export async function publishEvent(
 
   if (!organization) {
     throw new Error(
-      "Organization not found"
+      "Organization not found",
+    );
+  }
+
+  const event =
+    await prisma.event.findFirst({
+      where: {
+        id: eventId,
+        organizationId:
+          organization.id,
+      },
+    });
+
+  if (!event) {
+    throw new Error(
+      "Event not found",
     );
   }
 
   return prisma.event.update({
     where: {
-      id: eventId,
+      id: event.id,
     },
     data: {
-      status: "PUBLISHED",
+      status:
+        "PUBLISHED",
     },
   });
 }
@@ -220,7 +268,11 @@ export async function getPublicEvents() {
   const events =
     await prisma.event.findMany({
       where: {
-        status: "PUBLISHED",
+        status:
+          "PUBLISHED",
+
+        isPublic:
+          true,
 
         endDate: {
           gt: new Date(),
@@ -266,9 +318,11 @@ export async function getPublicEventById(
       where: {
         id: eventId,
 
-        status: "PUBLISHED",
+        status:
+          "PUBLISHED",
 
-        isPublic: true,
+        isPublic:
+          true,
       },
 
       include: {
@@ -281,7 +335,15 @@ export async function getPublicEventById(
           },
         },
 
-        tickets: true,
+        tickets: {
+          where: {
+            isActive: true,
+          },
+
+          orderBy: {
+            price: "asc",
+          },
+        },
       },
     });
 
@@ -296,7 +358,7 @@ export async function getPublicEventById(
 
 export async function registerForEvent(
   userId: string,
-  eventId: string
+  eventId: string,
 ) {
   const event =
     await prisma.event.findUnique({
@@ -307,7 +369,7 @@ export async function registerForEvent(
 
   if (!event) {
     throw new Error(
-      "Event not found"
+      "Event not found",
     );
   }
 
@@ -323,7 +385,7 @@ export async function registerForEvent(
 
   if (existing) {
     throw new Error(
-      "Already registered"
+      "Already registered",
     );
   }
 
@@ -336,13 +398,14 @@ export async function registerForEvent(
 }
 
 export async function getMyRegistrations(
-  userId: string
+  userId: string,
 ) {
   const registrations =
     await prisma.registration.findMany({
       where: {
         userId,
       },
+
       include: {
         event: {
           include: {
@@ -350,6 +413,7 @@ export async function getMyRegistrations(
           },
         },
       },
+
       orderBy: {
         createdAt: "desc",
       },
@@ -357,6 +421,6 @@ export async function getMyRegistrations(
 
   return registrations.map(
     (registration) =>
-      registration.event
+      registration.event,
   );
 }
