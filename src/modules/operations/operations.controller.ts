@@ -65,13 +65,18 @@ export async function login(
       event: result.event,
     });
   } catch (error: any) {
-    return res.status(401).json({
-      success: false,
-      message:
-        error.message ||
-        "Invalid access code.",
-    });
-  }
+  console.error(
+    "OPERATIONS LOGIN ERROR:",
+    error
+  );
+
+  return res.status(401).json({
+    success: false,
+    message:
+      error?.message ||
+      "Invalid access code.",
+  });
+}
 }
 
 /*
