@@ -29,6 +29,16 @@ async function createEvent(userId, data) {
     if (endDate <= startDate) {
         throw new Error("End date must be after start date");
     }
+    if (data.venueLatitude !== undefined &&
+        (data.venueLatitude < -90 ||
+            data.venueLatitude > 90)) {
+        throw new Error("Invalid venue latitude.");
+    }
+    if (data.venueLongitude !== undefined &&
+        (data.venueLongitude < -180 ||
+            data.venueLongitude > 180)) {
+        throw new Error("Invalid venue longitude.");
+    }
     return prisma_1.prisma.$transaction(async (tx) => {
         const event = await tx.event.create({
             data: {
@@ -36,6 +46,8 @@ async function createEvent(userId, data) {
                 description: data.description,
                 venue: data.venue,
                 venueAddress: data.venueAddress,
+                venueLatitude: data.venueLatitude,
+                venueLongitude: data.venueLongitude,
                 city: data.city,
                 country: data.country,
                 coverImage: data.coverImage,
@@ -103,9 +115,18 @@ async function publishEvent(userId, eventId) {
     if (!organization) {
         throw new Error("Organization not found");
     }
-    return prisma_1.prisma.event.update({
+    const event = await prisma_1.prisma.event.findFirst({
         where: {
             id: eventId,
+            organizationId: organization.id,
+        },
+    });
+    if (!event) {
+        throw new Error("Event not found");
+    }
+    return prisma_1.prisma.event.update({
+        where: {
+            id: event.id,
         },
         data: {
             status: "PUBLISHED",
@@ -116,6 +137,7 @@ async function getPublicEvents() {
     const events = await prisma_1.prisma.event.findMany({
         where: {
             status: "PUBLISHED",
+            isPublic: true,
             endDate: {
                 gt: new Date(),
             },
@@ -162,7 +184,14 @@ async function getPublicEventById(eventId) {
                     logo: true,
                 },
             },
-            tickets: true,
+            tickets: {
+                where: {
+                    isActive: true,
+                },
+                orderBy: {
+                    price: "asc",
+                },
+            },
         },
     });
     if (!event) {

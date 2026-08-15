@@ -5,6 +5,10 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.createRevolutOrder = createRevolutOrder;
 exports.getRevolutOrder = getRevolutOrder;
+exports.createRevolutCustomer = createRevolutCustomer;
+exports.createRevolutSubscription = createRevolutSubscription;
+exports.getRevolutSubscription = getRevolutSubscription;
+exports.cancelRevolutSubscription = cancelRevolutSubscription;
 exports.verifyRevolutWebhook = verifyRevolutWebhook;
 const crypto_1 = __importDefault(require("crypto"));
 /*
@@ -34,8 +38,7 @@ function getSecretKey() {
 |--------------------------------------------------------------------------
 */
 function getWebhookSecret() {
-    const secret = process.env
-        .REVOLUT_WEBHOOK_SECRET;
+    const secret = process.env.REVOLUT_WEBHOOK_SECRET;
     if (!secret) {
         throw new Error("REVOLUT_WEBHOOK_SECRET is missing.");
     }
@@ -53,8 +56,7 @@ async function revolutRequest(path, options = {}) {
             Authorization: `Bearer ${getSecretKey()}`,
             "Content-Type": "application/json",
             "Revolut-Api-Version": REVOLUT_API_VERSION,
-            ...(options.headers ??
-                {}),
+            ...(options.headers ?? {}),
         },
     });
     const raw = await response.text();
@@ -84,7 +86,7 @@ async function revolutRequest(path, options = {}) {
 }
 /*
 |--------------------------------------------------------------------------
-| Create Order
+| Create Attendee Order
 |--------------------------------------------------------------------------
 */
 async function createRevolutOrder(input) {
@@ -131,6 +133,94 @@ async function getRevolutOrder(orderId) {
 }
 /*
 |--------------------------------------------------------------------------
+| Create Customer
+|--------------------------------------------------------------------------
+*/
+async function createRevolutCustomer(input) {
+    const fullName = input.fullName.trim();
+    const email = input.email
+        .trim()
+        .toLowerCase();
+    if (!email) {
+        throw new Error("Customer email is required.");
+    }
+    return revolutRequest("/customers", {
+        method: "POST",
+        body: JSON.stringify({
+            full_name: fullName,
+            email,
+        }),
+    });
+}
+/*
+|--------------------------------------------------------------------------
+| Create Subscription
+|--------------------------------------------------------------------------
+|
+| Revolut flow:
+|
+| 1. Customer must exist.
+| 2. Create subscription using a plan variation.
+| 3. Revolut returns setup_order_id.
+| 4. Retrieve setup order.
+| 5. Redirect organizer to checkout_url.
+|
+*/
+async function createRevolutSubscription(input) {
+    if (!input.customerId) {
+        throw new Error("Revolut customer ID is required.");
+    }
+    if (!input.planVariationId) {
+        throw new Error("Revolut plan variation ID is required.");
+    }
+    if (!input.externalReference) {
+        throw new Error("Revolut external reference is required.");
+    }
+    if (!input.redirectUrl) {
+        throw new Error("Revolut subscription redirect URL is required.");
+    }
+    if (!input.idempotencyKey) {
+        throw new Error("Revolut idempotency key is required.");
+    }
+    return revolutRequest("/subscriptions", {
+        method: "POST",
+        headers: {
+            "Idempotency-Key": input.idempotencyKey,
+        },
+        body: JSON.stringify({
+            customer_id: input.customerId,
+            plan_variation_id: input.planVariationId,
+            external_reference: input.externalReference,
+            setup_order_redirect_url: input.redirectUrl,
+        }),
+    });
+}
+/*
+|--------------------------------------------------------------------------
+| Get Subscription
+|--------------------------------------------------------------------------
+*/
+async function getRevolutSubscription(subscriptionId) {
+    if (!subscriptionId) {
+        throw new Error("Revolut subscription ID is required.");
+    }
+    return revolutRequest(`/subscriptions/${encodeURIComponent(subscriptionId)}`);
+}
+/*
+|--------------------------------------------------------------------------
+| Cancel Subscription
+|--------------------------------------------------------------------------
+*/
+async function cancelRevolutSubscription(subscriptionId) {
+    if (!subscriptionId) {
+        throw new Error("Revolut subscription ID is required.");
+    }
+    return revolutRequest(`/subscriptions/${encodeURIComponent(subscriptionId)}/cancel`, {
+        method: "POST",
+    });
+}
+/*
+|--------------------------------------------------------------------------
 | Verify Webhook
 |--------------------------------------------------------------------------
 |
@@ -149,9 +239,6 @@ function verifyRevolutWebhook(rawBody, timestamp, signatureHeader) {
     |--------------------------------------------------------------------------
     | Replay Protection
     |--------------------------------------------------------------------------
-    |
-    | Revolut recommends a five-minute tolerance.
-    |
     */
     const timestampNumber = Number(timestamp);
     if (!Number.isFinite(timestampNumber)) {
@@ -178,7 +265,7 @@ function verifyRevolutWebhook(rawBody, timestamp, signatureHeader) {
     const expected = `v1=${digest}`;
     /*
     |--------------------------------------------------------------------------
-    | Revolut Can Send Multiple Signatures
+    | Multiple Signatures
     |--------------------------------------------------------------------------
     */
     const signatures = signatureHeader

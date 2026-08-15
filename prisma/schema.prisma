@@ -119,6 +119,22 @@ enum LegalConsentStatus {
   REQUIRES_REACCEPTANCE
 }
 
+enum OrganizerPlan {
+  STARTER
+  PROFESSIONAL
+  BUSINESS
+  ENTERPRISE
+}
+
+enum SubscriptionStatus {
+  PENDING
+  ACTIVE
+  TRIALING
+  PAST_DUE
+  CANCELED
+  EXPIRED
+}
+
 model User {
   id String @id @default(cuid())
 
@@ -186,6 +202,8 @@ model Organization {
   website String?
 
   ownerId String @unique
+
+  subscription OrganizationSubscription?
 
   owner User @relation(fields: [ownerId], references: [id])
 
@@ -1118,4 +1136,30 @@ model LegalConsent {
   @@index([consentStatus])
   @@index([acceptedAt])
   @@index([consentSource])
+}
+
+model OrganizationSubscription {
+  id                     String             @id @default(cuid())
+  organizationId         String             @unique
+  organization           Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  plan                   OrganizerPlan
+  status                 SubscriptionStatus @default(ACTIVE)
+  currency               String             @default("GBP")
+  amount                 Decimal            @db.Decimal(10, 2)
+  interval               String             @default("MONTH")
+  provider               String?
+  providerCustomerId     String?
+  providerSubscriptionId String? @unique
+  providerPriceId        String?
+  providerSetupOrderId   String?
+  currentPeriodStart     DateTime?
+  currentPeriodEnd       DateTime?
+  cancelAtPeriodEnd      Boolean            @default(false)
+  canceledAt             DateTime?
+  createdAt              DateTime           @default(now())
+  updatedAt              DateTime           @updatedAt
+
+  @@index([status])
+  @@index([plan])
+  @@index([providerSubscriptionId])
 }

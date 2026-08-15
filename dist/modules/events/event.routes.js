@@ -20,19 +20,30 @@ const networkingController = new networking_controller_1.NetworkingController();
 router.post("/", auth_middleware_1.auth, event_controller_1.create);
 /*
 |--------------------------------------------------------------------------
+| Public Discovery
+|--------------------------------------------------------------------------
+|
+| IMPORTANT:
+| These routes MUST appear before /:id.
+|
+| Otherwise /public can be interpreted as:
+|
+| /:id
+|
+| and sent to the authenticated organizer
+| event handler.
+|
+*/
+router.get("/public", event_controller_1.publicEvents);
+router.get("/public/:id", event_controller_1.getPublicEvent);
+/*
+|--------------------------------------------------------------------------
 | Organizer Events
 |--------------------------------------------------------------------------
 */
 router.get("/my", auth_middleware_1.auth, event_controller_1.myEvents);
 router.get("/:id", auth_middleware_1.auth, event_controller_1.getEvent);
 router.patch("/:id/publish", auth_middleware_1.auth, event_controller_1.publish);
-/*
-|--------------------------------------------------------------------------
-| Public Discovery
-|--------------------------------------------------------------------------
-*/
-router.get("/public", event_controller_1.publicEvents);
-router.get("/public/:id", event_controller_1.getPublicEvent);
 /*
 |--------------------------------------------------------------------------
 | Attendee Registration

@@ -37,9 +37,10 @@ async function login(req, res) {
         });
     }
     catch (error) {
+        console.error("OPERATIONS LOGIN ERROR:", error);
         return res.status(401).json({
             success: false,
-            message: error.message ||
+            message: error?.message ||
                 "Invalid access code.",
         });
     }

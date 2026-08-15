@@ -10,6 +10,7 @@ import { initializeSocket } from "./realtime/socket";
 
 import discoveryRoutes from "./modules/discovery/discovery.routes";
 import legalRoutes from "./modules/legal/legal.routes";
+import billingRoutes from "./modules/billing/billing.routes";
 
 app.get("/health", (_req, res) => {
   return res.status(200).json({
@@ -31,6 +32,10 @@ app.use(
   legalRoutes,
 );
 
+app.use(
+  "/api/billing",
+  billingRoutes,
+);
 
 const PORT = Number(
   process.env.PORT || 5000

@@ -11,6 +11,7 @@ const routes_1 = __importDefault(require("./routes"));
 const socket_1 = require("./realtime/socket");
 const discovery_routes_1 = __importDefault(require("./modules/discovery/discovery.routes"));
 const legal_routes_1 = __importDefault(require("./modules/legal/legal.routes"));
+const billing_routes_1 = __importDefault(require("./modules/billing/billing.routes"));
 app_1.default.get("/health", (_req, res) => {
     return res.status(200).json({
         success: true,
@@ -21,6 +22,7 @@ app_1.default.get("/health", (_req, res) => {
 app_1.default.use(routes_1.default);
 app_1.default.use("/discovery", discovery_routes_1.default);
 app_1.default.use("/api/legal", legal_routes_1.default);
+app_1.default.use("/api/billing", billing_routes_1.default);
 const PORT = Number(process.env.PORT || 5000);
 const server = http_1.default.createServer(app_1.default);
 (0, socket_1.initializeSocket)(server);

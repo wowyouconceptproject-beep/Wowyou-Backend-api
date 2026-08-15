@@ -18,12 +18,20 @@ const attendees_service_1 = require("./attendees.service");
  */
 async function create(req, res) {
     try {
-        const { title, description, venue, venueAddress, city, country, coverImage, category, capacity, currency, startDate, endDate, isPublic, } = req.body;
+        const { title, description, venue, venueAddress, venueLatitude, venueLongitude, city, country, coverImage, category, capacity, currency, startDate, endDate, isPublic, } = req.body;
         const event = await (0, event_service_1.createEvent)(req.user.userId, {
             title,
             description,
             venue,
             venueAddress,
+            venueLatitude: venueLatitude !== undefined &&
+                venueLatitude !== null
+                ? Number(venueLatitude)
+                : undefined,
+            venueLongitude: venueLongitude !== undefined &&
+                venueLongitude !== null
+                ? Number(venueLongitude)
+                : undefined,
             city,
             country,
             coverImage,
