@@ -3,6 +3,10 @@ import { Router } from "express";
 import { auth } from "../auth/auth.middleware";
 
 import {
+  requireFeature,
+} from "../billing/billing.middleware";
+
+import {
   announcements,
   create,
   pin,
@@ -15,11 +19,23 @@ const router = Router();
 |--------------------------------------------------------------------------
 | List Announcements
 |--------------------------------------------------------------------------
+|
+| ANNOUNCEMENTS is included in:
+|
+| PROFESSIONAL
+| BUSINESS
+| ENTERPRISE
+|
+| STARTER does not have announcement access.
+|
 */
 
 router.get(
   "/:eventId/announcements",
   auth,
+  requireFeature(
+    "ANNOUNCEMENTS",
+  ),
   announcements,
 );
 
@@ -32,6 +48,9 @@ router.get(
 router.post(
   "/:eventId/announcements",
   auth,
+  requireFeature(
+    "ANNOUNCEMENTS",
+  ),
   create,
 );
 
@@ -44,6 +63,9 @@ router.post(
 router.patch(
   "/:eventId/announcements/:id/pin",
   auth,
+  requireFeature(
+    "ANNOUNCEMENTS",
+  ),
   pin,
 );
 
@@ -56,6 +78,9 @@ router.patch(
 router.delete(
   "/:eventId/announcements/:id",
   auth,
+  requireFeature(
+    "ANNOUNCEMENTS",
+  ),
   remove,
 );
 

@@ -1,6 +1,14 @@
-import { Router } from "express";
+import {
+  Router,
+} from "express";
 
-import { auth } from "../auth/auth.middleware";
+import {
+  auth,
+} from "../auth/auth.middleware";
+
+import {
+  requireFeature,
+} from "../billing/billing.middleware";
 
 import {
   create,
@@ -10,42 +18,97 @@ import {
   disable,
 } from "./staff.controller";
 
-const router = Router();
+const router =
+  Router();
 
 /*
 |--------------------------------------------------------------------------
-| Staff
+| Staff Management
+|--------------------------------------------------------------------------
+|
+| STAFF_MANAGEMENT is included in:
+|
+| PROFESSIONAL
+| BUSINESS
+| ENTERPRISE
+|
+| STARTER does not have staff management.
+|
+*/
+
+/*
+|--------------------------------------------------------------------------
+| Create Staff
 |--------------------------------------------------------------------------
 */
 
 router.post(
   "/:eventId/staff",
   auth,
-  create
+  requireFeature(
+    "STAFF_MANAGEMENT",
+  ),
+  create,
 );
+
+/*
+|--------------------------------------------------------------------------
+| List Staff
+|--------------------------------------------------------------------------
+*/
 
 router.get(
   "/:eventId/staff",
   auth,
-  list
+  requireFeature(
+    "STAFF_MANAGEMENT",
+  ),
+  list,
 );
+
+/*
+|--------------------------------------------------------------------------
+| Get Staff
+|--------------------------------------------------------------------------
+*/
 
 router.get(
   "/staff/:staffId",
   auth,
-  get
+  requireFeature(
+    "STAFF_MANAGEMENT",
+  ),
+  get,
 );
+
+/*
+|--------------------------------------------------------------------------
+| Regenerate Access Code
+|--------------------------------------------------------------------------
+*/
 
 router.post(
   "/staff/:staffId/regenerate",
   auth,
-  regenerate
+  requireFeature(
+    "STAFF_MANAGEMENT",
+  ),
+  regenerate,
 );
+
+/*
+|--------------------------------------------------------------------------
+| Disable Staff
+|--------------------------------------------------------------------------
+*/
 
 router.patch(
   "/staff/:staffId/disable",
   auth,
-  disable
+  requireFeature(
+    "STAFF_MANAGEMENT",
+  ),
+  disable,
 );
 
 export default router;

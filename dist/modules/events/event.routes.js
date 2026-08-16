@@ -5,6 +5,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
 const auth_middleware_1 = require("../auth/auth.middleware");
+const billing_middleware_1 = require("../billing/billing.middleware");
 const staff_routes_1 = __importDefault(require("./staff.routes"));
 const activity_routes_1 = __importDefault(require("./activity.routes"));
 const announcement_routes_1 = __importDefault(require("./announcement.routes"));
@@ -16,22 +17,17 @@ const networkingController = new networking_controller_1.NetworkingController();
 |--------------------------------------------------------------------------
 | Event Creation
 |--------------------------------------------------------------------------
+|
+| Creating and managing organizer events requires an active subscription.
+|
 */
-router.post("/", auth_middleware_1.auth, event_controller_1.create);
+router.post("/", auth_middleware_1.auth, billing_middleware_1.requireActiveSubscription, event_controller_1.create);
 /*
 |--------------------------------------------------------------------------
 | Public Discovery
 |--------------------------------------------------------------------------
 |
-| IMPORTANT:
 | These routes MUST appear before /:id.
-|
-| Otherwise /public can be interpreted as:
-|
-| /:id
-|
-| and sent to the authenticated organizer
-| event handler.
 |
 */
 router.get("/public", event_controller_1.publicEvents);
@@ -41,34 +37,48 @@ router.get("/public/:id", event_controller_1.getPublicEvent);
 | Organizer Events
 |--------------------------------------------------------------------------
 */
-router.get("/my", auth_middleware_1.auth, event_controller_1.myEvents);
-router.get("/:id", auth_middleware_1.auth, event_controller_1.getEvent);
-router.patch("/:id/publish", auth_middleware_1.auth, event_controller_1.publish);
+router.get("/my", auth_middleware_1.auth, billing_middleware_1.requireActiveSubscription, event_controller_1.myEvents);
+router.get("/my-registrations", auth_middleware_1.auth, event_controller_1.myRegistrations);
+router.get("/:id", auth_middleware_1.auth, billing_middleware_1.requireActiveSubscription, event_controller_1.getEvent);
+router.patch("/:id/publish", auth_middleware_1.auth, billing_middleware_1.requireActiveSubscription, event_controller_1.publish);
 /*
 |--------------------------------------------------------------------------
 | Attendee Registration
 |--------------------------------------------------------------------------
+|
+| These do NOT require an organizer subscription.
+|
 */
 router.post("/:id/register", auth_middleware_1.auth, event_controller_1.register);
-router.get("/my-registrations", auth_middleware_1.auth, event_controller_1.myRegistrations);
 /*
 |--------------------------------------------------------------------------
 | Event Attendees
 |--------------------------------------------------------------------------
+|
+| Organizer functionality.
+|
 */
-router.get("/:eventId/attendees", auth_middleware_1.auth, event_controller_1.attendees);
+router.get("/:eventId/attendees", auth_middleware_1.auth, billing_middleware_1.requireActiveSubscription, event_controller_1.attendees);
 /*
 |--------------------------------------------------------------------------
 | Networking
 |--------------------------------------------------------------------------
+|
+| Organizer networking infrastructure requires an active subscription.
+|
 */
-router.get("/:eventId/networking", auth_middleware_1.auth, networkingController
+router.get("/:eventId/networking", auth_middleware_1.auth, billing_middleware_1.requireActiveSubscription, networkingController
     .getMatches
     .bind(networkingController));
 /*
 |--------------------------------------------------------------------------
 | Event Modules
 |--------------------------------------------------------------------------
+|
+| These modules have their own authentication.
+| Their subscription protection should be added inside their respective
+| route files so individual permissions/features can be controlled later.
+|
 */
 router.use("/", staff_routes_1.default);
 router.use("/", activity_routes_1.default);

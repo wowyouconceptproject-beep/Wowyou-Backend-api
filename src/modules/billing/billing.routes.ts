@@ -42,6 +42,12 @@ router.get(
 |--------------------------------------------------------------------------
 | Checkout
 |--------------------------------------------------------------------------
+|
+| IMPORTANT:
+|
+| Do NOT require an active subscription here.
+| An organizer without a subscription must be able to purchase one.
+|
 */
 
 router.post(

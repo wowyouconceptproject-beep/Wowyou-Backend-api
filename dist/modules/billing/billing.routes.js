@@ -20,6 +20,12 @@ router.get("/subscription", auth_middleware_1.auth, billing_controller_1.subscri
 |--------------------------------------------------------------------------
 | Checkout
 |--------------------------------------------------------------------------
+|
+| IMPORTANT:
+|
+| Do NOT require an active subscription here.
+| An organizer without a subscription must be able to purchase one.
+|
 */
 router.post("/checkout", auth_middleware_1.auth, billing_controller_1.checkout);
 exports.default = router;

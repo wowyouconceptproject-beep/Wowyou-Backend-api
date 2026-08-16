@@ -6,6 +6,10 @@ import {
   auth,
 } from "../auth/auth.middleware";
 
+import {
+  requireActiveSubscription,
+} from "../billing/billing.middleware";
+
 import staffRoutes from "./staff.routes";
 import activityRoutes from "./activity.routes";
 import announcementRoutes from "./announcement.routes";
@@ -36,11 +40,15 @@ const networkingController =
 |--------------------------------------------------------------------------
 | Event Creation
 |--------------------------------------------------------------------------
+|
+| Creating and managing organizer events requires an active subscription.
+|
 */
 
 router.post(
   "/",
   auth,
+  requireActiveSubscription,
   create,
 );
 
@@ -49,15 +57,7 @@ router.post(
 | Public Discovery
 |--------------------------------------------------------------------------
 |
-| IMPORTANT:
 | These routes MUST appear before /:id.
-|
-| Otherwise /public can be interpreted as:
-|
-| /:id
-|
-| and sent to the authenticated organizer
-| event handler.
 |
 */
 
@@ -80,31 +80,8 @@ router.get(
 router.get(
   "/my",
   auth,
+  requireActiveSubscription,
   myEvents,
-);
-
-router.get(
-  "/:id",
-  auth,
-  getEvent,
-);
-
-router.patch(
-  "/:id/publish",
-  auth,
-  publish,
-);
-
-/*
-|--------------------------------------------------------------------------
-| Attendee Registration
-|--------------------------------------------------------------------------
-*/
-
-router.post(
-  "/:id/register",
-  auth,
-  register,
 );
 
 router.get(
@@ -113,15 +90,48 @@ router.get(
   myRegistrations,
 );
 
+router.get(
+  "/:id",
+  auth,
+  requireActiveSubscription,
+  getEvent,
+);
+
+router.patch(
+  "/:id/publish",
+  auth,
+  requireActiveSubscription,
+  publish,
+);
+
+/*
+|--------------------------------------------------------------------------
+| Attendee Registration
+|--------------------------------------------------------------------------
+|
+| These do NOT require an organizer subscription.
+|
+*/
+
+router.post(
+  "/:id/register",
+  auth,
+  register,
+);
+
 /*
 |--------------------------------------------------------------------------
 | Event Attendees
 |--------------------------------------------------------------------------
+|
+| Organizer functionality.
+|
 */
 
 router.get(
   "/:eventId/attendees",
   auth,
+  requireActiveSubscription,
   attendees,
 );
 
@@ -129,11 +139,15 @@ router.get(
 |--------------------------------------------------------------------------
 | Networking
 |--------------------------------------------------------------------------
+|
+| Organizer networking infrastructure requires an active subscription.
+|
 */
 
 router.get(
   "/:eventId/networking",
   auth,
+  requireActiveSubscription,
   networkingController
     .getMatches
     .bind(
@@ -145,6 +159,11 @@ router.get(
 |--------------------------------------------------------------------------
 | Event Modules
 |--------------------------------------------------------------------------
+|
+| These modules have their own authentication.
+| Their subscription protection should be added inside their respective
+| route files so individual permissions/features can be controlled later.
+|
 */
 
 router.use(
