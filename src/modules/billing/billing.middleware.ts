@@ -8,12 +8,12 @@ import {
 } from "../auth/auth.middleware";
 
 import {
-  SubscriptionStatus,
-} from "@prisma/client";
-
-import {
   ORGANIZER_PLANS,
 } from "./billing.plans";
+
+import {
+  isSubscriptionActive,
+} from "./billing.service";
 
 import { prisma } from "../../lib/prisma";
 
@@ -23,7 +23,7 @@ import { prisma } from "../../lib/prisma";
 |--------------------------------------------------------------------------
 |
 | Allows requests only when the authenticated user's organization has
-| an ACTIVE or TRIALING subscription.
+| an ACTIVE subscription or a non-expired TRIALING subscription.
 |
 */
 
@@ -75,25 +75,36 @@ export async function requireActiveSubscription(
       });
     }
 
+    /*
+    |--------------------------------------------------------------------------
+    | Verify Active Subscription
+    |--------------------------------------------------------------------------
+    */
+
     const active =
-      subscription.status ===
-        SubscriptionStatus.ACTIVE ||
-      subscription.status ===
-        SubscriptionStatus.TRIALING;
+      isSubscriptionActive(
+        subscription,
+      );
 
     if (!active) {
       return res.status(402).json({
         success: false,
         code:
-          "SUBSCRIPTION_INACTIVE",
+          subscription.status ===
+          "TRIALING"
+            ? "TRIAL_EXPIRED"
+            : "SUBSCRIPTION_INACTIVE",
         message:
-          "Your organizer subscription is not active.",
+          subscription.status ===
+          "TRIALING"
+            ? "Your 14-day free trial has expired. Please choose a plan to continue."
+            : "Your organizer subscription is not active.",
       });
     }
 
     /*
     |--------------------------------------------------------------------------
-    | Attach subscription to request
+    | Attach Subscription Context
     |--------------------------------------------------------------------------
     */
 
@@ -135,8 +146,11 @@ export async function requireActiveSubscription(
 | Require Subscription Feature
 |--------------------------------------------------------------------------
 |
-| Requires an ACTIVE/TRIALING subscription and verifies that the
-| organization's current plan contains the requested feature.
+| Requires:
+|
+| 1. Authentication
+| 2. Active subscription OR non-expired trial
+| 3. Feature included in the current plan
 |
 */
 
@@ -191,19 +205,30 @@ export function requireFeature(
         });
       }
 
+      /*
+      |--------------------------------------------------------------------------
+      | Verify Active Subscription / Trial
+      |--------------------------------------------------------------------------
+      */
+
       const active =
-        subscription.status ===
-          SubscriptionStatus.ACTIVE ||
-        subscription.status ===
-          SubscriptionStatus.TRIALING;
+        isSubscriptionActive(
+          subscription,
+        );
 
       if (!active) {
         return res.status(402).json({
           success: false,
           code:
-            "SUBSCRIPTION_INACTIVE",
+            subscription.status ===
+            "TRIALING"
+              ? "TRIAL_EXPIRED"
+              : "SUBSCRIPTION_INACTIVE",
           message:
-            "Your organizer subscription is not active.",
+            subscription.status ===
+            "TRIALING"
+              ? "Your 14-day free trial has expired. Please choose a plan to continue."
+              : "Your organizer subscription is not active.",
         });
       }
 
@@ -244,6 +269,12 @@ export function requireFeature(
             "Your current plan does not include this feature.",
         });
       }
+
+      /*
+      |--------------------------------------------------------------------------
+      | Attach Subscription Context
+      |--------------------------------------------------------------------------
+      */
 
       (
         req as AuthRequest & {

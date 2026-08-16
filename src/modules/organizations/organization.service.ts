@@ -1,9 +1,25 @@
 import { prisma } from "../../lib/prisma";
 
+import {
+  createOrganizationTrial,
+} from "../billing/billing.service";
+
+import {
+  OrganizerPlan,
+} from "@prisma/client";
+
+/*
+|--------------------------------------------------------------------------
+| Create Organization
+|--------------------------------------------------------------------------
+*/
+
 export async function createOrganization(
   userId: string,
   name: string,
-  slug: string
+  slug: string,
+  plan: OrganizerPlan =
+    OrganizerPlan.STARTER,
 ) {
   const existingOrganization =
     await prisma.organization.findUnique({
@@ -14,7 +30,7 @@ export async function createOrganization(
 
   if (existingOrganization) {
     throw new Error(
-      "You already have an organization"
+      "You already have an organization",
     );
   }
 
@@ -27,28 +43,67 @@ export async function createOrganization(
 
   if (existingSlug) {
     throw new Error(
-      "Slug already exists"
+      "Slug already exists",
     );
   }
 
-  return prisma.organization.create({
-    data: {
-      name,
-      slug,
-      ownerId: userId,
-    },
-  });
+  /*
+  |--------------------------------------------------------------------------
+  | Create Organization
+  |--------------------------------------------------------------------------
+  */
+
+  const organization =
+    await prisma.organization.create({
+      data: {
+        name,
+        slug,
+        ownerId: userId,
+      },
+    });
+
+  /*
+  |--------------------------------------------------------------------------
+  | Start 14-Day Organizer Trial
+  |--------------------------------------------------------------------------
+  |
+  | New organizations receive the selected plan for 14 days without
+  | requiring payment.
+  |
+  */
+
+  await createOrganizationTrial(
+    organization.id,
+    plan,
+  );
+
+  /*
+  |--------------------------------------------------------------------------
+  | Return Organization
+  |--------------------------------------------------------------------------
+  */
+
+  return organization;
 }
 
+/*
+|--------------------------------------------------------------------------
+| Get My Organization
+|--------------------------------------------------------------------------
+*/
+
 export async function getMyOrganization(
-  userId: string
+  userId: string,
 ) {
   return prisma.organization.findUnique({
     where: {
       ownerId: userId,
     },
+
     include: {
       events: true,
+
+      subscription: true,
     },
   });
 }

@@ -17,6 +17,14 @@ import {
 
 /*
 |--------------------------------------------------------------------------
+| Trial Configuration
+|--------------------------------------------------------------------------
+*/
+
+export const ORGANIZER_TRIAL_DAYS = 14;
+
+/*
+|--------------------------------------------------------------------------
 | Get Organization Subscription
 |--------------------------------------------------------------------------
 */
@@ -57,6 +65,49 @@ export function getPlan(
 
 /*
 |--------------------------------------------------------------------------
+| Subscription Active Check
+|--------------------------------------------------------------------------
+|
+| ACTIVE subscriptions are always considered active.
+|
+| TRIALING subscriptions are active only until currentPeriodEnd.
+|
+*/
+
+export function isSubscriptionActive(
+  subscription: {
+    status: SubscriptionStatus;
+    currentPeriodEnd: Date | null;
+  },
+) {
+  if (
+    subscription.status ===
+    SubscriptionStatus.ACTIVE
+  ) {
+    return true;
+  }
+
+  if (
+    subscription.status ===
+    SubscriptionStatus.TRIALING
+  ) {
+    if (
+      !subscription.currentPeriodEnd
+    ) {
+      return false;
+    }
+
+    return (
+      subscription.currentPeriodEnd >
+      new Date()
+    );
+  }
+
+  return false;
+}
+
+/*
+|--------------------------------------------------------------------------
 | Organization Feature Access
 |--------------------------------------------------------------------------
 */
@@ -75,10 +126,9 @@ export async function organizationHasFeature(
   }
 
   if (
-    subscription.status !==
-      SubscriptionStatus.ACTIVE &&
-    subscription.status !==
-      SubscriptionStatus.TRIALING
+    !isSubscriptionActive(
+      subscription,
+    )
   ) {
     return false;
   }
@@ -99,15 +149,98 @@ export async function organizationHasFeature(
 
 /*
 |--------------------------------------------------------------------------
+| Create Organization Trial
+|--------------------------------------------------------------------------
+|
+| This is used when a new organization is created.
+|
+| It gives the organization 14 days of access to the selected plan
+| without requiring immediate payment.
+|
+*/
+
+export async function createOrganizationTrial(
+  organizationId: string,
+  plan: OrganizerPlan =
+    OrganizerPlan.STARTER,
+) {
+  const config =
+    ORGANIZER_PLANS[plan];
+
+  if (!config) {
+    throw new Error(
+      "Invalid organizer plan.",
+    );
+  }
+
+  const existing =
+    await getOrganizationSubscription(
+      organizationId,
+    );
+
+  /*
+  |--------------------------------------------------------------------------
+  | Do Not Reset Existing Subscription
+  |--------------------------------------------------------------------------
+  */
+
+  if (existing) {
+    return existing;
+  }
+
+  const now =
+    new Date();
+
+  const trialEnd =
+    new Date(now);
+
+  trialEnd.setDate(
+    trialEnd.getDate() +
+      ORGANIZER_TRIAL_DAYS,
+  );
+
+  return prisma.organizationSubscription.create({
+    data: {
+      organizationId,
+
+      plan,
+
+      status:
+        SubscriptionStatus.TRIALING,
+
+      currency:
+        config.currency,
+
+      amount:
+        config.amount,
+
+      interval:
+        config.interval,
+
+      currentPeriodStart:
+        now,
+
+      currentPeriodEnd:
+        trialEnd,
+
+      cancelAtPeriodEnd:
+        false,
+    },
+  });
+}
+
+/*
+|--------------------------------------------------------------------------
 | Create Initial Subscription
 |--------------------------------------------------------------------------
 |
 | IMPORTANT:
 |
-| This does NOT activate the organization.
+| This function is used by the payment checkout flow.
 |
-| It creates a PENDING subscription that will be activated after the
-| organizer successfully completes the Revolut checkout.
+| It creates a PENDING subscription.
+|
+| It does NOT create or start the free trial.
 |
 */
 
@@ -162,6 +295,15 @@ export async function createInitialSubscription(
 
       interval:
         config.interval,
+
+      currentPeriodStart:
+        null,
+
+      currentPeriodEnd:
+        null,
+
+      cancelAtPeriodEnd:
+        false,
     },
   });
 }
@@ -221,13 +363,28 @@ export async function createSubscriptionCheckout(
       data.organizationId,
     );
 
+  /*
+  |--------------------------------------------------------------------------
+  | Active Subscription
+  |--------------------------------------------------------------------------
+  |
+  | An organization with an active paid subscription cannot start another
+  | checkout over the existing subscription.
+  |
+  */
+
   if (
     existing &&
     (
       existing.status ===
         SubscriptionStatus.ACTIVE ||
-      existing.status ===
-        SubscriptionStatus.TRIALING
+      (
+        existing.status ===
+          SubscriptionStatus.TRIALING &&
+        isSubscriptionActive(
+          existing,
+        )
+      )
     )
   ) {
     throw new Error(
@@ -237,7 +394,7 @@ export async function createSubscriptionCheckout(
 
   /*
   |--------------------------------------------------------------------------
-  | Create / Update Local Subscription
+  | Create / Update Pending Local Subscription
   |--------------------------------------------------------------------------
   */
 
