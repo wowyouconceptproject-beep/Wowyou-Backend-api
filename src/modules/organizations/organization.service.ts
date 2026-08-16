@@ -30,7 +30,7 @@ export async function createOrganization(
 
   if (existingOrganization) {
     throw new Error(
-      "You already have an organization",
+      "You already have an organization.",
     );
   }
 
@@ -43,7 +43,7 @@ export async function createOrganization(
 
   if (existingSlug) {
     throw new Error(
-      "Slug already exists",
+      "Slug already exists.",
     );
   }
 
@@ -66,22 +66,12 @@ export async function createOrganization(
   |--------------------------------------------------------------------------
   | Start 14-Day Organizer Trial
   |--------------------------------------------------------------------------
-  |
-  | New organizations receive the selected plan for 14 days without
-  | requiring payment.
-  |
   */
 
   await createOrganizationTrial(
     organization.id,
     plan,
   );
-
-  /*
-  |--------------------------------------------------------------------------
-  | Return Organization
-  |--------------------------------------------------------------------------
-  */
 
   return organization;
 }
@@ -102,7 +92,6 @@ export async function getMyOrganization(
 
     include: {
       events: true,
-
       subscription: true,
     },
   });
