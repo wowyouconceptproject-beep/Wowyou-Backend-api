@@ -73,11 +73,6 @@ export async function subscription(
         result,
     });
   } catch (error: any) {
-    console.error(
-      "GET ORGANIZER SUBSCRIPTION ERROR:",
-      error,
-    );
-
     return res.status(400).json({
       success: false,
       message:
@@ -161,12 +156,6 @@ export async function checkout(
     |--------------------------------------------------------------------------
     | Validate Redirect URL
     |--------------------------------------------------------------------------
-    |
-    | This billing endpoint is for the organizer web platform.
-    |
-    | We therefore only allow redirects back to the configured WowYou
-    | organizer frontend.
-    |
     */
 
     if (
@@ -177,62 +166,6 @@ export async function checkout(
         success: false,
         message:
           "Redirect URL is required.",
-      });
-    }
-
-    const frontendUrl =
-      process.env.FRONTEND_URL;
-
-    if (!frontendUrl) {
-      console.error(
-        "FRONTEND_URL is not configured.",
-      );
-
-      return res.status(500).json({
-        success: false,
-        message:
-          "Frontend URL is not configured.",
-      });
-    }
-
-    /*
-    |--------------------------------------------------------------------------
-    | Validate Redirect Origin
-    |--------------------------------------------------------------------------
-    |
-    | Prevent arbitrary external redirect URLs.
-    |
-    */
-
-    let requestedRedirectUrl: URL;
-    let configuredFrontendUrl: URL;
-
-    try {
-      requestedRedirectUrl =
-        new URL(
-          redirectUrl.trim(),
-        );
-
-      configuredFrontendUrl =
-        new URL(
-          frontendUrl,
-        );
-    } catch {
-      return res.status(400).json({
-        success: false,
-        message:
-          "Invalid redirect URL.",
-      });
-    }
-
-    if (
-      requestedRedirectUrl.origin !==
-      configuredFrontendUrl.origin
-    ) {
-      return res.status(400).json({
-        success: false,
-        message:
-          "Redirect URL is not allowed.",
       });
     }
 
@@ -279,7 +212,7 @@ export async function checkout(
             .toLowerCase(),
 
         redirectUrl:
-          requestedRedirectUrl.toString(),
+          redirectUrl.trim(),
       });
 
     /*
