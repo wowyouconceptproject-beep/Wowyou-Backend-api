@@ -17,11 +17,24 @@ const router = (0, express_1.Router)();
 router.post("/webhook", revolut_controller_1.webhook);
 /*
 |--------------------------------------------------------------------------
-| Payment Return
+| Attendee Payment Return
 |--------------------------------------------------------------------------
 |
-| Revolut redirects the customer here after checkout.
+| Existing attendee payment flow.
+| DO NOT CHANGE.
 |
 */
 router.get("/return", revolut_return_controller_1.paymentReturn);
+/*
+|--------------------------------------------------------------------------
+| Organizer Subscription Return
+|--------------------------------------------------------------------------
+|
+| Separate from attendee ticket payments.
+|
+| This endpoint does NOT activate the subscription.
+| Activation remains webhook-driven.
+|
+*/
+router.get("/subscription-return", revolut_return_controller_1.subscriptionReturn);
 exports.default = router;

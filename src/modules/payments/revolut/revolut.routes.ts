@@ -8,6 +8,7 @@ import {
 
 import {
   paymentReturn,
+  subscriptionReturn,
 } from "./revolut-return.controller";
 
 const router =
@@ -31,16 +32,34 @@ router.post(
 
 /*
 |--------------------------------------------------------------------------
-| Payment Return
+| Attendee Payment Return
 |--------------------------------------------------------------------------
 |
-| Revolut redirects the customer here after checkout.
+| Existing attendee payment flow.
+| DO NOT CHANGE.
 |
 */
 
 router.get(
   "/return",
   paymentReturn,
+);
+
+/*
+|--------------------------------------------------------------------------
+| Organizer Subscription Return
+|--------------------------------------------------------------------------
+|
+| Separate from attendee ticket payments.
+|
+| This endpoint does NOT activate the subscription.
+| Activation remains webhook-driven.
+|
+*/
+
+router.get(
+  "/subscription-return",
+  subscriptionReturn,
 );
 
 export default router;

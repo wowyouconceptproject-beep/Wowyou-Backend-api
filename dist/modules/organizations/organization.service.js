@@ -17,7 +17,7 @@ async function createOrganization(userId, name, slug, plan = client_1.OrganizerP
         },
     });
     if (existingOrganization) {
-        throw new Error("You already have an organization");
+        throw new Error("You already have an organization.");
     }
     const existingSlug = await prisma_1.prisma.organization.findUnique({
         where: {
@@ -25,7 +25,7 @@ async function createOrganization(userId, name, slug, plan = client_1.OrganizerP
         },
     });
     if (existingSlug) {
-        throw new Error("Slug already exists");
+        throw new Error("Slug already exists.");
     }
     /*
     |--------------------------------------------------------------------------
@@ -43,17 +43,8 @@ async function createOrganization(userId, name, slug, plan = client_1.OrganizerP
     |--------------------------------------------------------------------------
     | Start 14-Day Organizer Trial
     |--------------------------------------------------------------------------
-    |
-    | New organizations receive the selected plan for 14 days without
-    | requiring payment.
-    |
     */
     await (0, billing_service_1.createOrganizationTrial)(organization.id, plan);
-    /*
-    |--------------------------------------------------------------------------
-    | Return Organization
-    |--------------------------------------------------------------------------
-    */
     return organization;
 }
 /*
