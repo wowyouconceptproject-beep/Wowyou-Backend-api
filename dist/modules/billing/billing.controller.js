@@ -41,7 +41,6 @@ async function subscription(req, res) {
         });
     }
     catch (error) {
-        console.error("GET ORGANIZER SUBSCRIPTION ERROR:", error);
         return res.status(400).json({
             success: false,
             message: error.message,
@@ -91,55 +90,12 @@ async function checkout(req, res) {
         |--------------------------------------------------------------------------
         | Validate Redirect URL
         |--------------------------------------------------------------------------
-        |
-        | This billing endpoint is for the organizer web platform.
-        |
-        | We therefore only allow redirects back to the configured WowYou
-        | organizer frontend.
-        |
         */
         if (!redirectUrl ||
             !redirectUrl.trim()) {
             return res.status(400).json({
                 success: false,
                 message: "Redirect URL is required.",
-            });
-        }
-        const frontendUrl = process.env.FRONTEND_URL;
-        if (!frontendUrl) {
-            console.error("FRONTEND_URL is not configured.");
-            return res.status(500).json({
-                success: false,
-                message: "Frontend URL is not configured.",
-            });
-        }
-        /*
-        |--------------------------------------------------------------------------
-        | Validate Redirect Origin
-        |--------------------------------------------------------------------------
-        |
-        | Prevent arbitrary external redirect URLs.
-        |
-        */
-        let requestedRedirectUrl;
-        let configuredFrontendUrl;
-        try {
-            requestedRedirectUrl =
-                new URL(redirectUrl.trim());
-            configuredFrontendUrl =
-                new URL(frontendUrl);
-        }
-        catch {
-            return res.status(400).json({
-                success: false,
-                message: "Invalid redirect URL.",
-            });
-        }
-        if (requestedRedirectUrl.origin !==
-            configuredFrontendUrl.origin) {
-            return res.status(400).json({
-                success: false,
-                message: "Redirect URL is not allowed.",
             });
         }
         /*
@@ -169,7 +125,7 @@ async function checkout(req, res) {
             fullName: fullName.trim(),
             email: email.trim()
                 .toLowerCase(),
-            redirectUrl: requestedRedirectUrl.toString(),
+            redirectUrl: redirectUrl.trim(),
         });
         /*
         |--------------------------------------------------------------------------

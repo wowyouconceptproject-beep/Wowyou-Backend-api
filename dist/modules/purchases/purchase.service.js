@@ -42,10 +42,63 @@ function toMinorUnits(amount, currency) {
 }
 /*
 |--------------------------------------------------------------------------
+| Build Payment Return URL
+|--------------------------------------------------------------------------
+|
+| IMPORTANT:
+|
+| We do NOT accept an arbitrary redirect URL from the browser.
+|
+| The backend decides the destination based on the checkout channel.
+|
+| This prevents an open-redirect vulnerability.
+|
+*/
+function getPaymentReturnUrl(purchaseId, channel) {
+    /*
+    |--------------------------------------------------------------------------
+    | Web Attendee Checkout
+    |--------------------------------------------------------------------------
+    */
+    if (channel === "web") {
+        const webUrl = (process.env
+            .ATTENDEE_WEB_URL ??
+            process.env
+                .WEB_APP_URL ??
+            process.env
+                .FRONTEND_URL ??
+            "").replace(/\/+$/, "");
+        if (!webUrl) {
+            throw new Error("Attendee web application URL is not configured.");
+        }
+        return `${webUrl}/attendee/dashboard?purchase=${encodeURIComponent(purchaseId)}`;
+    }
+    /*
+    |--------------------------------------------------------------------------
+    | Existing Mobile Attendee Checkout
+    |--------------------------------------------------------------------------
+    |
+    | DO NOT CHANGE.
+    |
+    | This is the existing mobile callback that eventually deep-links into
+    | the WOWYOU attendee application.
+    |
+    */
+    const mobileReturnUrl = process.env
+        .PAYMENT_RETURN_URL ??
+        process.env
+            .FRONTEND_URL;
+    if (!mobileReturnUrl) {
+        return undefined;
+    }
+    return `${mobileReturnUrl}?purchase=${encodeURIComponent(purchaseId)}`;
+}
+/*
+|--------------------------------------------------------------------------
 | Create Purchase
 |--------------------------------------------------------------------------
 */
-async function createPurchase(userId, ticketTypeId, quantity) {
+async function createPurchase(userId, ticketTypeId, quantity, channel = "mobile") {
     /*
     |--------------------------------------------------------------------------
     | Validation
@@ -60,6 +113,10 @@ async function createPurchase(userId, ticketTypeId, quantity) {
     if (!Number.isInteger(quantity) ||
         quantity < 1) {
         throw new Error("Quantity must be at least 1.");
+    }
+    if (channel !== "mobile" &&
+        channel !== "web") {
+        throw new Error("Invalid checkout channel.");
     }
     /*
     |--------------------------------------------------------------------------
@@ -111,10 +168,10 @@ async function createPurchase(userId, ticketTypeId, quantity) {
             : "s"} remaining.`);
     }
     /*
-   |--------------------------------------------------------------------------
-   | Amount
-   |--------------------------------------------------------------------------
-   */
+    |--------------------------------------------------------------------------
+    | Amount
+    |--------------------------------------------------------------------------
+    */
     const currency = ticket.event.currency
         .trim()
         .toUpperCase();
@@ -123,7 +180,8 @@ async function createPurchase(userId, ticketTypeId, quantity) {
         unitPrice < 0) {
         throw new Error("Invalid ticket price.");
     }
-    const amount = unitPrice * quantity;
+    const amount = unitPrice *
+        quantity;
     if (!Number.isFinite(amount) ||
         amount < 0) {
         throw new Error("Invalid purchase amount.");
@@ -132,13 +190,14 @@ async function createPurchase(userId, ticketTypeId, quantity) {
     |--------------------------------------------------------------------------
     | Free Ticket
     |--------------------------------------------------------------------------
+    |
+    | Free tickets do not go through Revolut.
+    |
+    | The existing registration + purchase + ticket issuance behavior
+    | remains intact.
+    |
     */
     if (amount === 0) {
-        /*
-        |--------------------------------------------------------------------------
-        | Transaction
-        |--------------------------------------------------------------------------
-        */
         const purchase = await prisma_1.prisma.$transaction(async (tx) => {
             /*
             |--------------------------------------------------------------------------
@@ -161,13 +220,13 @@ async function createPurchase(userId, ticketTypeId, quantity) {
             | Inventory Check
             |--------------------------------------------------------------------------
             */
-            const remaining = currentTicket.quantity -
+            const currentRemaining = currentTicket.quantity -
                 currentTicket.sold;
-            if (remaining <
+            if (currentRemaining <
                 quantity) {
-                throw new Error(remaining <= 0
+                throw new Error(currentRemaining <= 0
                     ? "This ticket is sold out."
-                    : `Only ${remaining} ticket${remaining === 1
+                    : `Only ${currentRemaining} ticket${currentRemaining === 1
                         ? ""
                         : "s"} remaining.`);
             }
@@ -231,14 +290,15 @@ async function createPurchase(userId, ticketTypeId, quantity) {
         };
     }
     /*
-  |--------------------------------------------------------------------------
-  | Paid Ticket
-  |--------------------------------------------------------------------------
-  |
-  | Create a pending purchase first.
-  | Inventory is NOT reserved until payment succeeds.
-  |
-  */
+    |--------------------------------------------------------------------------
+    | Paid Ticket
+    |--------------------------------------------------------------------------
+    |
+    | Create a pending purchase first.
+    |
+    | Inventory is NOT reserved until the Revolut webhook confirms payment.
+    |
+    */
     const purchase = await prisma_1.prisma.ticketPurchase.create({
         data: {
             userId,
@@ -273,10 +333,15 @@ async function createPurchase(userId, ticketTypeId, quantity) {
     |--------------------------------------------------------------------------
     | Return URL
     |--------------------------------------------------------------------------
+    |
+    | MOBILE:
+    | Existing PAYMENT_RETURN_URL flow.
+    |
+    | WEB:
+    | New attendee dashboard flow.
+    |
     */
-    const paymentReturnUrl = process.env
-        .PAYMENT_RETURN_URL ??
-        process.env.FRONTEND_URL;
+    const paymentReturnUrl = getPaymentReturnUrl(purchase.id, channel);
     /*
     |--------------------------------------------------------------------------
     | Create Revolut Order
@@ -291,9 +356,7 @@ async function createPurchase(userId, ticketTypeId, quantity) {
             eventId: ticket.eventId,
             ticketTypeId,
             description: `${ticket.event.title} - ${ticket.name}`,
-            redirectUrl: paymentReturnUrl
-                ? `${paymentReturnUrl}?purchase=${encodeURIComponent(purchase.id)}`
-                : undefined,
+            redirectUrl: paymentReturnUrl,
         });
         /*
         |--------------------------------------------------------------------------
@@ -478,7 +541,8 @@ async function getPurchasePaymentStatus(userId, purchaseId) {
         event: purchase.event,
         ticket: purchase.ticket,
         passes: purchase.passes,
-        hasPass: purchase.passes.length > 0,
+        hasPass: purchase.passes.length >
+            0,
     };
 }
 /*

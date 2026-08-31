@@ -18,6 +18,26 @@ async function create(req, res) {
         const quantity = Number(req.body.quantity);
         /*
         |--------------------------------------------------------------------------
+        | Checkout Channel
+        |--------------------------------------------------------------------------
+        |
+        | MOBILE
+        | Existing Flutter attendee application.
+        |
+        | WEB
+        | Public event page / attendee web checkout.
+        |
+        | IMPORTANT:
+        |
+        | Mobile remains the default so existing app requests continue working
+        | exactly as they do today.
+        |
+        */
+        const channel = req.body.channel === "web"
+            ? "web"
+            : "mobile";
+        /*
+        |--------------------------------------------------------------------------
         | Authentication
         |--------------------------------------------------------------------------
         */
@@ -55,7 +75,7 @@ async function create(req, res) {
         | Create Purchase
         |--------------------------------------------------------------------------
         */
-        const result = await (0, purchase_service_1.createPurchase)(userId, ticketTypeId, quantity);
+        const result = await (0, purchase_service_1.createPurchase)(userId, ticketTypeId, quantity, channel);
         /*
         |--------------------------------------------------------------------------
         | Response
@@ -75,7 +95,8 @@ async function create(req, res) {
         return res.status(201).json({
             success: true,
             paymentRequired: result.paymentRequired,
-            checkoutUrl: result.checkoutUrl ?? null,
+            checkoutUrl: result.checkoutUrl ??
+                null,
             purchase: result.purchase,
         });
     }

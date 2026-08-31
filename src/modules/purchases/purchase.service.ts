@@ -10,6 +10,25 @@ import {
 
 /*
 |--------------------------------------------------------------------------
+| Purchase Checkout Channel
+|--------------------------------------------------------------------------
+|
+| MOBILE:
+| Existing attendee app flow.
+|
+| WEB:
+| Public event page → Revolut → web attendee dashboard.
+|
+| MOBILE remains the default so existing callers are not broken.
+|
+*/
+
+export type PurchaseCheckoutChannel =
+  | "mobile"
+  | "web";
+
+/*
+|--------------------------------------------------------------------------
 | Currency Minor Units
 |--------------------------------------------------------------------------
 */
@@ -60,6 +79,86 @@ function toMinorUnits(
 
 /*
 |--------------------------------------------------------------------------
+| Build Payment Return URL
+|--------------------------------------------------------------------------
+|
+| IMPORTANT:
+|
+| We do NOT accept an arbitrary redirect URL from the browser.
+|
+| The backend decides the destination based on the checkout channel.
+|
+| This prevents an open-redirect vulnerability.
+|
+*/
+
+function getPaymentReturnUrl(
+  purchaseId: string,
+  channel: PurchaseCheckoutChannel,
+) {
+  /*
+  |--------------------------------------------------------------------------
+  | Web Attendee Checkout
+  |--------------------------------------------------------------------------
+  */
+
+  if (
+    channel === "web"
+  ) {
+    const webUrl =
+      (
+        process.env
+          .ATTENDEE_WEB_URL ??
+        process.env
+          .WEB_APP_URL ??
+        process.env
+          .FRONTEND_URL ??
+        ""
+      ).replace(
+        /\/+$/,
+        "",
+      );
+
+    if (!webUrl) {
+      throw new Error(
+        "Attendee web application URL is not configured.",
+      );
+    }
+
+    return `${webUrl}/attendee/dashboard?purchase=${encodeURIComponent(
+      purchaseId,
+    )}`;
+  }
+
+  /*
+  |--------------------------------------------------------------------------
+  | Existing Mobile Attendee Checkout
+  |--------------------------------------------------------------------------
+  |
+  | DO NOT CHANGE.
+  |
+  | This is the existing mobile callback that eventually deep-links into
+  | the WOWYOU attendee application.
+  |
+  */
+
+  const mobileReturnUrl =
+    process.env
+      .PAYMENT_RETURN_URL ??
+    process.env
+      .FRONTEND_URL;
+
+  if (!mobileReturnUrl) {
+    return undefined;
+  }
+
+  return `${mobileReturnUrl}?purchase=${encodeURIComponent(
+    purchaseId,
+  )}`;
+}
+
+/*
+|--------------------------------------------------------------------------
 | Create Purchase
 |--------------------------------------------------------------------------
 */
@@ -68,6 +167,8 @@ export async function createPurchase(
   userId: string,
   ticketTypeId: string,
   quantity: number,
+  channel: PurchaseCheckoutChannel =
+    "mobile",
 ) {
   /*
   |--------------------------------------------------------------------------
@@ -95,6 +196,15 @@ export async function createPurchase(
   ) {
     throw new Error(
       "Quantity must be at least 1.",
+    );
+  }
+
+  if (
+    channel !== "mobile" &&
+    channel !== "web"
+  ) {
+    throw new Error(
+      "Invalid checkout channel.",
     );
   }
 
@@ -142,7 +252,8 @@ export async function createPurchase(
     );
   }
 
-  const now = new Date();
+  const now =
+    new Date();
 
   if (
     ticket.event.endDate <=
@@ -163,7 +274,9 @@ export async function createPurchase(
     ticket.quantity -
     ticket.sold;
 
-  if (remaining <= 0) {
+  if (
+    remaining <= 0
+  ) {
     throw new Error(
       "This ticket is sold out.",
     );
@@ -182,427 +295,442 @@ export async function createPurchase(
     );
   }
 
- /*
-|--------------------------------------------------------------------------
-| Amount
-|--------------------------------------------------------------------------
-*/
-
-const currency =
-  ticket.event.currency
-    .trim()
-    .toUpperCase();
-
-const unitPrice =
-  Number(
-    ticket.price,
-  );
-
-if (
-  !Number.isFinite(
-    unitPrice,
-  ) ||
-  unitPrice < 0
-) {
-  throw new Error(
-    "Invalid ticket price.",
-  );
-}
-
-const amount =
-  unitPrice * quantity;
-
-if (
-  !Number.isFinite(
-    amount,
-  ) ||
-  amount < 0
-) {
-  throw new Error(
-    "Invalid purchase amount.",
-  );
-}
-
-/*
-|--------------------------------------------------------------------------
-| Free Ticket
-|--------------------------------------------------------------------------
-*/
-
-if (amount === 0) {
   /*
   |--------------------------------------------------------------------------
-  | Transaction
+  | Amount
   |--------------------------------------------------------------------------
+  */
+
+  const currency =
+    ticket.event.currency
+      .trim()
+      .toUpperCase();
+
+  const unitPrice =
+    Number(
+      ticket.price,
+    );
+
+  if (
+    !Number.isFinite(
+      unitPrice,
+    ) ||
+    unitPrice < 0
+  ) {
+    throw new Error(
+      "Invalid ticket price.",
+    );
+  }
+
+  const amount =
+    unitPrice *
+    quantity;
+
+  if (
+    !Number.isFinite(
+      amount,
+    ) ||
+    amount < 0
+  ) {
+    throw new Error(
+      "Invalid purchase amount.",
+    );
+  }
+
+  /*
+  |--------------------------------------------------------------------------
+  | Free Ticket
+  |--------------------------------------------------------------------------
+  |
+  | Free tickets do not go through Revolut.
+  |
+  | The existing registration + purchase + ticket issuance behavior
+  | remains intact.
+  |
+  */
+
+  if (
+    amount === 0
+  ) {
+    const purchase =
+      await prisma.$transaction(
+        async (tx) => {
+          /*
+          |--------------------------------------------------------------------------
+          | Reload Ticket
+          |--------------------------------------------------------------------------
+          */
+
+          const currentTicket =
+            await tx.ticketType.findUnique({
+              where: {
+                id:
+                  ticketTypeId,
+              },
+            });
+
+          if (!currentTicket) {
+            throw new Error(
+              "Ticket not found.",
+            );
+          }
+
+          if (
+            !currentTicket.isActive
+          ) {
+            throw new Error(
+              "Ticket unavailable.",
+            );
+          }
+
+          /*
+          |--------------------------------------------------------------------------
+          | Inventory Check
+          |--------------------------------------------------------------------------
+          */
+
+          const currentRemaining =
+            currentTicket.quantity -
+            currentTicket.sold;
+
+          if (
+            currentRemaining <
+            quantity
+          ) {
+            throw new Error(
+              currentRemaining <= 0
+                ? "This ticket is sold out."
+                : `Only ${currentRemaining} ticket${
+                    currentRemaining === 1
+                      ? ""
+                      : "s"
+                  } remaining.`,
+            );
+          }
+
+          /*
+          |--------------------------------------------------------------------------
+          | Reserve Inventory
+          |--------------------------------------------------------------------------
+          */
+
+          const inventory =
+            await tx.ticketType.updateMany({
+              where: {
+                id:
+                  ticketTypeId,
+
+                isActive:
+                  true,
+
+                sold: {
+                  lte:
+                    currentTicket.quantity -
+                    quantity,
+                },
+              },
+
+              data: {
+                sold: {
+                  increment:
+                    quantity,
+                },
+              },
+            });
+
+          if (
+            inventory.count !==
+            1
+          ) {
+            throw new Error(
+              "Ticket inventory changed. Please try again.",
+            );
+          }
+
+          /*
+          |--------------------------------------------------------------------------
+          | Create Purchase
+          |--------------------------------------------------------------------------
+          */
+
+          return tx.ticketPurchase.create({
+            data: {
+              userId,
+
+              eventId:
+                ticket.eventId,
+
+              ticketTypeId,
+
+              quantity,
+
+              amount,
+
+              currency,
+
+              paymentProvider:
+                "FREE",
+
+              paymentReference:
+                null,
+
+              paymentMethod:
+                "FREE",
+
+              gatewayStatus:
+                "COMPLETED",
+
+              status:
+                "PAID",
+
+              paymentCompletedAt:
+                new Date(),
+            },
+          });
+        },
+      );
+
+    /*
+    |--------------------------------------------------------------------------
+    | Issue Event Passes
+    |--------------------------------------------------------------------------
+    */
+
+    const passes =
+      await issuePurchase(
+        purchase.id,
+      );
+
+    return {
+      purchase,
+
+      passes,
+
+      checkoutUrl:
+        null,
+
+      paymentRequired:
+        false,
+    };
+  }
+
+  /*
+  |--------------------------------------------------------------------------
+  | Paid Ticket
+  |--------------------------------------------------------------------------
+  |
+  | Create a pending purchase first.
+  |
+  | Inventory is NOT reserved until the Revolut webhook confirms payment.
+  |
   */
 
   const purchase =
-    await prisma.$transaction(
-      async (tx) => {
-        /*
-        |--------------------------------------------------------------------------
-        | Reload Ticket
-        |--------------------------------------------------------------------------
-        */
-
-        const currentTicket =
-          await tx.ticketType.findUnique({
-            where: {
-              id: ticketTypeId,
-            },
-          });
-
-        if (!currentTicket) {
-          throw new Error(
-            "Ticket not found.",
-          );
-        }
-
-        if (!currentTicket.isActive) {
-          throw new Error(
-            "Ticket unavailable.",
-          );
-        }
-
-        /*
-        |--------------------------------------------------------------------------
-        | Inventory Check
-        |--------------------------------------------------------------------------
-        */
-
-        const remaining =
-          currentTicket.quantity -
-          currentTicket.sold;
-
-        if (
-          remaining <
-          quantity
-        ) {
-          throw new Error(
-            remaining <= 0
-              ? "This ticket is sold out."
-              : `Only ${remaining} ticket${
-                  remaining === 1
-                    ? ""
-                    : "s"
-                } remaining.`,
-          );
-        }
-
-        /*
-        |--------------------------------------------------------------------------
-        | Reserve Inventory
-        |--------------------------------------------------------------------------
-        */
-
-        const inventory =
-          await tx.ticketType.updateMany({
-            where: {
-              id: ticketTypeId,
-
-              isActive: true,
-
-              sold: {
-                lte:
-                  currentTicket.quantity -
-                  quantity,
-              },
-            },
-
-            data: {
-              sold: {
-                increment:
-                  quantity,
-              },
-            },
-          });
-
-        if (
-          inventory.count !==
-          1
-        ) {
-          throw new Error(
-            "Ticket inventory changed. Please try again.",
-          );
-        }
-
-        /*
-        |--------------------------------------------------------------------------
-        | Create Purchase
-        |--------------------------------------------------------------------------
-        */
-
-        return tx.ticketPurchase.create({
-          data: {
-            userId,
-
-            eventId:
-              ticket.eventId,
-
-            ticketTypeId,
-
-            quantity,
-
-            amount,
-
-            currency,
-
-            paymentProvider:
-              "FREE",
-
-            paymentReference:
-              null,
-
-            paymentMethod:
-              "FREE",
-
-            gatewayStatus:
-              "COMPLETED",
-
-            status:
-              "PAID",
-
-            paymentCompletedAt:
-              new Date(),
-          },
-        });
-      },
-    );
-
-  /*
-  |--------------------------------------------------------------------------
-  | Issue Event Passes
-  |--------------------------------------------------------------------------
-  */
-
-  const passes =
-    await issuePurchase(
-      purchase.id,
-    );
-
-  return {
-    purchase,
-
-    passes,
-
-    checkoutUrl:
-      null,
-
-    paymentRequired:
-      false,
-  };
-}
-  /*
-|--------------------------------------------------------------------------
-| Paid Ticket
-|--------------------------------------------------------------------------
-|
-| Create a pending purchase first.
-| Inventory is NOT reserved until payment succeeds.
-|
-*/
-
-const purchase =
-  await prisma.ticketPurchase.create({
-    data: {
-      userId,
-
-      eventId:
-        ticket.eventId,
-
-      ticketTypeId,
-
-      quantity,
-
-      amount,
-
-      currency,
-
-      paymentProvider:
-        "REVOLUT",
-
-      paymentReference:
-        null,
-
-      paymentMethod:
-        null,
-
-      gatewayStatus:
-        "PENDING",
-
-      status:
-        "PENDING",
-    },
-  });
-
-/*
-|--------------------------------------------------------------------------
-| Convert Amount
-|--------------------------------------------------------------------------
-*/
-
-const revolutAmount =
-  toMinorUnits(
-    amount,
-    currency,
-  );
-
-if (
-  !Number.isInteger(
-    revolutAmount,
-  ) ||
-  revolutAmount < 1
-) {
-  await prisma.ticketPurchase.delete({
-    where: {
-      id:
-        purchase.id,
-    },
-  });
-
-  throw new Error(
-    "Payment amount is invalid.",
-  );
-}
-
-/*
-|--------------------------------------------------------------------------
-| Return URL
-|--------------------------------------------------------------------------
-*/
-
-const paymentReturnUrl =
-  process.env
-    .PAYMENT_RETURN_URL ??
-  process.env.FRONTEND_URL;
-
-/*
-|--------------------------------------------------------------------------
-| Create Revolut Order
-|--------------------------------------------------------------------------
-*/
-
-try {
-  const order =
-    await createRevolutOrder({
-      amount:
-        revolutAmount,
-
-      currency,
-
-      purchaseId:
-        purchase.id,
-
-      userId,
-
-      eventId:
-        ticket.eventId,
-
-      ticketTypeId,
-
-      description:
-        `${ticket.event.title} - ${ticket.name}`,
-
-      redirectUrl:
-  paymentReturnUrl
-    ? `${paymentReturnUrl}?purchase=${encodeURIComponent(
-        purchase.id,
-      )}`
-    : undefined,
-    });
-
-  /*
-  |--------------------------------------------------------------------------
-  | Validate Revolut Response
-  |--------------------------------------------------------------------------
-  */
-
-  if (!order.id) {
-    throw new Error(
-      "Revolut did not return an order ID.",
-    );
-  }
-
-  if (!order.checkout_url) {
-    throw new Error(
-      "Revolut did not return a checkout URL.",
-    );
-  }
-
-  /*
-  |--------------------------------------------------------------------------
-  | Store Revolut Order Reference
-  |--------------------------------------------------------------------------
-  */
-
-  const updatedPurchase =
-    await prisma.ticketPurchase.update({
-      where: {
-        id:
-          purchase.id,
-      },
-
+    await prisma.ticketPurchase.create({
       data: {
+        userId,
+
+        eventId:
+          ticket.eventId,
+
+        ticketTypeId,
+
+        quantity,
+
+        amount,
+
+        currency,
+
+        paymentProvider:
+          "REVOLUT",
+
         paymentReference:
-          order.id,
+          null,
+
+        paymentMethod:
+          null,
+
+        gatewayStatus:
+          "PENDING",
+
+        status:
+          "PENDING",
       },
     });
 
   /*
   |--------------------------------------------------------------------------
-  | Return Checkout
+  | Convert Amount
   |--------------------------------------------------------------------------
   */
 
-  return {
-    purchase:
-      updatedPurchase,
+  const revolutAmount =
+    toMinorUnits(
+      amount,
+      currency,
+    );
 
-    passes: [],
-
-    checkoutUrl:
-      order.checkout_url,
-
-    paymentRequired:
-      true,
-  };
-} catch (error) {
-  console.error(
-    "REVOLUT PURCHASE ERROR:",
-    error,
-  );
-
-  /*
-  |--------------------------------------------------------------------------
-  | Cleanup Pending Purchase
-  |--------------------------------------------------------------------------
-  */
-
-  try {
+  if (
+    !Number.isInteger(
+      revolutAmount,
+    ) ||
+    revolutAmount < 1
+  ) {
     await prisma.ticketPurchase.delete({
       where: {
         id:
           purchase.id,
       },
     });
-  } catch (cleanupError) {
-    console.error(
-      "PURCHASE CLEANUP ERROR:",
-      cleanupError,
+
+    throw new Error(
+      "Payment amount is invalid.",
     );
   }
 
-  if (
-    error instanceof Error
-  ) {
-    throw error;
+  /*
+  |--------------------------------------------------------------------------
+  | Return URL
+  |--------------------------------------------------------------------------
+  |
+  | MOBILE:
+  | Existing PAYMENT_RETURN_URL flow.
+  |
+  | WEB:
+  | New attendee dashboard flow.
+  |
+  */
+
+  const paymentReturnUrl =
+    getPaymentReturnUrl(
+      purchase.id,
+      channel,
+    );
+
+  /*
+  |--------------------------------------------------------------------------
+  | Create Revolut Order
+  |--------------------------------------------------------------------------
+  */
+
+  try {
+    const order =
+      await createRevolutOrder({
+        amount:
+          revolutAmount,
+
+        currency,
+
+        purchaseId:
+          purchase.id,
+
+        userId,
+
+        eventId:
+          ticket.eventId,
+
+        ticketTypeId,
+
+        description:
+          `${ticket.event.title} - ${ticket.name}`,
+
+        redirectUrl:
+          paymentReturnUrl,
+      });
+
+    /*
+    |--------------------------------------------------------------------------
+    | Validate Revolut Response
+    |--------------------------------------------------------------------------
+    */
+
+    if (!order.id) {
+      throw new Error(
+        "Revolut did not return an order ID.",
+      );
+    }
+
+    if (!order.checkout_url) {
+      throw new Error(
+        "Revolut did not return a checkout URL.",
+      );
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Store Revolut Order Reference
+    |--------------------------------------------------------------------------
+    */
+
+    const updatedPurchase =
+      await prisma.ticketPurchase.update({
+        where: {
+          id:
+            purchase.id,
+        },
+
+        data: {
+          paymentReference:
+            order.id,
+        },
+      });
+
+    /*
+    |--------------------------------------------------------------------------
+    | Return Checkout
+    |--------------------------------------------------------------------------
+    */
+
+    return {
+      purchase:
+        updatedPurchase,
+
+      passes: [],
+
+      checkoutUrl:
+        order.checkout_url,
+
+      paymentRequired:
+        true,
+    };
+  } catch (error) {
+    console.error(
+      "REVOLUT PURCHASE ERROR:",
+      error,
+    );
+
+    /*
+    |--------------------------------------------------------------------------
+    | Cleanup Pending Purchase
+    |--------------------------------------------------------------------------
+    */
+
+    try {
+      await prisma.ticketPurchase.delete({
+        where: {
+          id:
+            purchase.id,
+        },
+      });
+    } catch (
+      cleanupError
+    ) {
+      console.error(
+        "PURCHASE CLEANUP ERROR:",
+        cleanupError,
+      );
+    }
+
+    if (
+      error instanceof Error
+    ) {
+      throw error;
+    }
+
+    throw new Error(
+      "Unable to initialize payment.",
+    );
   }
-
-  throw new Error(
-    "Unable to initialize payment.",
-  );
-}
-
 }
 
 /*
@@ -652,7 +780,8 @@ export async function getMyTickets(
         },
 
         orderBy: {
-          createdAt: "asc",
+          createdAt:
+            "asc",
         },
       },
 
@@ -677,7 +806,8 @@ export async function getMyTickets(
     },
 
     orderBy: {
-      createdAt: "desc",
+      createdAt:
+        "desc",
     },
   });
 }
@@ -695,7 +825,9 @@ export async function getPurchasePaymentStatus(
   const purchase =
     await prisma.ticketPurchase.findFirst({
       where: {
-        id: purchaseId,
+        id:
+          purchaseId,
+
         userId,
       },
 
@@ -726,8 +858,10 @@ export async function getPurchasePaymentStatus(
 
         passes: {
           where: {
-            isActive: true,
-            isRevoked: false,
+            isActive:
+              true,
+            isRevoked:
+              false,
           },
 
           select: {
@@ -744,7 +878,8 @@ export async function getPurchasePaymentStatus(
   }
 
   return {
-    id: purchase.id,
+    id:
+      purchase.id,
 
     status:
       purchase.status,
@@ -780,7 +915,8 @@ export async function getPurchasePaymentStatus(
       purchase.passes,
 
     hasPass:
-      purchase.passes.length > 0,
+      purchase.passes.length >
+      0,
   };
 }
 
@@ -807,11 +943,13 @@ export async function getMyEvents(
             where: {
               OR: [
                 {
-                  expiresAt: null,
+                  expiresAt:
+                    null,
                 },
                 {
                   expiresAt: {
-                    gt: new Date(),
+                    gt:
+                      new Date(),
                   },
                 },
               ],
@@ -819,10 +957,12 @@ export async function getMyEvents(
 
             orderBy: [
               {
-                isPinned: "desc",
+                isPinned:
+                  "desc",
               },
               {
-                createdAt: "desc",
+                createdAt:
+                  "desc",
               },
             ],
 
@@ -835,8 +975,10 @@ export async function getMyEvents(
 
       passes: {
         where: {
-          isActive: true,
-          isRevoked: false,
+          isActive:
+            true,
+          isRevoked:
+            false,
         },
       },
 
@@ -845,7 +987,8 @@ export async function getMyEvents(
 
     orderBy: {
       event: {
-        startDate: "asc",
+        startDate:
+          "asc",
       },
     },
   });
@@ -864,11 +1007,13 @@ export async function getMyEvent(
   const purchase =
     await prisma.ticketPurchase.findFirst({
       where: {
-        id: purchaseId,
+        id:
+          purchaseId,
 
         userId,
 
-        status: "PAID",
+        status:
+          "PAID",
       },
 
       include: {
@@ -878,11 +1023,13 @@ export async function getMyEvent(
               where: {
                 OR: [
                   {
-                    expiresAt: null,
+                    expiresAt:
+                      null,
                   },
                   {
                     expiresAt: {
-                      gt: new Date(),
+                      gt:
+                        new Date(),
                     },
                   },
                 ],
@@ -890,17 +1037,20 @@ export async function getMyEvent(
 
               orderBy: [
                 {
-                  isPinned: "desc",
+                  isPinned:
+                    "desc",
                 },
                 {
-                  createdAt: "desc",
+                  createdAt:
+                    "desc",
                 },
               ],
             },
 
             sessions: {
               orderBy: {
-                startTime: "asc",
+                startTime:
+                  "asc",
               },
             },
           },
@@ -910,8 +1060,10 @@ export async function getMyEvent(
 
         passes: {
           where: {
-            isActive: true,
-            isRevoked: false,
+            isActive:
+              true,
+            isRevoked:
+              false,
           },
         },
 
@@ -923,13 +1075,15 @@ export async function getMyEvent(
 
         activities: {
           orderBy: {
-            createdAt: "desc",
+            createdAt:
+              "desc",
           },
         },
 
         user: {
           include: {
-            attendeeProfile: true,
+            attendeeProfile:
+              true,
           },
         },
       },
@@ -943,4 +1097,3 @@ export async function getMyEvent(
 
   return purchase;
 }
-          

@@ -1,6 +1,10 @@
-import { Response } from "express";
+import {
+  Response,
+} from "express";
 
-import { AuthRequest } from "../auth/auth.middleware";
+import {
+  AuthRequest,
+} from "../auth/auth.middleware";
 
 import {
   createPurchase,
@@ -8,6 +12,7 @@ import {
   getMyEvents,
   getPurchasePaymentStatus,
   getMyEvent as getMyEventService,
+  PurchaseCheckoutChannel,
 } from "./purchase.service";
 
 /*
@@ -33,6 +38,29 @@ export async function create(
       Number(
         req.body.quantity,
       );
+
+    /*
+    |--------------------------------------------------------------------------
+    | Checkout Channel
+    |--------------------------------------------------------------------------
+    |
+    | MOBILE
+    | Existing Flutter attendee application.
+    |
+    | WEB
+    | Public event page / attendee web checkout.
+    |
+    | IMPORTANT:
+    |
+    | Mobile remains the default so existing app requests continue working
+    | exactly as they do today.
+    |
+    */
+
+    const channel =
+      req.body.channel === "web"
+        ? "web"
+        : "mobile";
 
     /*
     |--------------------------------------------------------------------------
@@ -71,7 +99,9 @@ export async function create(
     */
 
     if (
-      !Number.isInteger(quantity) ||
+      !Number.isInteger(
+        quantity,
+      ) ||
       quantity < 1
     ) {
       return res.status(400).json({
@@ -93,6 +123,7 @@ export async function create(
         userId,
         ticketTypeId,
         quantity,
+        channel as PurchaseCheckoutChannel,
       );
 
     /*
@@ -119,7 +150,8 @@ export async function create(
         result.paymentRequired,
 
       checkoutUrl:
-        result.checkoutUrl ?? null,
+        result.checkoutUrl ??
+        null,
 
       purchase:
         result.purchase,
