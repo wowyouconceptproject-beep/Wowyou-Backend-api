@@ -2,28 +2,64 @@ import {
   OrganizerPlan,
 } from "@prisma/client";
 
+/*
+|--------------------------------------------------------------------------
+| Billing Interval
+|--------------------------------------------------------------------------
+|
+| Pricing supports both monthly and yearly billing.
+|
+*/
+
+export type BillingInterval =
+  | "MONTH"
+  | "YEAR";
+
+/*
+|--------------------------------------------------------------------------
+| Organizer Plan Configuration
+|--------------------------------------------------------------------------
+|
+| This file contains the identity and feature set of each plan.
+|
+| IMPORTANT:
+|
+| Pricing does NOT live here anymore.
+|
+| Price is resolved dynamically from:
+|
+| country + plan + interval
+|
+| in billing.pricing.ts.
+|
+*/
+
 export interface OrganizerPlanConfig {
   plan: OrganizerPlan;
 
   name: string;
 
-  amount: number;
-
-  currency: "GBP";
-
-  interval: "MONTH";
-
   description: string;
 
   features: string[];
-
-  revolutPlanVariationId?: string;
 }
+
+/*
+|--------------------------------------------------------------------------
+| Organizer Plans
+|--------------------------------------------------------------------------
+*/
 
 export const ORGANIZER_PLANS: Record<
   OrganizerPlan,
   OrganizerPlanConfig
 > = {
+  /*
+  |--------------------------------------------------------------------------
+  | Starter
+  |--------------------------------------------------------------------------
+  */
+
   STARTER: {
     plan:
       OrganizerPlan.STARTER,
@@ -31,21 +67,8 @@ export const ORGANIZER_PLANS: Record<
     name:
       "Starter",
 
-    amount:
-      49,
-
-    currency:
-      "GBP",
-
-    interval:
-      "MONTH",
-
     description:
       "Everything you need to start running events.",
-
-    revolutPlanVariationId:
-      process.env
-        .REVOLUT_STARTER_PLAN_VARIATION_ID,
 
     features: [
       "EVENT_CREATION",
@@ -56,6 +79,12 @@ export const ORGANIZER_PLANS: Record<
     ],
   },
 
+  /*
+  |--------------------------------------------------------------------------
+  | Professional
+  |--------------------------------------------------------------------------
+  */
+
   PROFESSIONAL: {
     plan:
       OrganizerPlan.PROFESSIONAL,
@@ -63,21 +92,8 @@ export const ORGANIZER_PLANS: Record<
     name:
       "Professional",
 
-    amount:
-      149,
-
-    currency:
-      "GBP",
-
-    interval:
-      "MONTH",
-
     description:
       "Advanced tools for growing event operations.",
-
-    revolutPlanVariationId:
-      process.env
-        .REVOLUT_PROFESSIONAL_PLAN_VARIATION_ID,
 
     features: [
       "EVENT_CREATION",
@@ -92,6 +108,12 @@ export const ORGANIZER_PLANS: Record<
     ],
   },
 
+  /*
+  |--------------------------------------------------------------------------
+  | Business
+  |--------------------------------------------------------------------------
+  */
+
   BUSINESS: {
     plan:
       OrganizerPlan.BUSINESS,
@@ -99,21 +121,8 @@ export const ORGANIZER_PLANS: Record<
     name:
       "Business",
 
-    amount:
-      399,
-
-    currency:
-      "GBP",
-
-    interval:
-      "MONTH",
-
     description:
       "Complete infrastructure for serious event businesses.",
-
-    revolutPlanVariationId:
-      process.env
-        .REVOLUT_BUSINESS_PLAN_VARIATION_ID,
 
     features: [
       "EVENT_CREATION",
@@ -131,6 +140,12 @@ export const ORGANIZER_PLANS: Record<
     ],
   },
 
+  /*
+  |--------------------------------------------------------------------------
+  | Enterprise
+  |--------------------------------------------------------------------------
+  */
+
   ENTERPRISE: {
     plan:
       OrganizerPlan.ENTERPRISE,
@@ -138,21 +153,8 @@ export const ORGANIZER_PLANS: Record<
     name:
       "Enterprise",
 
-    amount:
-      1500,
-
-    currency:
-      "GBP",
-
-    interval:
-      "MONTH",
-
     description:
       "Enterprise-grade event infrastructure and support.",
-
-    revolutPlanVariationId:
-      process.env
-        .REVOLUT_ENTERPRISE_PLAN_VARIATION_ID,
 
     features: [
       "EVENT_CREATION",

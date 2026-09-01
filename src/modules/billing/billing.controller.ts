@@ -17,7 +17,50 @@ import {
   createSubscriptionCheckout,
 } from "./billing.service";
 
+import {
+  BillingCountry,
+  BillingInterval,
+} from "./billing.pricing";
+
 import { prisma } from "../../lib/prisma";
+
+/*
+|--------------------------------------------------------------------------
+| Supported Billing Countries
+|--------------------------------------------------------------------------
+|
+| WOWYOU is positioned as an international / European event platform.
+|
+| GB  → United Kingdom
+| US  → United States
+| EU  → European Union / Euro
+| CH  → Switzerland
+| NO  → Norway
+| SE  → Sweden
+| DK  → Denmark
+|
+*/
+
+const BILLING_COUNTRIES: BillingCountry[] = [
+  "GB",
+  "US",
+  "EU",
+  "CH",
+  "NO",
+  "SE",
+  "DK",
+];
+
+/*
+|--------------------------------------------------------------------------
+| Supported Billing Intervals
+|--------------------------------------------------------------------------
+*/
+
+const BILLING_INTERVALS: BillingInterval[] = [
+  "MONTH",
+  "YEAR",
+];
 
 /*
 |--------------------------------------------------------------------------
@@ -57,6 +100,7 @@ export async function subscription(
     if (!organization) {
       return res.status(404).json({
         success: false,
+
         message:
           "Organization not found.",
       });
@@ -69,14 +113,22 @@ export async function subscription(
 
     return res.json({
       success: true,
+
       subscription:
         result,
     });
   } catch (error: any) {
+    console.error(
+      "ORGANIZER SUBSCRIPTION ERROR:",
+      error,
+    );
+
     return res.status(400).json({
       success: false,
+
       message:
-        error.message,
+        error.message ||
+        "Unable to load subscription.",
     });
   }
 }
@@ -94,11 +146,17 @@ export async function checkout(
   try {
     const {
       plan,
+      country,
+      interval,
       fullName,
       email,
       redirectUrl,
     } = req.body as {
       plan: OrganizerPlan;
+
+      country?: BillingCountry;
+
+      interval?: BillingInterval;
 
       fullName?: string;
 
@@ -119,8 +177,49 @@ export async function checkout(
     ) {
       return res.status(400).json({
         success: false,
+
         message:
           "Invalid organizer plan.",
+      });
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Validate Billing Country
+    |--------------------------------------------------------------------------
+    */
+
+    if (
+      !country ||
+      !BILLING_COUNTRIES.includes(
+        country,
+      )
+    ) {
+      return res.status(400).json({
+        success: false,
+
+        message:
+          "Invalid billing country.",
+      });
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Validate Billing Interval
+    |--------------------------------------------------------------------------
+    */
+
+    if (
+      !interval ||
+      !BILLING_INTERVALS.includes(
+        interval,
+      )
+    ) {
+      return res.status(400).json({
+        success: false,
+
+        message:
+          "Invalid billing interval. Choose MONTH or YEAR.",
       });
     }
 
@@ -136,6 +235,7 @@ export async function checkout(
     ) {
       return res.status(400).json({
         success: false,
+
         message:
           "Full name is required.",
       });
@@ -147,6 +247,7 @@ export async function checkout(
     ) {
       return res.status(400).json({
         success: false,
+
         message:
           "Email is required.",
       });
@@ -164,6 +265,7 @@ export async function checkout(
     ) {
       return res.status(400).json({
         success: false,
+
         message:
           "Redirect URL is required.",
       });
@@ -186,6 +288,7 @@ export async function checkout(
     if (!organization) {
       return res.status(404).json({
         success: false,
+
         message:
           "Organization not found.",
       });
@@ -193,8 +296,15 @@ export async function checkout(
 
     /*
     |--------------------------------------------------------------------------
-    | Create Revolut Checkout
+    | Create Subscription Checkout
     |--------------------------------------------------------------------------
+    |
+    | Pricing is resolved by:
+    |
+    | country
+    | plan
+    | interval
+    |
     */
 
     const result =
@@ -204,11 +314,16 @@ export async function checkout(
 
         plan,
 
+        country,
+
+        interval,
+
         fullName:
           fullName.trim(),
 
         email:
-          email.trim()
+          email
+            .trim()
             .toLowerCase(),
 
         redirectUrl:
@@ -219,6 +334,10 @@ export async function checkout(
     |--------------------------------------------------------------------------
     | Response
     |--------------------------------------------------------------------------
+    |
+    | Return the resolved pricing so the frontend knows exactly what
+    | pricing configuration was used for the checkout.
+    |
     */
 
     return res.status(200).json({
@@ -235,6 +354,9 @@ export async function checkout(
 
       setupOrderId:
         result.setupOrderId,
+
+      pricing:
+        result.pricing,
     });
   } catch (error: any) {
     console.error(
