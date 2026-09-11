@@ -9,6 +9,10 @@ import {
 
 import revolutRoutes from "./modules/payments/revolut/revolut.routes";
 
+import {
+  webhook,
+} from "./modules/payments/revolut/revolut.controller";
+
 const app = express();
 
 /*
@@ -51,22 +55,45 @@ app.use(
 |
 | IMPORTANT:
 |
-| This MUST be registered before express.json().
-|
 | Revolut webhook signature verification requires the exact raw request
 | body that Revolut signed.
 |
-| Final endpoint:
+| Therefore express.raw() MUST run before express.json().
 |
-| POST /payments/revolut/webhook
+|--------------------------------------------------------------------------
+| Primary Webhook Endpoint
+|--------------------------------------------------------------------------
+|
+| POST /api/payments/revolut/webhook
+|
+| This is the endpoint currently being called by Revolut.
+|
+*/
+
+app.post(
+  "/api/payments/revolut/webhook",
+  express.raw({
+    type: "application/json",
+  }),
+  webhook,
+);
+
+/*
+|--------------------------------------------------------------------------
+| Revolut Payment Routes
+|--------------------------------------------------------------------------
+|
+| Existing attendee payment flow.
+|
+| DO NOT CHANGE.
+|
+| GET /payments/revolut/return
+| GET /payments/revolut/subscription-return
 |
 */
 
 app.use(
   "/payments/revolut",
-  express.raw({
-    type: "application/json",
-  }),
   revolutRoutes,
 );
 
