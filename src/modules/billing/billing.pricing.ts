@@ -48,9 +48,10 @@ export type BillingCountry =
 |
 | country + plan + billing interval
 |
-| The Revolut variation ID is optional while pricing is being configured.
-| The billing service is responsible for rejecting checkout if a required
-| variation has not been configured.
+| revolutPlanVariationId:
+| - Used ONLY by the backend
+| - Never returned to the frontend
+| - Resolved from Railway environment variables
 |
 */
 
@@ -83,9 +84,30 @@ export interface PlanPricing {
 |
 | MONTH = monthly billing price
 |
-| The annual prices are intentionally lower than paying the monthly
-| price for twelve months.
+| The annual prices are intentionally lower than paying
+| the monthly price for twelve months.
 |
+|--------------------------------------------------------------------------
+| IMPORTANT
+|--------------------------------------------------------------------------
+|
+| The frontend does NOT need to know the Revolut variation ID.
+|
+| The backend uses:
+|
+| country
+|    +
+| plan
+|    +
+| interval
+|
+| to resolve:
+|
+| amount
+| currency
+| Revolut variation ID
+|
+|--------------------------------------------------------------------------
 */
 
 export const ORGANIZER_PRICING: Record<
