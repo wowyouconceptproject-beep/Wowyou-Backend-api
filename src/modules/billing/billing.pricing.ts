@@ -133,7 +133,7 @@ export const ORGANIZER_PRICING: Record<
 
         revolutPlanVariationId:
           process.env
-            .REVOLUT_GB_STARTER_MONTH_VARIATION_ID,
+            .REVOLUT_STARTER_GBP_MONTHLY_PLAN_VARIATION_ID,
       },
 
       YEAR: {
@@ -142,7 +142,7 @@ export const ORGANIZER_PRICING: Record<
 
         revolutPlanVariationId:
           process.env
-            .REVOLUT_GB_STARTER_YEAR_VARIATION_ID,
+            .REVOLUT_STARTER_GBP_YEARLY_PLAN_VARIATION_ID,
       },
     },
 
@@ -153,7 +153,7 @@ export const ORGANIZER_PRICING: Record<
 
         revolutPlanVariationId:
           process.env
-            .REVOLUT_GB_PROFESSIONAL_MONTH_VARIATION_ID,
+            .REVOLUT_PROFESSIONAL_GBP_MONTHLY_PLAN_VARIATION_ID,
       },
 
       YEAR: {
@@ -162,7 +162,7 @@ export const ORGANIZER_PRICING: Record<
 
         revolutPlanVariationId:
           process.env
-            .REVOLUT_GB_PROFESSIONAL_YEAR_VARIATION_ID,
+            .REVOLUT_PROFESSIONAL_GBP_YEARLY_PLAN_VARIATION_ID,
       },
     },
 
@@ -173,7 +173,7 @@ export const ORGANIZER_PRICING: Record<
 
         revolutPlanVariationId:
           process.env
-            .REVOLUT_GB_BUSINESS_MONTH_VARIATION_ID,
+            .REVOLUT_BUSINESS_GBP_MONTHLY_PLAN_VARIATION_ID,
       },
 
       YEAR: {
@@ -182,7 +182,7 @@ export const ORGANIZER_PRICING: Record<
 
         revolutPlanVariationId:
           process.env
-            .REVOLUT_GB_BUSINESS_YEAR_VARIATION_ID,
+            .REVOLUT_BUSINESS_GBP_YEARLY_PLAN_VARIATION_ID,
       },
     },
 
@@ -193,7 +193,7 @@ export const ORGANIZER_PRICING: Record<
 
         revolutPlanVariationId:
           process.env
-            .REVOLUT_GB_ENTERPRISE_MONTH_VARIATION_ID,
+            .REVOLUT_ENTERPRISE_GBP_MONTHLY_PLAN_VARIATION_ID,
       },
 
       YEAR: {
@@ -202,7 +202,7 @@ export const ORGANIZER_PRICING: Record<
 
         revolutPlanVariationId:
           process.env
-            .REVOLUT_GB_ENTERPRISE_YEAR_VARIATION_ID,
+            .REVOLUT_ENTERPRISE_GBP_YEARLY_PLAN_VARIATION_ID,
       },
     },
   },
@@ -222,7 +222,7 @@ export const ORGANIZER_PRICING: Record<
 
         revolutPlanVariationId:
           process.env
-            .REVOLUT_EU_STARTER_MONTH_VARIATION_ID,
+            .REVOLUT_STARTER_EUR_MONTHLY_PLAN_VARIATION_ID,
       },
 
       YEAR: {
@@ -231,7 +231,7 @@ export const ORGANIZER_PRICING: Record<
 
         revolutPlanVariationId:
           process.env
-            .REVOLUT_EU_STARTER_YEAR_VARIATION_ID,
+            .REVOLUT_STARTER_EUR_YEARLY_PLAN_VARIATION_ID,
       },
     },
 
@@ -242,7 +242,7 @@ export const ORGANIZER_PRICING: Record<
 
         revolutPlanVariationId:
           process.env
-            .REVOLUT_EU_PROFESSIONAL_MONTH_VARIATION_ID,
+            .REVOLUT_PROFESSIONAL_EUR_MONTHLY_PLAN_VARIATION_ID,
       },
 
       YEAR: {
@@ -251,7 +251,7 @@ export const ORGANIZER_PRICING: Record<
 
         revolutPlanVariationId:
           process.env
-            .REVOLUT_EU_PROFESSIONAL_YEAR_VARIATION_ID,
+            .REVOLUT_PROFESSIONAL_EUR_YEARLY_PLAN_VARIATION_ID,
       },
     },
 
@@ -262,7 +262,7 @@ export const ORGANIZER_PRICING: Record<
 
         revolutPlanVariationId:
           process.env
-            .REVOLUT_EU_BUSINESS_MONTH_VARIATION_ID,
+            .REVOLUT_BUSINESS_EUR_MONTHLY_PLAN_VARIATION_ID,
       },
 
       YEAR: {
@@ -271,7 +271,7 @@ export const ORGANIZER_PRICING: Record<
 
         revolutPlanVariationId:
           process.env
-            .REVOLUT_EU_BUSINESS_YEAR_VARIATION_ID,
+            .REVOLUT_BUSINESS_EUR_YEARLY_PLAN_VARIATION_ID,
       },
     },
 
@@ -282,7 +282,7 @@ export const ORGANIZER_PRICING: Record<
 
         revolutPlanVariationId:
           process.env
-            .REVOLUT_EU_ENTERPRISE_MONTH_VARIATION_ID,
+            .REVOLUT_ENTERPRISE_EUR_MONTHLY_PLAN_VARIATION_ID,
       },
 
       YEAR: {
@@ -291,7 +291,7 @@ export const ORGANIZER_PRICING: Record<
 
         revolutPlanVariationId:
           process.env
-            .REVOLUT_EU_ENTERPRISE_YEAR_VARIATION_ID,
+            .REVOLUT_ENTERPRISE_EUR_YEARLY_PLAN_VARIATION_ID,
       },
     },
   },
@@ -667,7 +667,7 @@ export const ORGANIZER_PRICING: Record<
 
         revolutPlanVariationId:
           process.env
-            .REVOLUT_US_STARTER_MONTH_VARIATION_ID,
+            .REVOLUT_STARTER_USD_MONTHLY_PLAN_VARIATION_ID,
       },
 
       YEAR: {
@@ -676,7 +676,7 @@ export const ORGANIZER_PRICING: Record<
 
         revolutPlanVariationId:
           process.env
-            .REVOLUT_US_STARTER_YEAR_VARIATION_ID,
+            .REVOLUT_STARTER_USD_YEARLY_PLAN_VARIATION_ID,
       },
     },
 
@@ -687,7 +687,7 @@ export const ORGANIZER_PRICING: Record<
 
         revolutPlanVariationId:
           process.env
-            .REVOLUT_US_PROFESSIONAL_MONTH_VARIATION_ID,
+            .REVOLUT_PROFESSIONAL_USD_MONTHLY_PLAN_VARIATION_ID,
       },
 
       YEAR: {
@@ -696,7 +696,7 @@ export const ORGANIZER_PRICING: Record<
 
         revolutPlanVariationId:
           process.env
-            .REVOLUT_US_PROFESSIONAL_YEAR_VARIATION_ID,
+            .REVOLUT_PROFESSIONAL_USD_YEARLY_PLAN_VARIATION_ID,
       },
     },
 
@@ -707,7 +707,7 @@ export const ORGANIZER_PRICING: Record<
 
         revolutPlanVariationId:
           process.env
-            .REVOLUT_US_BUSINESS_MONTH_VARIATION_ID,
+            .REVOLUT_BUSINESS_USD_MONTHLY_PLAN_VARIATION_ID,
       },
 
       YEAR: {
@@ -716,7 +716,7 @@ export const ORGANIZER_PRICING: Record<
 
         revolutPlanVariationId:
           process.env
-            .REVOLUT_US_BUSINESS_YEAR_VARIATION_ID,
+            .REVOLUT_BUSINESS_USD_YEARLY_PLAN_VARIATION_ID,
       },
     },
 
@@ -727,7 +727,7 @@ export const ORGANIZER_PRICING: Record<
 
         revolutPlanVariationId:
           process.env
-            .REVOLUT_US_ENTERPRISE_MONTH_VARIATION_ID,
+            .REVOLUT_ENTERPRISE_USD_MONTHLY_PLAN_VARIATION_ID,
       },
 
       YEAR: {
@@ -736,7 +736,7 @@ export const ORGANIZER_PRICING: Record<
 
         revolutPlanVariationId:
           process.env
-            .REVOLUT_US_ENTERPRISE_YEAR_VARIATION_ID,
+            .REVOLUT_ENTERPRISE_USD_YEARLY_PLAN_VARIATION_ID,
       },
     },
   },
