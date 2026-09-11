@@ -223,7 +223,6 @@ export async function webhook(
       revolutSubscriptionId
     ) {
       return handleSubscriptionPayment(
-        req,
         res,
         event,
         orderId,
@@ -270,7 +269,7 @@ export async function webhook(
     | Attendee Ticket Purchase
     |--------------------------------------------------------------------------
     |
-    | Everything below remains the existing ticket-payment flow.
+    | Everything below handles the attendee ticket-payment flow.
     |
     */
 
@@ -432,8 +431,95 @@ export async function webhook(
 
     /*
     |--------------------------------------------------------------------------
-    | Complete Ticket Purchase
+    | Mark Purchase As Paid
     |--------------------------------------------------------------------------
+    |
+    | Payment processing owns the purchase payment state.
+    |
+    | We MUST mark the purchase as PAID before calling issuePurchase().
+    |
+    | issuePurchase() intentionally refuses to issue passes for a purchase
+    | that is not PAID.
+    |
+    */
+
+    const updatedPurchase =
+      await prisma.ticketPurchase.updateMany({
+        where: {
+          id:
+            purchase.id,
+
+          status:
+            "PENDING",
+        },
+
+        data: {
+          status:
+            "PAID",
+
+          paymentCompletedAt:
+            new Date(),
+
+          gatewayStatus:
+            order.state,
+        },
+      });
+
+    /*
+    |--------------------------------------------------------------------------
+    | Handle Already-Processed Webhook
+    |--------------------------------------------------------------------------
+    |
+    | If another webhook request processed this purchase first, updateMany
+    | will affect zero rows. We do not treat that as an error.
+    |
+    */
+
+    if (
+      updatedPurchase.count ===
+      0
+    ) {
+      const currentPurchase =
+        await prisma.ticketPurchase.findUnique({
+          where: {
+            id:
+              purchase.id,
+          },
+
+          select: {
+            status: true,
+          },
+        });
+
+      if (
+        currentPurchase?.status !==
+        "PAID"
+      ) {
+        console.error(
+          "REVOLUT PURCHASE STATUS COULD NOT BE UPDATED:",
+          {
+            purchaseId:
+              purchase.id,
+
+            currentStatus:
+              currentPurchase?.status,
+          },
+        );
+
+        return res
+          .status(204)
+          .send();
+      }
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Issue Ticket Passes
+    |--------------------------------------------------------------------------
+    |
+    | The purchase is now PAID, so the issuance service can safely create
+    | the attendee passes.
+    |
     */
 
     await issuePurchase(
@@ -637,7 +723,6 @@ async function handleInitialSubscriptionPayment(
 */
 
 async function handleSubscriptionPayment(
-  req: Request,
   res: Response,
   event: string,
   orderId: string,
