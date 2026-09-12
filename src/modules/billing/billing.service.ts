@@ -468,26 +468,26 @@ export async function createSubscriptionCheckout(
 
   /*
   |--------------------------------------------------------------------------
-  | Active Subscription
+  | Active Paid Subscription
   |--------------------------------------------------------------------------
+  |
+  | A TRIALING subscription is intentionally allowed to proceed.
+  |
+  | The organization receives a free trial first and can then convert
+  | that trial into a paid Revolut subscription.
+  |
+  | Only an already ACTIVE paid subscription should block creation
+  | of another paid checkout.
+  |
   */
 
   if (
     existing &&
-    (
-      existing.status ===
-        SubscriptionStatus.ACTIVE ||
-      (
-        existing.status ===
-          SubscriptionStatus.TRIALING &&
-        isSubscriptionActive(
-          existing,
-        )
-      )
-    )
+    existing.status ===
+      SubscriptionStatus.ACTIVE
   ) {
     throw new Error(
-      "Organization already has an active subscription.",
+      "Organization already has an active paid subscription.",
     );
   }
 
