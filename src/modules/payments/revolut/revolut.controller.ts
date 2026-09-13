@@ -61,8 +61,6 @@ export async function webhook(
     | Raw Body
     |--------------------------------------------------------------------------
     |
-    | IMPORTANT:
-    |
     | Express must preserve the original body for this route.
     |
     */
@@ -326,6 +324,8 @@ export async function webhook(
 
         include: {
           event: true,
+
+          ticket: true,
         },
       });
 
@@ -341,21 +341,6 @@ export async function webhook(
       |--------------------------------------------------------------------------
       */
 
-      return res
-        .status(204)
-        .send();
-    }
-
-    /*
-    |--------------------------------------------------------------------------
-    | Idempotency
-    |--------------------------------------------------------------------------
-    */
-
-    if (
-      purchase.status ===
-      "PAID"
-    ) {
       return res
         .status(204)
         .send();
@@ -431,84 +416,217 @@ export async function webhook(
 
     /*
     |--------------------------------------------------------------------------
-    | Mark Purchase As Paid
+    | Mark Purchase Paid + Update Inventory
     |--------------------------------------------------------------------------
     |
-    | Payment processing owns the purchase payment state.
+    | IMPORTANT:
     |
-    | We MUST mark the purchase as PAID before calling issuePurchase().
+    | TicketPurchase does not expose a ticketId scalar in the Prisma type.
+    | The ticket is accessed through the existing `ticket` relation.
     |
-    | issuePurchase() intentionally refuses to issue passes for a purchase
-    | that is not PAID.
+    | The purchase status transition and inventory update happen inside
+    | the SAME transaction.
     |
-    */
-
-    const updatedPurchase =
-      await prisma.ticketPurchase.updateMany({
-        where: {
-          id:
-            purchase.id,
-
-          status:
-            "PENDING",
-        },
-
-        data: {
-          status:
-            "PAID",
-
-          paymentCompletedAt:
-            new Date(),
-
-          gatewayStatus:
-            order.state,
-        },
-      });
-
-    /*
-    |--------------------------------------------------------------------------
-    | Handle Already-Processed Webhook
-    |--------------------------------------------------------------------------
+    | This means:
     |
-    | If another webhook request processed this purchase first, updateMany
-    | will affect zero rows. We do not treat that as an error.
+    | PENDING → PAID
+    |       +
+    | TicketType.sold += quantity
+    |
+    | either both succeed or neither succeeds.
     |
     */
 
     if (
-      updatedPurchase.count ===
-      0
+      purchase.status ===
+      "PENDING"
     ) {
-      const currentPurchase =
-        await prisma.ticketPurchase.findUnique({
-          where: {
-            id:
-              purchase.id,
-          },
+      const processed =
+        await prisma.$transaction(
+          async (tx) => {
+            /*
+            |--------------------------------------------------------------------------
+            | Lock Purchase Row
+            |--------------------------------------------------------------------------
+            |
+            | Prevent concurrent webhook requests from processing the same
+            | purchase simultaneously.
+            |
+            */
 
-          select: {
-            status: true,
-          },
-        });
+            await tx.$queryRaw`
+              SELECT id
+              FROM "TicketPurchase"
+              WHERE id = ${purchase.id}
+              FOR UPDATE
+            `;
 
-      if (
-        currentPurchase?.status !==
-        "PAID"
-      ) {
-        console.error(
-          "REVOLUT PURCHASE STATUS COULD NOT BE UPDATED:",
+            /*
+            |--------------------------------------------------------------------------
+            | Re-fetch Purchase State
+            |--------------------------------------------------------------------------
+            |
+            | We use the ticket relation instead of ticketId because the
+            | Prisma model exposes the relationship as `ticket`.
+            |
+            */
+
+            const lockedPurchase =
+              await tx.ticketPurchase.findUnique({
+                where: {
+                  id:
+                    purchase.id,
+                },
+
+                select: {
+                  id: true,
+
+                  status: true,
+
+                  quantity: true,
+
+                  ticket: {
+                    select: {
+                      id: true,
+                    },
+                  },
+                },
+              });
+
+            if (
+              !lockedPurchase
+            ) {
+              throw new Error(
+                "Purchase not found during payment transaction.",
+              );
+            }
+
+            /*
+            |--------------------------------------------------------------------------
+            | Idempotency
+            |--------------------------------------------------------------------------
+            |
+            | Another webhook may have completed the transaction while this
+            | request was waiting for the row lock.
+            |
+            */
+
+            if (
+              lockedPurchase.status !==
+              "PENDING"
+            ) {
+              return false;
+            }
+
+            /*
+            |--------------------------------------------------------------------------
+            | Validate Ticket Relation
+            |--------------------------------------------------------------------------
+            */
+
+            if (
+              !lockedPurchase.ticket
+            ) {
+              throw new Error(
+                "Ticket type not found for purchase.",
+              );
+            }
+
+            /*
+            |--------------------------------------------------------------------------
+            | Mark Purchase As Paid
+            |--------------------------------------------------------------------------
+            */
+
+            const updatedPurchase =
+              await tx.ticketPurchase.updateMany({
+                where: {
+                  id:
+                    lockedPurchase.id,
+
+                  status:
+                    "PENDING",
+                },
+
+                data: {
+                  status:
+                    "PAID",
+
+                  paymentCompletedAt:
+                    new Date(),
+
+                  gatewayStatus:
+                    order.state,
+                },
+              });
+
+            /*
+            |--------------------------------------------------------------------------
+            | Confirm Status Transition
+            |--------------------------------------------------------------------------
+            */
+
+            if (
+              updatedPurchase.count !==
+              1
+            ) {
+              return false;
+            }
+
+            /*
+            |--------------------------------------------------------------------------
+            | Update Ticket Inventory
+            |--------------------------------------------------------------------------
+            |
+            | The TicketType sold counter is updated only after the purchase
+            | successfully transitions from PENDING to PAID.
+            |
+            */
+
+            await tx.ticketType.update({
+              where: {
+                id:
+                  lockedPurchase.ticket.id,
+              },
+
+              data: {
+                sold: {
+                  increment:
+                    lockedPurchase.quantity,
+                },
+              },
+            });
+
+            return true;
+          },
+        );
+
+      if (processed) {
+        console.log(
+          "REVOLUT PURCHASE MARKED PAID + INVENTORY UPDATED:",
           {
             purchaseId:
               purchase.id,
 
-            currentStatus:
-              currentPurchase?.status,
+            ticketTypeId:
+              purchase.ticket.id,
+
+            quantity:
+              purchase.quantity,
+
+            orderId,
           },
         );
+      } else {
+        console.log(
+          "REVOLUT PURCHASE ALREADY PROCESSED:",
+          {
+            purchaseId:
+              purchase.id,
 
-        return res
-          .status(204)
-          .send();
+            orderId,
+          },
+        );
       }
     }
 
@@ -517,14 +635,25 @@ export async function webhook(
     | Issue Ticket Passes
     |--------------------------------------------------------------------------
     |
-    | The purchase is now PAID, so the issuance service can safely create
-    | the attendee passes.
+    | We intentionally call issuePurchase() even when the purchase is already
+    | PAID.
+    |
+    | This allows a later webhook retry to recover from a situation where
+    | payment was successfully recorded but pass issuance failed.
+    |
+    | issuePurchase() has its own idempotency protection.
     |
     */
 
     await issuePurchase(
       purchase.id,
     );
+
+    /*
+    |--------------------------------------------------------------------------
+    | Success
+    |--------------------------------------------------------------------------
+    */
 
     console.log(
       "REVOLUT PAYMENT COMPLETED:",

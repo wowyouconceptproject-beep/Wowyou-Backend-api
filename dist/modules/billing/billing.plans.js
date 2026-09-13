@@ -2,16 +2,21 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.ORGANIZER_PLANS = void 0;
 const client_1 = require("@prisma/client");
+/*
+|--------------------------------------------------------------------------
+| Organizer Plans
+|--------------------------------------------------------------------------
+*/
 exports.ORGANIZER_PLANS = {
+    /*
+    |--------------------------------------------------------------------------
+    | Starter
+    |--------------------------------------------------------------------------
+    */
     STARTER: {
         plan: client_1.OrganizerPlan.STARTER,
         name: "Starter",
-        amount: 49,
-        currency: "GBP",
-        interval: "MONTH",
         description: "Everything you need to start running events.",
-        revolutPlanVariationId: process.env
-            .REVOLUT_STARTER_PLAN_VARIATION_ID,
         features: [
             "EVENT_CREATION",
             "EVENT_PUBLISHING",
@@ -20,15 +25,15 @@ exports.ORGANIZER_PLANS = {
             "BASIC_ANALYTICS",
         ],
     },
+    /*
+    |--------------------------------------------------------------------------
+    | Professional
+    |--------------------------------------------------------------------------
+    */
     PROFESSIONAL: {
         plan: client_1.OrganizerPlan.PROFESSIONAL,
         name: "Professional",
-        amount: 149,
-        currency: "GBP",
-        interval: "MONTH",
         description: "Advanced tools for growing event operations.",
-        revolutPlanVariationId: process.env
-            .REVOLUT_PROFESSIONAL_PLAN_VARIATION_ID,
         features: [
             "EVENT_CREATION",
             "EVENT_PUBLISHING",
@@ -41,15 +46,15 @@ exports.ORGANIZER_PLANS = {
             "REPORTS",
         ],
     },
+    /*
+    |--------------------------------------------------------------------------
+    | Business
+    |--------------------------------------------------------------------------
+    */
     BUSINESS: {
         plan: client_1.OrganizerPlan.BUSINESS,
         name: "Business",
-        amount: 399,
-        currency: "GBP",
-        interval: "MONTH",
         description: "Complete infrastructure for serious event businesses.",
-        revolutPlanVariationId: process.env
-            .REVOLUT_BUSINESS_PLAN_VARIATION_ID,
         features: [
             "EVENT_CREATION",
             "EVENT_PUBLISHING",
@@ -65,15 +70,15 @@ exports.ORGANIZER_PLANS = {
             "MULTIPLE_EVENTS",
         ],
     },
+    /*
+    |--------------------------------------------------------------------------
+    | Enterprise
+    |--------------------------------------------------------------------------
+    */
     ENTERPRISE: {
         plan: client_1.OrganizerPlan.ENTERPRISE,
         name: "Enterprise",
-        amount: 1500,
-        currency: "GBP",
-        interval: "MONTH",
         description: "Enterprise-grade event infrastructure and support.",
-        revolutPlanVariationId: process.env
-            .REVOLUT_ENTERPRISE_PLAN_VARIATION_ID,
         features: [
             "EVENT_CREATION",
             "EVENT_PUBLISHING",

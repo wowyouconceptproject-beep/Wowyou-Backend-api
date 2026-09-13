@@ -4,6 +4,7 @@ exports.ORGANIZER_TRIAL_DAYS = void 0;
 exports.getOrganizationSubscription = getOrganizationSubscription;
 exports.getPlans = getPlans;
 exports.getPlan = getPlan;
+exports.getPlanPricing = getPlanPricing;
 exports.isSubscriptionActive = isSubscriptionActive;
 exports.organizationHasFeature = organizationHasFeature;
 exports.createOrganizationTrial = createOrganizationTrial;
@@ -12,6 +13,7 @@ exports.createSubscriptionCheckout = createSubscriptionCheckout;
 const client_1 = require("@prisma/client");
 const prisma_1 = require("../../lib/prisma");
 const billing_plans_1 = require("./billing.plans");
+const billing_pricing_1 = require("./billing.pricing");
 const revolut_service_1 = require("../payments/revolut/revolut.service");
 /*
 |--------------------------------------------------------------------------
@@ -19,6 +21,13 @@ const revolut_service_1 = require("../payments/revolut/revolut.service");
 |--------------------------------------------------------------------------
 */
 exports.ORGANIZER_TRIAL_DAYS = 14;
+/*
+|--------------------------------------------------------------------------
+| Default Billing Configuration
+|--------------------------------------------------------------------------
+*/
+const DEFAULT_BILLING_COUNTRY = "GB";
+const DEFAULT_BILLING_INTERVAL = "MONTH";
 /*
 |--------------------------------------------------------------------------
 | Get Organization Subscription
@@ -35,6 +44,11 @@ async function getOrganizationSubscription(organizationId) {
 |--------------------------------------------------------------------------
 | Get Plans
 |--------------------------------------------------------------------------
+|
+| Returns plan metadata only.
+|
+| Pricing is resolved separately through billing.pricing.ts.
+|
 */
 function getPlans() {
     return Object.values(billing_plans_1.ORGANIZER_PLANS);
@@ -49,13 +63,33 @@ function getPlan(plan) {
 }
 /*
 |--------------------------------------------------------------------------
-| Subscription Active Check
+| Get Plan Pricing
 |--------------------------------------------------------------------------
 |
-| ACTIVE subscriptions are always considered active.
+| Pricing is resolved using:
 |
-| TRIALING subscriptions are active only until currentPeriodEnd.
+| country + plan + interval
 |
+*/
+function getPlanPricing(country, plan, interval) {
+    const countryPricing = billing_pricing_1.ORGANIZER_PRICING[country];
+    if (!countryPricing) {
+        throw new Error(`Billing is not available for country ${country}.`);
+    }
+    const planPricing = countryPricing[plan];
+    if (!planPricing) {
+        throw new Error(`Pricing is not configured for ${plan} in ${country}.`);
+    }
+    const pricing = planPricing[interval];
+    if (!pricing) {
+        throw new Error(`Pricing is not configured for ${plan} in ${country} for ${interval} billing.`);
+    }
+    return pricing;
+}
+/*
+|--------------------------------------------------------------------------
+| Subscription Active Check
+|--------------------------------------------------------------------------
 */
 function isSubscriptionActive(subscription) {
     if (subscription.status ===
@@ -95,18 +129,13 @@ async function organizationHasFeature(organizationId, feature) {
 |--------------------------------------------------------------------------
 | Create Organization Trial
 |--------------------------------------------------------------------------
-|
-| This is used when a new organization is created.
-|
-| It gives the organization 14 days of access to the selected plan
-| without requiring immediate payment.
-|
 */
-async function createOrganizationTrial(organizationId, plan = client_1.OrganizerPlan.STARTER) {
+async function createOrganizationTrial(organizationId, plan = client_1.OrganizerPlan.STARTER, country = DEFAULT_BILLING_COUNTRY, interval = DEFAULT_BILLING_INTERVAL) {
     const config = billing_plans_1.ORGANIZER_PLANS[plan];
     if (!config) {
         throw new Error("Invalid organizer plan.");
     }
+    const pricing = getPlanPricing(country, plan, interval);
     const existing = await getOrganizationSubscription(organizationId);
     /*
     |--------------------------------------------------------------------------
@@ -125,9 +154,9 @@ async function createOrganizationTrial(organizationId, plan = client_1.Organizer
             organizationId,
             plan,
             status: client_1.SubscriptionStatus.TRIALING,
-            currency: config.currency,
-            amount: config.amount,
-            interval: config.interval,
+            currency: pricing.currency,
+            amount: pricing.amount,
+            interval,
             currentPeriodStart: now,
             currentPeriodEnd: trialEnd,
             cancelAtPeriodEnd: false,
@@ -138,21 +167,13 @@ async function createOrganizationTrial(organizationId, plan = client_1.Organizer
 |--------------------------------------------------------------------------
 | Create Initial Subscription
 |--------------------------------------------------------------------------
-|
-| IMPORTANT:
-|
-| This function is used by the payment checkout flow.
-|
-| It creates a PENDING subscription.
-|
-| It does NOT create or start the free trial.
-|
 */
-async function createInitialSubscription(organizationId, plan = client_1.OrganizerPlan.STARTER) {
+async function createInitialSubscription(organizationId, plan = client_1.OrganizerPlan.STARTER, country = DEFAULT_BILLING_COUNTRY, interval = DEFAULT_BILLING_INTERVAL) {
     const config = billing_plans_1.ORGANIZER_PLANS[plan];
     if (!config) {
         throw new Error("Invalid organizer plan.");
     }
+    const pricing = getPlanPricing(country, plan, interval);
     return prisma_1.prisma.organizationSubscription.upsert({
         where: {
             organizationId,
@@ -161,16 +182,16 @@ async function createInitialSubscription(organizationId, plan = client_1.Organiz
             organizationId,
             plan,
             status: client_1.SubscriptionStatus.PENDING,
-            currency: config.currency,
-            amount: config.amount,
-            interval: config.interval,
+            currency: pricing.currency,
+            amount: pricing.amount,
+            interval,
         },
         update: {
             plan,
             status: client_1.SubscriptionStatus.PENDING,
-            currency: config.currency,
-            amount: config.amount,
-            interval: config.interval,
+            currency: pricing.currency,
+            amount: pricing.amount,
+            interval,
             currentPeriodStart: null,
             currentPeriodEnd: null,
             cancelAtPeriodEnd: false,
@@ -181,19 +202,40 @@ async function createInitialSubscription(organizationId, plan = client_1.Organiz
 |--------------------------------------------------------------------------
 | Create Organizer Checkout
 |--------------------------------------------------------------------------
+|
+| Pricing is resolved by:
+|
+| country + plan + interval
+|
+| The Revolut variation is resolved from the selected price.
+|
 */
 async function createSubscriptionCheckout(data) {
+    /*
+    |--------------------------------------------------------------------------
+    | Validate Plan
+    |--------------------------------------------------------------------------
+    */
     const config = billing_plans_1.ORGANIZER_PLANS[data.plan];
     if (!config) {
         throw new Error("Invalid organizer plan.");
     }
     /*
     |--------------------------------------------------------------------------
-    | Revolut Plan Variation
+    | Resolve Pricing
     |--------------------------------------------------------------------------
     */
-    if (!config.revolutPlanVariationId) {
-        throw new Error(`Revolut plan variation is not configured for ${data.plan}.`);
+    const pricing = getPlanPricing(data.country, data.plan, data.interval);
+    /*
+    |--------------------------------------------------------------------------
+    | Resolve Revolut Variation
+    |--------------------------------------------------------------------------
+    */
+    const revolutPlanVariationId = pricing.revolutPlanVariationId;
+    if (!revolutPlanVariationId ||
+        typeof revolutPlanVariationId !==
+            "string") {
+        throw new Error(`Revolut plan variation is not configured for ${data.country} / ${data.plan} / ${data.interval}.`);
     }
     /*
     |--------------------------------------------------------------------------
@@ -203,27 +245,29 @@ async function createSubscriptionCheckout(data) {
     const existing = await getOrganizationSubscription(data.organizationId);
     /*
     |--------------------------------------------------------------------------
-    | Active Subscription
+    | Active Paid Subscription
     |--------------------------------------------------------------------------
     |
-    | An organization with an active paid subscription cannot start another
-    | checkout over the existing subscription.
+    | A TRIALING subscription is intentionally allowed to proceed.
+    |
+    | The organization receives a free trial first and can then convert
+    | that trial into a paid Revolut subscription.
+    |
+    | Only an already ACTIVE paid subscription should block creation
+    | of another paid checkout.
     |
     */
     if (existing &&
-        (existing.status ===
-            client_1.SubscriptionStatus.ACTIVE ||
-            (existing.status ===
-                client_1.SubscriptionStatus.TRIALING &&
-                isSubscriptionActive(existing)))) {
-        throw new Error("Organization already has an active subscription.");
+        existing.status ===
+            client_1.SubscriptionStatus.ACTIVE) {
+        throw new Error("Organization already has an active paid subscription.");
     }
     /*
     |--------------------------------------------------------------------------
     | Create / Update Pending Local Subscription
     |--------------------------------------------------------------------------
     */
-    const subscription = await createInitialSubscription(data.organizationId, data.plan);
+    const subscription = await createInitialSubscription(data.organizationId, data.plan, data.country, data.interval);
     /*
     |--------------------------------------------------------------------------
     | Create Revolut Customer
@@ -246,7 +290,7 @@ async function createSubscriptionCheckout(data) {
     */
     const revolutSubscription = await (0, revolut_service_1.createRevolutSubscription)({
         customerId: customer.id,
-        planVariationId: config.revolutPlanVariationId,
+        planVariationId: revolutPlanVariationId,
         externalReference,
         redirectUrl: data.redirectUrl,
         idempotencyKey: externalReference,
@@ -284,7 +328,7 @@ async function createSubscriptionCheckout(data) {
             provider: "REVOLUT",
             providerCustomerId: customer.id,
             providerSubscriptionId: revolutSubscription.id,
-            providerPriceId: config.revolutPlanVariationId,
+            providerPriceId: revolutPlanVariationId,
             providerSetupOrderId: setupOrderId,
         },
     });
@@ -298,5 +342,12 @@ async function createSubscriptionCheckout(data) {
         checkoutUrl: order.checkout_url,
         revolutSubscriptionId: revolutSubscription.id,
         setupOrderId,
+        pricing: {
+            amount: pricing.amount,
+            currency: pricing.currency,
+            interval: data.interval,
+            country: data.country,
+            plan: data.plan,
+        },
     };
 }

@@ -92,6 +92,11 @@ async function getEventById(userId, eventId) {
     if (!organization) {
         throw new Error("Organization not found");
     }
+    /*
+    |--------------------------------------------------------------------------
+    | Event
+    |--------------------------------------------------------------------------
+    */
     const event = await prisma_1.prisma.event.findFirst({
         where: {
             id: eventId,
@@ -104,7 +109,82 @@ async function getEventById(userId, eventId) {
     if (!event) {
         throw new Error("Event not found");
     }
-    return event;
+    /*
+    |--------------------------------------------------------------------------
+    | Live Dashboard Statistics
+    |--------------------------------------------------------------------------
+    |
+    | TicketPurchase is the reporting source of truth.
+    |
+    | Only PAID purchases count toward:
+    |
+    | • tickets sold
+    | • revenue
+    |
+    | Checked-in is counted only from PAID purchases.
+    |
+    */
+    const [paidPurchases, checkedIn, onlineStaff,] = await Promise.all([
+        prisma_1.prisma.ticketPurchase.findMany({
+            where: {
+                eventId,
+                status: "PAID",
+            },
+            select: {
+                quantity: true,
+                amount: true,
+            },
+        }),
+        prisma_1.prisma.ticketPurchase.count({
+            where: {
+                eventId,
+                status: "PAID",
+                checkedIn: true,
+            },
+        }),
+        prisma_1.prisma.operationSession.count({
+            where: {
+                isActive: true,
+                staff: {
+                    eventId,
+                },
+            },
+        }),
+    ]);
+    /*
+    |--------------------------------------------------------------------------
+    | Tickets Sold
+    |--------------------------------------------------------------------------
+    */
+    const ticketSold = paidPurchases.reduce((total, purchase) => total +
+        purchase.quantity, 0);
+    /*
+    |--------------------------------------------------------------------------
+    | Revenue
+    |--------------------------------------------------------------------------
+    */
+    const revenue = paidPurchases.reduce((total, purchase) => total +
+        Number(purchase.amount), 0);
+    /*
+    |--------------------------------------------------------------------------
+    | Return Event
+    |--------------------------------------------------------------------------
+    |
+    | Preserve the existing event/ticket structure while adding:
+    |
+    | event.stats
+    |
+    */
+    return {
+        ...event,
+        stats: {
+            ticketSold,
+            checkedIn,
+            revenue,
+            currency: event.currency,
+            onlineStaff,
+        },
+    };
 }
 async function publishEvent(userId, eventId) {
     const organization = await prisma_1.prisma.organization.findUnique({

@@ -9,6 +9,7 @@ const helmet_1 = __importDefault(require("helmet"));
 const morgan_1 = __importDefault(require("morgan"));
 const search_1 = require("./modules/search");
 const revolut_routes_1 = __importDefault(require("./modules/payments/revolut/revolut.routes"));
+const revolut_controller_1 = require("./modules/payments/revolut/revolut.controller");
 const app = (0, express_1.default)();
 /*
 |--------------------------------------------------------------------------
@@ -38,19 +39,37 @@ app.use((0, morgan_1.default)("dev"));
 |
 | IMPORTANT:
 |
-| This MUST be registered before express.json().
-|
 | Revolut webhook signature verification requires the exact raw request
 | body that Revolut signed.
 |
-| Final endpoint:
+| Therefore express.raw() MUST run before express.json().
 |
-| POST /payments/revolut/webhook
+|--------------------------------------------------------------------------
+| Primary Webhook Endpoint
+|--------------------------------------------------------------------------
+|
+| POST /api/payments/revolut/webhook
+|
+| This is the endpoint currently being called by Revolut.
 |
 */
-app.use("/payments/revolut", express_1.default.raw({
+app.post("/api/payments/revolut/webhook", express_1.default.raw({
     type: "application/json",
-}), revolut_routes_1.default);
+}), revolut_controller_1.webhook);
+/*
+|--------------------------------------------------------------------------
+| Revolut Payment Routes
+|--------------------------------------------------------------------------
+|
+| Existing attendee payment flow.
+|
+| DO NOT CHANGE.
+|
+| GET /payments/revolut/return
+| GET /payments/revolut/subscription-return
+|
+*/
+app.use("/payments/revolut", revolut_routes_1.default);
 /*
 |--------------------------------------------------------------------------
 | JSON Parser

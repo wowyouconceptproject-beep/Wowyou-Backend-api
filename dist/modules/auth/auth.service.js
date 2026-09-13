@@ -8,47 +8,154 @@ exports.loginUser = loginUser;
 const bcryptjs_1 = __importDefault(require("bcryptjs"));
 const prisma_1 = require("../../lib/prisma");
 const jwt_1 = require("./jwt");
+/*
+|--------------------------------------------------------------------------
+| Normalize Registration Role
+|--------------------------------------------------------------------------
+*/
+function normalizeRegistrationRole(role) {
+    const normalizedRole = String(role ?? "")
+        .trim()
+        .toUpperCase();
+    if (normalizedRole === "ORGANIZER" ||
+        normalizedRole === "VENDOR" ||
+        normalizedRole === "ATTENDEE") {
+        return normalizedRole;
+    }
+    throw new Error("Invalid registration role");
+}
+/*
+|--------------------------------------------------------------------------
+| Register User
+|--------------------------------------------------------------------------
+*/
 async function registerUser(data) {
+    const firstName = data.firstName?.trim();
+    const lastName = data.lastName?.trim();
+    const email = data.email
+        ?.trim()
+        .toLowerCase();
+    const password = data.password;
+    /*
+    |--------------------------------------------------------------------------
+    | Basic Validation
+    |--------------------------------------------------------------------------
+    */
+    if (!firstName ||
+        !lastName ||
+        !email ||
+        !password) {
+        throw new Error("First name, last name, email and password are required");
+    }
+    /*
+    |--------------------------------------------------------------------------
+    | Normalize Role
+    |--------------------------------------------------------------------------
+    */
+    const registrationRole = normalizeRegistrationRole(data.role);
+    /*
+    |--------------------------------------------------------------------------
+    | Check Existing User
+    |--------------------------------------------------------------------------
+    */
     const existingUser = await prisma_1.prisma.user.findUnique({
         where: {
-            email: data.email,
+            email,
         },
     });
     if (existingUser) {
         throw new Error("Email already exists");
     }
-    const hashedPassword = await bcryptjs_1.default.hash(data.password, 10);
+    /*
+    |--------------------------------------------------------------------------
+    | Hash Password
+    |--------------------------------------------------------------------------
+    */
+    const hashedPassword = await bcryptjs_1.default.hash(password, 10);
+    /*
+    |--------------------------------------------------------------------------
+    | Create User
+    |--------------------------------------------------------------------------
+    */
     const user = await prisma_1.prisma.user.create({
         data: {
-            firstName: data.firstName,
-            lastName: data.lastName,
-            email: data.email,
+            firstName,
+            lastName,
+            email,
             password: hashedPassword,
-            role: data.role,
+            role: registrationRole,
         },
     });
+    /*
+    |--------------------------------------------------------------------------
+    | Generate JWT
+    |--------------------------------------------------------------------------
+    */
     const token = (0, jwt_1.generateToken)(user.id);
-    const { password: _, ...safeUser } = user;
+    /*
+    |--------------------------------------------------------------------------
+    | Remove Password
+    |--------------------------------------------------------------------------
+    */
+    const { password: _password, ...safeUser } = user;
+    /*
+    |--------------------------------------------------------------------------
+    | Response
+    |--------------------------------------------------------------------------
+    */
     return {
         token,
         user: safeUser,
     };
 }
+/*
+|--------------------------------------------------------------------------
+| Login User
+|--------------------------------------------------------------------------
+*/
 async function loginUser(email, password) {
+    const normalizedEmail = email
+        ?.trim()
+        .toLowerCase();
+    /*
+    |--------------------------------------------------------------------------
+    | Find User
+    |--------------------------------------------------------------------------
+    */
     const user = await prisma_1.prisma.user.findUnique({
         where: {
-            email,
+            email: normalizedEmail,
         },
     });
     if (!user) {
         throw new Error("Invalid credentials");
     }
+    /*
+    |--------------------------------------------------------------------------
+    | Verify Password
+    |--------------------------------------------------------------------------
+    */
     const isValid = await bcryptjs_1.default.compare(password, user.password);
     if (!isValid) {
         throw new Error("Invalid credentials");
     }
+    /*
+    |--------------------------------------------------------------------------
+    | Generate JWT
+    |--------------------------------------------------------------------------
+    */
     const token = (0, jwt_1.generateToken)(user.id);
-    const { password: _, ...safeUser } = user;
+    /*
+    |--------------------------------------------------------------------------
+    | Remove Password
+    |--------------------------------------------------------------------------
+    */
+    const { password: _password, ...safeUser } = user;
+    /*
+    |--------------------------------------------------------------------------
+    | Response
+    |--------------------------------------------------------------------------
+    */
     return {
         token,
         user: safeUser,

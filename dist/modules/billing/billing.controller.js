@@ -7,6 +7,40 @@ const billing_service_1 = require("./billing.service");
 const prisma_1 = require("../../lib/prisma");
 /*
 |--------------------------------------------------------------------------
+| Supported Billing Countries
+|--------------------------------------------------------------------------
+|
+| WOWYOU is positioned as an international / European event platform.
+|
+| GB  → United Kingdom
+| US  → United States
+| EU  → European Union / Euro
+| CH  → Switzerland
+| NO  → Norway
+| SE  → Sweden
+| DK  → Denmark
+|
+*/
+const BILLING_COUNTRIES = [
+    "GB",
+    "US",
+    "EU",
+    "CH",
+    "NO",
+    "SE",
+    "DK",
+];
+/*
+|--------------------------------------------------------------------------
+| Supported Billing Intervals
+|--------------------------------------------------------------------------
+*/
+const BILLING_INTERVALS = [
+    "MONTH",
+    "YEAR",
+];
+/*
+|--------------------------------------------------------------------------
 | Plans
 |--------------------------------------------------------------------------
 */
@@ -41,9 +75,11 @@ async function subscription(req, res) {
         });
     }
     catch (error) {
+        console.error("ORGANIZER SUBSCRIPTION ERROR:", error);
         return res.status(400).json({
             success: false,
-            message: error.message,
+            message: error.message ||
+                "Unable to load subscription.",
         });
     }
 }
@@ -54,7 +90,7 @@ async function subscription(req, res) {
 */
 async function checkout(req, res) {
     try {
-        const { plan, fullName, email, redirectUrl, } = req.body;
+        const { plan, country, interval, fullName, email, redirectUrl, } = req.body;
         /*
         |--------------------------------------------------------------------------
         | Validate Plan
@@ -65,6 +101,30 @@ async function checkout(req, res) {
             return res.status(400).json({
                 success: false,
                 message: "Invalid organizer plan.",
+            });
+        }
+        /*
+        |--------------------------------------------------------------------------
+        | Validate Billing Country
+        |--------------------------------------------------------------------------
+        */
+        if (!country ||
+            !BILLING_COUNTRIES.includes(country)) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid billing country.",
+            });
+        }
+        /*
+        |--------------------------------------------------------------------------
+        | Validate Billing Interval
+        |--------------------------------------------------------------------------
+        */
+        if (!interval ||
+            !BILLING_INTERVALS.includes(interval)) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid billing interval. Choose MONTH or YEAR.",
             });
         }
         /*
@@ -116,14 +176,24 @@ async function checkout(req, res) {
         }
         /*
         |--------------------------------------------------------------------------
-        | Create Revolut Checkout
+        | Create Subscription Checkout
         |--------------------------------------------------------------------------
+        |
+        | Pricing is resolved by:
+        |
+        | country
+        | plan
+        | interval
+        |
         */
         const result = await (0, billing_service_1.createSubscriptionCheckout)({
             organizationId: organization.id,
             plan,
+            country,
+            interval,
             fullName: fullName.trim(),
-            email: email.trim()
+            email: email
+                .trim()
                 .toLowerCase(),
             redirectUrl: redirectUrl.trim(),
         });
@@ -131,6 +201,10 @@ async function checkout(req, res) {
         |--------------------------------------------------------------------------
         | Response
         |--------------------------------------------------------------------------
+        |
+        | Return the resolved pricing so the frontend knows exactly what
+        | pricing configuration was used for the checkout.
+        |
         */
         return res.status(200).json({
             success: true,
@@ -138,6 +212,7 @@ async function checkout(req, res) {
             subscriptionId: result.subscription.id,
             revolutSubscriptionId: result.revolutSubscriptionId,
             setupOrderId: result.setupOrderId,
+            pricing: result.pricing,
         });
     }
     catch (error) {

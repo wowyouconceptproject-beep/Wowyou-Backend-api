@@ -200,13 +200,21 @@ export async function getEventById(
     );
   }
 
+  /*
+  |--------------------------------------------------------------------------
+  | Event
+  |--------------------------------------------------------------------------
+  */
+
   const event =
     await prisma.event.findFirst({
       where: {
         id: eventId,
+
         organizationId:
           organization.id,
       },
+
       include: {
         tickets: true,
       },
@@ -218,7 +226,132 @@ export async function getEventById(
     );
   }
 
-  return event;
+  /*
+  |--------------------------------------------------------------------------
+  | Live Dashboard Statistics
+  |--------------------------------------------------------------------------
+  |
+  | TicketPurchase is the reporting source of truth.
+  |
+  | Only PAID purchases count toward:
+  |
+  | • tickets sold
+  | • revenue
+  |
+  | Checked-in is counted only from PAID purchases.
+  |
+  */
+
+  const [
+    paidPurchases,
+    checkedIn,
+    onlineStaff,
+  ] =
+    await Promise.all([
+      prisma.ticketPurchase.findMany({
+        where: {
+          eventId,
+
+          status:
+            "PAID",
+        },
+
+        select: {
+          quantity: true,
+
+          amount: true,
+        },
+      }),
+
+      prisma.ticketPurchase.count({
+        where: {
+          eventId,
+
+          status:
+            "PAID",
+
+          checkedIn:
+            true,
+        },
+      }),
+
+      prisma.operationSession.count({
+        where: {
+          isActive:
+            true,
+
+          staff: {
+            eventId,
+          },
+        },
+      }),
+    ]);
+
+  /*
+  |--------------------------------------------------------------------------
+  | Tickets Sold
+  |--------------------------------------------------------------------------
+  */
+
+  const ticketSold =
+    paidPurchases.reduce(
+      (
+        total,
+        purchase,
+      ) =>
+        total +
+        purchase.quantity,
+
+      0,
+    );
+
+  /*
+  |--------------------------------------------------------------------------
+  | Revenue
+  |--------------------------------------------------------------------------
+  */
+
+  const revenue =
+    paidPurchases.reduce(
+      (
+        total,
+        purchase,
+      ) =>
+        total +
+        Number(
+          purchase.amount,
+        ),
+
+      0,
+    );
+
+  /*
+  |--------------------------------------------------------------------------
+  | Return Event
+  |--------------------------------------------------------------------------
+  |
+  | Preserve the existing event/ticket structure while adding:
+  |
+  | event.stats
+  |
+  */
+
+  return {
+    ...event,
+
+    stats: {
+      ticketSold,
+
+      checkedIn,
+
+      revenue,
+
+      currency:
+        event.currency,
+
+      onlineStaff,
+    },
+  };
 }
 
 export async function publishEvent(

@@ -46,6 +46,7 @@ function generateNfcToken() {
 |
 | Responsibilities:
 |
+| • Verify purchase is paid
 | • Create EventPass records
 | • Generate Pass Number
 | • Generate QR Token
@@ -58,6 +59,7 @@ function generateNfcToken() {
 | • Inventory reservation
 | • Purchase status updates
 |
+|--------------------------------------------------------------------------
 */
 async function issuePurchase(purchaseId) {
     /*
@@ -90,7 +92,7 @@ async function issuePurchase(purchaseId) {
     }
     /*
     |--------------------------------------------------------------------------
-    | Idempotency
+    | Fast Idempotency Check
     |--------------------------------------------------------------------------
     */
     if (purchase.passes.length > 0) {
@@ -100,18 +102,75 @@ async function issuePurchase(purchaseId) {
     |--------------------------------------------------------------------------
     | Transaction
     |--------------------------------------------------------------------------
+    |
+    | The purchase row is locked before checking/creating passes.
+    |
+    | This prevents duplicate pass issuance if Revolut delivers the same
+    | webhook more than once at nearly the same time.
+    |
     */
     return prisma_1.prisma.$transaction(async (tx) => {
+        /*
+        |--------------------------------------------------------------------------
+        | Lock Purchase Row
+        |--------------------------------------------------------------------------
+        */
+        await tx.$queryRaw `
+        SELECT id
+        FROM "TicketPurchase"
+        WHERE id = ${purchaseId}
+        FOR UPDATE
+      `;
+        /*
+        |--------------------------------------------------------------------------
+        | Re-fetch Purchase State
+        |--------------------------------------------------------------------------
+        */
+        const lockedPurchase = await tx.ticketPurchase.findUnique({
+            where: {
+                id: purchaseId,
+            },
+            include: {
+                event: true,
+                ticket: true,
+                passes: true,
+            },
+        });
+        if (!lockedPurchase) {
+            throw new Error("Purchase not found.");
+        }
+        /*
+        |--------------------------------------------------------------------------
+        | Verify Paid State
+        |--------------------------------------------------------------------------
+        */
+        if (lockedPurchase.status !==
+            "PAID") {
+            throw new Error("Purchase has not been paid.");
+        }
+        /*
+        |--------------------------------------------------------------------------
+        | Idempotency
+        |--------------------------------------------------------------------------
+        |
+        | Check again AFTER acquiring the row lock.
+        |
+        */
+        if (lockedPurchase.passes.length >
+            0) {
+            return lockedPurchase.passes;
+        }
         /*
         |--------------------------------------------------------------------------
         | Create Event Passes
         |--------------------------------------------------------------------------
         */
         const passes = [];
-        for (let i = 0; i < purchase.quantity; i++) {
+        for (let i = 0; i <
+            lockedPurchase.quantity; i++) {
             const pass = await tx.eventPass.create({
                 data: {
-                    purchaseId: purchase.id,
+                    purchaseId: lockedPurchase.id,
                     passNumber: generatePassNumber(),
                     qrToken: generateQrToken(),
                     nfcToken: generateNfcToken(),
@@ -130,15 +189,17 @@ async function issuePurchase(purchaseId) {
         */
         await tx.eventActivity.create({
             data: {
-                eventId: purchase.eventId,
-                purchaseId: purchase.id,
+                eventId: lockedPurchase.eventId,
+                purchaseId: lockedPurchase.id,
                 type: "PASS_ISSUED",
                 title: "Ticket Issued",
-                description: `${purchase.quantity} pass${purchase.quantity === 1 ? "" : "es"} issued.`,
+                description: `${lockedPurchase.quantity} pass${lockedPurchase.quantity === 1
+                    ? ""
+                    : "es"} issued.`,
                 payload: {
-                    paymentProvider: purchase.paymentProvider,
-                    quantity: purchase.quantity,
-                    ticketType: purchase.ticket.name,
+                    paymentProvider: lockedPurchase.paymentProvider,
+                    quantity: lockedPurchase.quantity,
+                    ticketType: lockedPurchase.ticket.name,
                 },
             },
         });
