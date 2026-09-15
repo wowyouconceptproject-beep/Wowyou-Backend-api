@@ -13,6 +13,7 @@ const ticket_routes_1 = __importDefault(require("../modules/tickets/ticket.route
 const revenue_routes_1 = __importDefault(require("../modules/revenue/revenue.routes"));
 const purchase_routes_1 = __importDefault(require("../modules/purchases/purchase.routes"));
 const stripe_routes_1 = __importDefault(require("../modules/payments/stripe/stripe.routes"));
+const stripe_routes_2 = __importDefault(require("./modules/stripe/stripe.routes"));
 const pass_routes_1 = __importDefault(require("../modules/pass/pass.routes"));
 const operations_routes_1 = __importDefault(require("../modules/operations/operations.routes"));
 const staff_routes_1 = __importDefault(require("../modules/events/staff.routes"));
@@ -36,6 +37,7 @@ router.use("/tickets", ticket_routes_1.default);
 router.use("/revenue", revenue_routes_1.default);
 router.use("/purchase", purchase_routes_1.default);
 router.use("/stripe", stripe_routes_1.default);
+router.use("/stripe", stripe_routes_2.default);
 router.use("/passes", pass_routes_1.default);
 router.use("/operations", operations_routes_1.default);
 router.use("/staff", staff_routes_1.default);

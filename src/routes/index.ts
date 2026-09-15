@@ -11,7 +11,7 @@ import revenueRoutes from "../modules/revenue/revenue.routes";
 import purchaseRoutes from "../modules/purchases/purchase.routes";
 
 import stripeRoutes from "../modules/payments/stripe/stripe.routes";
-
+import stripeConnectRoutes from "../modules/stripe/stripe.routes";
 import passRoutes from "../modules/pass/pass.routes";
 import operationsRoutes from "../modules/operations/operations.routes";
 import staffRoutes from "../modules/events/staff.routes";
@@ -42,6 +42,7 @@ router.use("/purchase", purchaseRoutes);
 
 router.use("/stripe", stripeRoutes);
 
+
 router.use("/passes", passRoutes);
 router.use("/operations", operationsRoutes);
 router.use("/staff", staffRoutes);
@@ -49,5 +50,6 @@ router.use("/vendors", vendorRoutes);
 router.use("/settings", settingsRoutes);
 router.use("/media", mediaRoutes);
 router.use("/operations/capacity", capacityRoutes);
+router.use("/stripe", stripeConnectRoutes,);
 
 export default router;
