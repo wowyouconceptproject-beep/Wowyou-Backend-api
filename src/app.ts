@@ -7,11 +7,11 @@ import {
   searchRoutes,
 } from "./modules/search";
 
-import revolutRoutes from "./modules/payments/revolut/revolut.routes";
+import stripeRoutes
+  from "./modules/payments/stripe/stripe.routes";
 
-import {
-  webhook,
-} from "./modules/payments/revolut/revolut.controller";
+import intelligenceRoutes
+  from "./modules/intelligence/intelligence.routes";
 
 const app = express();
 
@@ -50,60 +50,47 @@ app.use(
 
 /*
 |--------------------------------------------------------------------------
-| Revolut Webhook
+| Stripe Webhook
 |--------------------------------------------------------------------------
+|
+| Stripe signature verification requires the ORIGINAL raw request body.
 |
 | IMPORTANT:
+| This MUST be registered BEFORE express.json().
 |
-| Revolut webhook signature verification requires the exact raw request
-| body that Revolut signed.
+| Endpoint:
 |
-| Therefore express.raw() MUST run before express.json().
-|
-|--------------------------------------------------------------------------
-| Primary Webhook Endpoint
-|--------------------------------------------------------------------------
-|
-| POST /api/payments/revolut/webhook
-|
-| This is the endpoint currently being called by Revolut.
+| POST /api/stripe/webhook
 |
 */
 
 app.post(
-  "/api/payments/revolut/webhook",
+  "/api/stripe/webhook",
   express.raw({
     type: "application/json",
   }),
-  webhook,
-);
+  async (req, res, next) => {
+    try {
+      const {
+        webhook,
+      } = await import(
+        "./modules/payments/stripe/stripe.controller"
+      );
 
-/*
-|--------------------------------------------------------------------------
-| Revolut Payment Routes
-|--------------------------------------------------------------------------
-|
-| Existing attendee payment flow.
-|
-| DO NOT CHANGE.
-|
-| GET /payments/revolut/return
-| GET /payments/revolut/subscription-return
-|
-*/
-
-app.use(
-  "/payments/revolut",
-  revolutRoutes,
+      return webhook(
+        req,
+        res,
+      );
+    } catch (error) {
+      return next(error);
+    }
+  },
 );
 
 /*
 |--------------------------------------------------------------------------
 | JSON Parser
 |--------------------------------------------------------------------------
-|
-| Everything below this point receives normal parsed JSON.
-|
 */
 
 app.use(
@@ -121,6 +108,34 @@ app.use(
 app.use(
   "/search",
   searchRoutes,
+);
+
+/*
+|--------------------------------------------------------------------------
+| Stripe Routes
+|--------------------------------------------------------------------------
+|
+| /api/stripe/...
+|
+| The webhook is handled above because Stripe requires
+| the raw request body for signature verification.
+|
+*/
+
+app.use(
+  "/api/stripe",
+  stripeRoutes,
+);
+
+/*
+|--------------------------------------------------------------------------
+| Event Intelligence
+|--------------------------------------------------------------------------
+*/
+
+app.use(
+  "/api",
+  intelligenceRoutes,
 );
 
 export default app;

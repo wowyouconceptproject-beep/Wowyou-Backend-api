@@ -1,46 +1,24 @@
 import { Router } from "express";
 
 import authRoutes from "../modules/auth/auth.routes";
-
 import testRoutes from "./test.routes";
 
-import organizationRoutes
-  from "../modules/organizations/organization.routes";
+import organizationRoutes from "../modules/organizations/organization.routes";
+import eventRoutes from "../modules/events/event.routes";
+import attendeeProfileRoutes from "../modules/attendee-profile/attendee-profile.routes";
+import ticketRoutes from "../modules/tickets/ticket.routes";
+import revenueRoutes from "../modules/revenue/revenue.routes";
+import purchaseRoutes from "../modules/purchases/purchase.routes";
 
-import eventRoutes
-  from "../modules/events/event.routes";
+import stripeRoutes from "../modules/payments/stripe/stripe.routes";
 
-import attendeeProfileRoutes
-from "../modules/attendee-profile/attendee-profile.routes";
-
-import ticketRoutes
-from "../modules/tickets/ticket.routes";
-
-import revenueRoutes
-from "../modules/revenue/revenue.routes";
-
-import purchaseRoutes
-from "../modules/purchases/purchase.routes";
-
-import stripeRoutes
-from "../modules/stripe/stripe.routes";
-
-import passRoutes
-from "../modules/pass/pass.routes";
-
+import passRoutes from "../modules/pass/pass.routes";
 import operationsRoutes from "../modules/operations/operations.routes";
-
 import staffRoutes from "../modules/events/staff.routes";
-
 import vendorRoutes from "../modules/vendor/vendor.routes";
-
 import settingsRoutes from "./settings/settings.routes";
-
-import networkingRoutes
-  from "../modules/networking/networking.routes";
-
+import networkingRoutes from "../modules/networking/networking.routes";
 import mediaRoutes from "../modules/media/media.routes";
-
 import capacityRoutes from "../modules/operations/capacity/capacity.routes";
 
 const router = Router();
@@ -48,88 +26,28 @@ const router = Router();
 router.get("/", (_req, res) => {
   res.json({
     success: true,
-    message:
-      "WowYou EventTech API",
+    message: "WowYou EventTech API",
   });
 });
 
-
 router.use(testRoutes);
 
-router.use(
-  "/auth",
-  authRoutes
-);
+router.use("/auth", authRoutes);
+router.use("/organizations", organizationRoutes);
+router.use("/events", eventRoutes);
+router.use("/attendee-profile", attendeeProfileRoutes);
+router.use("/tickets", ticketRoutes);
+router.use("/revenue", revenueRoutes);
+router.use("/purchase", purchaseRoutes);
 
-router.use(
-  "/organizations",
-  organizationRoutes
-);
+router.use("/stripe", stripeRoutes);
 
-router.use(
-  "/events",
-  eventRoutes
-);
-
-router.use(
-  "/attendee-profile",
-  attendeeProfileRoutes
-);
-
-router.use(
-  "/tickets",
-  ticketRoutes
-);
-
-router.use(
-  "/revenue",
-  revenueRoutes
-);
-
-router.use(
-  "/purchase",
-  purchaseRoutes
-);
-
-router.use(
-  "/stripe",
-  stripeRoutes
-);
-
-router.use(
-  "/passes",
-  passRoutes
-);
-
-router.use(
-  "/operations",
-  operationsRoutes
-);
-
-router.use(
-  "/staff",
-  staffRoutes
-);
-
-router.use(
-  "/vendors",
-  vendorRoutes,
-);
-
-router.use(
-  "/settings",
-  settingsRoutes,
-);
-
-router.use(
-  "/media",
-  mediaRoutes
-);
-
-router.use(
-  "/operations/capacity",
-  capacityRoutes,
-);
-
+router.use("/passes", passRoutes);
+router.use("/operations", operationsRoutes);
+router.use("/staff", staffRoutes);
+router.use("/vendors", vendorRoutes);
+router.use("/settings", settingsRoutes);
+router.use("/media", mediaRoutes);
+router.use("/operations/capacity", capacityRoutes);
 
 export default router;

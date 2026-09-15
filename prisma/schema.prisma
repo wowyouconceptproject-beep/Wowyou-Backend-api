@@ -135,6 +135,15 @@ enum SubscriptionStatus {
   EXPIRED
 }
 
+enum EventPayoutStatus {
+  PENDING
+  PROCESSING
+  TRANSFERRED
+  PAID
+  FAILED
+  BLOCKED
+}
+
 model User {
   id String @id @default(cuid())
 
@@ -203,15 +212,60 @@ model Organization {
 
   ownerId String @unique
 
+  /**
+   * |--------------------------------------------------------------------------
+   * | Stripe Connect
+   * |--------------------------------------------------------------------------
+   */
+
+  stripeAccountId String? @unique
+
+  stripeAccountStatus String?
+
+  stripeChargesEnabled Boolean @default(false)
+
+  stripePayoutsEnabled Boolean @default(false)
+
+  stripeDetailsSubmitted Boolean @default(false)
+
+  stripeOnboardingComplete Boolean @default(false)
+
+  /**
+   * |--------------------------------------------------------------------------
+   * | Subscription
+   * |--------------------------------------------------------------------------
+   */
+
   subscription OrganizationSubscription?
+
+  /**
+   * |--------------------------------------------------------------------------
+   * | Relations
+   * |--------------------------------------------------------------------------
+   */
 
   owner User @relation(fields: [ownerId], references: [id])
 
   events Event[]
 
+  eventPayouts EventPayout[]
+
+  /**
+   * |--------------------------------------------------------------------------
+   * | Organization Details
+   * |--------------------------------------------------------------------------
+   */
+
   description String?
 
+  /**
+   * |--------------------------------------------------------------------------
+   * | Timestamps
+   * |--------------------------------------------------------------------------
+   */
+
   createdAt DateTime @default(now())
+
   updatedAt DateTime @updatedAt
 }
 
@@ -319,6 +373,14 @@ model Event {
   sessions Session[]
 
   vendorApplications VendorApplication[]
+
+  /**
+   * |--------------------------------------------------------------------------
+   * | Financial Settlement
+   * |--------------------------------------------------------------------------
+   */
+
+  eventPayout EventPayout?
 
   /**
    * |--------------------------------------------------------------------------
@@ -1149,7 +1211,7 @@ model OrganizationSubscription {
   interval               String             @default("MONTH")
   provider               String?
   providerCustomerId     String?
-  providerSubscriptionId String? @unique
+  providerSubscriptionId String?            @unique
   providerPriceId        String?
   providerSetupOrderId   String?
   currentPeriodStart     DateTime?
@@ -1162,4 +1224,52 @@ model OrganizationSubscription {
   @@index([status])
   @@index([plan])
   @@index([providerSubscriptionId])
+}
+
+model EventPayout {
+  id String @id @default(cuid())
+
+  eventId String
+
+  organizationId String
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  currency String
+
+  grossAmount Decimal @db.Decimal(14, 2)
+
+  refundAmount Decimal @default(0) @db.Decimal(14, 2)
+
+  platformFee Decimal @default(0) @db.Decimal(14, 2)
+
+  stripeFee Decimal @default(0) @db.Decimal(14, 2)
+
+  netAmount Decimal @default(0) @db.Decimal(14, 2)
+
+  scheduledFor DateTime
+
+  status EventPayoutStatus @default(PENDING)
+
+  stripeTransferId String? @unique
+
+  stripePayoutId String? @unique
+
+  processedAt DateTime?
+
+  paidAt DateTime?
+
+  failureReason String?
+
+  createdAt DateTime @default(now())
+
+  updatedAt DateTime @updatedAt
+
+  @@unique([eventId])
+  @@index([organizationId])
+  @@index([status])
+  @@index([scheduledFor])
+  @@index([organizationId, status])
 }
