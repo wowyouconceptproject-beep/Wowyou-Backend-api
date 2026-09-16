@@ -116,6 +116,18 @@ export async function create(
     |--------------------------------------------------------------------------
     | Create Purchase
     |--------------------------------------------------------------------------
+    |
+    | The purchase service handles the payment provider.
+    |
+    | Paid tickets:
+    | Stripe Checkout is initialized and checkoutUrl is returned.
+    |
+    | Free tickets:
+    | The purchase is completed immediately and checkoutUrl is null.
+    |
+    | Payment confirmation for paid tickets is NOT performed here.
+    | The Stripe webhook is authoritative.
+    |
     */
 
     const result =
@@ -134,7 +146,7 @@ export async function create(
     | Paid ticket:
     |
     | paymentRequired = true
-    | checkoutUrl      = Revolut checkout URL
+    | checkoutUrl      = Stripe Checkout URL
     |
     | Free ticket:
     |
@@ -176,6 +188,11 @@ export async function create(
 |--------------------------------------------------------------------------
 | Payment Status
 |--------------------------------------------------------------------------
+|
+| Payment status is read from our database.
+|
+| The Stripe webhook updates the purchase after Stripe confirms payment.
+|
 */
 
 export async function paymentStatus(

@@ -6,12 +6,21 @@ exports.getPurchasePaymentStatus = getPurchasePaymentStatus;
 exports.getMyEvents = getMyEvents;
 exports.getMyEvent = getMyEvent;
 const prisma_1 = require("../../lib/prisma");
-const revolut_service_1 = require("../payments/revolut/revolut.service");
+const stripe_service_1 = require("../payments/stripe/stripe.service");
 const ticket_issuance_service_1 = require("./ticket-issuance.service");
 /*
 |--------------------------------------------------------------------------
 | Currency Minor Units
 |--------------------------------------------------------------------------
+|
+| Stripe expects payment amounts in the smallest currency unit.
+|
+| Example:
+|
+| USD 25.00 → 2500
+| EUR 25.00 → 2500
+| JPY 2500 → 2500
+|
 */
 function toMinorUnits(amount, currency) {
     const normalized = currency
@@ -51,7 +60,9 @@ function toMinorUnits(amount, currency) {
 |
 | The backend decides the destination based on the checkout channel.
 |
-| This prevents an open-redirect vulnerability.
+| Stripe redirects the attendee here after Checkout.
+|
+| Payment confirmation itself remains controlled by the Stripe webhook.
 |
 */
 function getPaymentReturnUrl(purchaseId, channel) {
@@ -78,10 +89,7 @@ function getPaymentReturnUrl(purchaseId, channel) {
     | Existing Mobile Attendee Checkout
     |--------------------------------------------------------------------------
     |
-    | DO NOT CHANGE.
-    |
-    | This is the existing mobile callback that eventually deep-links into
-    | the WOWYOU attendee application.
+    | Keep the existing mobile callback behavior.
     |
     */
     const mobileReturnUrl = process.env
@@ -89,7 +97,7 @@ function getPaymentReturnUrl(purchaseId, channel) {
         process.env
             .FRONTEND_URL;
     if (!mobileReturnUrl) {
-        return undefined;
+        throw new Error("Mobile payment return URL is not configured.");
     }
     return `${mobileReturnUrl}?purchase=${encodeURIComponent(purchaseId)}`;
 }
@@ -191,7 +199,7 @@ async function createPurchase(userId, ticketTypeId, quantity, channel = "mobile"
     | Free Ticket
     |--------------------------------------------------------------------------
     |
-    | Free tickets do not go through Revolut.
+    | Free tickets do not go through Stripe.
     |
     | The existing registration + purchase + ticket issuance behavior
     | remains intact.
@@ -296,7 +304,12 @@ async function createPurchase(userId, ticketTypeId, quantity, channel = "mobile"
     |
     | Create a pending purchase first.
     |
-    | Inventory is NOT reserved until the Revolut webhook confirms payment.
+    | IMPORTANT:
+    |
+    | Inventory is NOT reserved here.
+    |
+    | Inventory is only incremented after Stripe confirms payment through
+    | the authoritative Stripe webhook.
     |
     */
     const purchase = await prisma_1.prisma.ticketPurchase.create({
@@ -307,9 +320,9 @@ async function createPurchase(userId, ticketTypeId, quantity, channel = "mobile"
             quantity,
             amount,
             currency,
-            paymentProvider: "REVOLUT",
+            paymentProvider: "STRIPE",
             paymentReference: null,
-            paymentMethod: null,
+            paymentMethod: "STRIPE_CHECKOUT",
             gatewayStatus: "PENDING",
             status: "PENDING",
         },
@@ -318,10 +331,13 @@ async function createPurchase(userId, ticketTypeId, quantity, channel = "mobile"
     |--------------------------------------------------------------------------
     | Convert Amount
     |--------------------------------------------------------------------------
+    |
+    | Stripe Checkout expects the amount in minor currency units.
+    |
     */
-    const revolutAmount = toMinorUnits(amount, currency);
-    if (!Number.isInteger(revolutAmount) ||
-        revolutAmount < 1) {
+    const stripeAmount = toMinorUnits(amount, currency);
+    if (!Number.isInteger(stripeAmount) ||
+        stripeAmount < 1) {
         await prisma_1.prisma.ticketPurchase.delete({
             where: {
                 id: purchase.id,
@@ -333,53 +349,68 @@ async function createPurchase(userId, ticketTypeId, quantity, channel = "mobile"
     |--------------------------------------------------------------------------
     | Return URL
     |--------------------------------------------------------------------------
-    |
-    | MOBILE:
-    | Existing PAYMENT_RETURN_URL flow.
-    |
-    | WEB:
-    | New attendee dashboard flow.
-    |
     */
     const paymentReturnUrl = getPaymentReturnUrl(purchase.id, channel);
     /*
     |--------------------------------------------------------------------------
-    | Create Revolut Order
+    | Create Stripe Checkout Session
     |--------------------------------------------------------------------------
+    |
+    | Stripe handles the customer-facing payment page.
+    |
+    | The backend keeps the purchase PENDING until the Stripe webhook
+    | confirms the payment.
+    |
     */
     try {
-        const order = await (0, revolut_service_1.createRevolutOrder)({
-            amount: revolutAmount,
-            currency,
+        const session = await (0, stripe_service_1.createStripeCheckoutSession)({
             purchaseId: purchase.id,
             userId,
             eventId: ticket.eventId,
             ticketTypeId,
-            description: `${ticket.event.title} - ${ticket.name}`,
-            redirectUrl: paymentReturnUrl,
+            amount: stripeAmount,
+            currency,
+            /*
+            |--------------------------------------------------------------------------
+            | Stripe Service Contract
+            |--------------------------------------------------------------------------
+            |
+            | stripe.service.ts expects `productName`.
+            |
+            */
+            productName: `${ticket.event.title} - ${ticket.name}`,
+            quantity,
+            successUrl: paymentReturnUrl,
+            cancelUrl: paymentReturnUrl,
         });
         /*
         |--------------------------------------------------------------------------
-        | Validate Revolut Response
+        | Validate Stripe Response
         |--------------------------------------------------------------------------
         */
-        if (!order.id) {
-            throw new Error("Revolut did not return an order ID.");
+        if (!session.sessionId) {
+            throw new Error("Stripe did not return a Checkout Session ID.");
         }
-        if (!order.checkout_url) {
-            throw new Error("Revolut did not return a checkout URL.");
+        if (!session.checkoutUrl) {
+            throw new Error("Stripe did not return a Checkout URL.");
         }
         /*
         |--------------------------------------------------------------------------
-        | Store Revolut Order Reference
+        | Store Stripe Checkout Session Reference
         |--------------------------------------------------------------------------
+        |
+        | stripe.service.ts returns `sessionId`.
+        |
+        | We store the Stripe Checkout Session ID as the payment reference.
+        |
         */
         const updatedPurchase = await prisma_1.prisma.ticketPurchase.update({
             where: {
                 id: purchase.id,
             },
             data: {
-                paymentReference: order.id,
+                paymentReference: session.sessionId,
+                gatewayStatus: "CHECKOUT_CREATED",
             },
         });
         /*
@@ -390,16 +421,20 @@ async function createPurchase(userId, ticketTypeId, quantity, channel = "mobile"
         return {
             purchase: updatedPurchase,
             passes: [],
-            checkoutUrl: order.checkout_url,
+            checkoutUrl: session.checkoutUrl,
             paymentRequired: true,
         };
     }
     catch (error) {
-        console.error("REVOLUT PURCHASE ERROR:", error);
+        console.error("STRIPE PURCHASE ERROR:", error);
         /*
         |--------------------------------------------------------------------------
         | Cleanup Pending Purchase
         |--------------------------------------------------------------------------
+        |
+        | If Stripe Checkout could not be initialized, the purchase is not
+        | useful and no payment exists. Remove the pending record.
+        |
         */
         try {
             await prisma_1.prisma.ticketPurchase.delete({

@@ -106,7 +106,7 @@ async function webhook(req, res) {
             }
             /*
             |--------------------------------------------------------------------------
-            | Subscription Created
+            | Organizer Subscription Created
             |--------------------------------------------------------------------------
             */
             case "customer.subscription.created": {
@@ -115,7 +115,7 @@ async function webhook(req, res) {
             }
             /*
             |--------------------------------------------------------------------------
-            | Subscription Updated
+            | Organizer Subscription Updated
             |--------------------------------------------------------------------------
             */
             case "customer.subscription.updated": {
@@ -124,7 +124,7 @@ async function webhook(req, res) {
             }
             /*
             |--------------------------------------------------------------------------
-            | Subscription Deleted
+            | Organizer Subscription Deleted
             |--------------------------------------------------------------------------
             */
             case "customer.subscription.deleted": {
@@ -169,6 +169,14 @@ async function webhook(req, res) {
     }
     catch (error) {
         console.error("STRIPE WEBHOOK ERROR:", error);
+        /*
+        |--------------------------------------------------------------------------
+        | Return 400
+        |--------------------------------------------------------------------------
+        |
+        | Stripe can retry the webhook when processing fails.
+        |
+        */
         return res.status(400).json({
             success: false,
             message: "Unable to process Stripe webhook.",
@@ -212,8 +220,8 @@ async function handleCheckoutCompleted(session) {
     | Retrieve Checkout Session From Stripe
     |--------------------------------------------------------------------------
     |
-    | Retrieve the session directly from Stripe so financial information
-    | is verified against Stripe's current state.
+    | Retrieve the session directly from Stripe so the financial state
+    | comes from Stripe rather than trusting the webhook payload alone.
     |
     */
     const verifiedSession = await (0, stripe_service_1.getStripeCheckoutSession)(session.id);
@@ -259,7 +267,7 @@ async function handleCheckoutCompleted(session) {
     }
     /*
     |--------------------------------------------------------------------------
-    | Verify Purchase Metadata
+    | Verify Metadata
     |--------------------------------------------------------------------------
     */
     const metadata = verifiedSession.metadata;
@@ -311,11 +319,6 @@ async function handleCheckoutCompleted(session) {
     |--------------------------------------------------------------------------
     | Ticket Type ID
     |--------------------------------------------------------------------------
-    |
-    | IMPORTANT:
-    |
-    | The Prisma field is `ticketTypeId`, NOT `ticketId`.
-    |
     */
     if (metadata?.ticketTypeId &&
         metadata.ticketTypeId !==
@@ -333,9 +336,7 @@ async function handleCheckoutCompleted(session) {
     |--------------------------------------------------------------------------
     */
     if (purchase.paymentProvider !==
-        "STRIPE" &&
-        purchase.paymentProvider !==
-            "Stripe") {
+        "STRIPE") {
         console.error("STRIPE PAYMENT PROVIDER MISMATCH:", {
             purchaseId: purchase.id,
             provider: purchase.paymentProvider,
@@ -346,6 +347,12 @@ async function handleCheckoutCompleted(session) {
     |--------------------------------------------------------------------------
     | Verify Payment Reference
     |--------------------------------------------------------------------------
+    |
+    | The purchase service stores the Stripe Checkout Session ID here.
+    |
+    | A webhook can arrive before the purchase reference has been saved,
+    | so a null reference is allowed.
+    |
     */
     if (purchase.paymentReference &&
         purchase.paymentReference !==
@@ -364,7 +371,7 @@ async function handleCheckoutCompleted(session) {
     */
     const stripeCurrency = verifiedSession.currency
         ?.toUpperCase();
-    const purchaseCurrency = purchase.event.currency
+    const purchaseCurrency = purchase.currency
         .toUpperCase();
     if (!stripeCurrency ||
         stripeCurrency !==
@@ -381,15 +388,35 @@ async function handleCheckoutCompleted(session) {
     | Verify Amount
     |--------------------------------------------------------------------------
     |
-    | Stripe uses the smallest currency unit.
+    | Stripe Checkout uses the smallest currency unit.
     |
     | Example:
     |
     | USD 10.00 = 1000
     |
-    |--------------------------------------------------------------------------
     */
-    const expectedAmount = Math.round(Number(purchase.amount) * 100);
+    const normalizedCurrency = purchaseCurrency;
+    const zeroDecimalCurrencies = new Set([
+        "BIF",
+        "CLP",
+        "DJF",
+        "GNF",
+        "ISK",
+        "JPY",
+        "KMF",
+        "KRW",
+        "PYG",
+        "RWF",
+        "UGX",
+        "VND",
+        "VUV",
+        "XAF",
+        "XOF",
+        "XPF",
+    ]);
+    const expectedAmount = zeroDecimalCurrencies.has(normalizedCurrency)
+        ? Math.round(Number(purchase.amount))
+        : Math.round(Number(purchase.amount) * 100);
     const receivedAmount = verifiedSession.amount_total;
     if (receivedAmount ===
         null ||
@@ -401,6 +428,7 @@ async function handleCheckoutCompleted(session) {
             purchaseId: purchase.id,
             expected: expectedAmount,
             received: receivedAmount,
+            currency: normalizedCurrency,
         });
         return;
     }
@@ -424,8 +452,21 @@ async function handleCheckoutCompleted(session) {
     }
     /*
     |--------------------------------------------------------------------------
-    | Mark Paid + Update Inventory
+    | Mark Purchase Paid + Update Inventory
     |--------------------------------------------------------------------------
+    |
+    | This transaction is the critical payment boundary.
+    |
+    | Before this point:
+    |
+    | Purchase = PENDING
+    | Ticket sold count = unchanged
+    |
+    | After this transaction:
+    |
+    | Purchase = PAID
+    | Ticket sold count = incremented
+    |
     */
     let processed = false;
     if (purchase.status ===
@@ -467,8 +508,8 @@ async function handleCheckoutCompleted(session) {
                 | Idempotency
                 |--------------------------------------------------------------------------
                 |
-                | If another webhook already completed this purchase,
-                | do nothing.
+                | If another Stripe webhook has already processed this purchase,
+                | do not increment inventory again.
                 |
                 */
                 if (lockedPurchase.status !==
@@ -486,10 +527,29 @@ async function handleCheckoutCompleted(session) {
                     },
                     select: {
                         id: true,
+                        quantity: true,
+                        sold: true,
+                        isActive: true,
                     },
                 });
                 if (!ticketType) {
                     throw new Error("Ticket type not found for purchase.");
+                }
+                /*
+                |--------------------------------------------------------------------------
+                | Verify Inventory
+                |--------------------------------------------------------------------------
+                |
+                | We intentionally did not reserve inventory when Checkout was
+                | created. Therefore inventory must still be available when
+                | payment is confirmed.
+                |
+                */
+                const remaining = ticketType.quantity -
+                    ticketType.sold;
+                if (remaining <
+                    lockedPurchase.quantity) {
+                    throw new Error("Ticket inventory is no longer sufficient to complete this purchase.");
                 }
                 /*
                 |--------------------------------------------------------------------------
@@ -503,6 +563,7 @@ async function handleCheckoutCompleted(session) {
                     },
                     data: {
                         status: "PAID",
+                        paymentReference: verifiedSession.id,
                         paymentCompletedAt: new Date(),
                         gatewayStatus: verifiedSession.payment_status,
                     },
@@ -539,8 +600,8 @@ async function handleCheckoutCompleted(session) {
     | Re-fetch Final Purchase State
     |--------------------------------------------------------------------------
     |
-    | This is important because another webhook could have processed
-    | the same purchase while this request was running.
+    | Another webhook could have completed this purchase while this
+    | request was executing.
     |
     */
     const finalPurchase = await prisma_1.prisma.ticketPurchase.findUnique({
@@ -558,13 +619,15 @@ async function handleCheckoutCompleted(session) {
     }
     /*
     |--------------------------------------------------------------------------
-    | Issue Ticket / Pass
+    | Issue Ticket / Passes
     |--------------------------------------------------------------------------
     |
-    | This runs whenever the final state is PAID.
+    | issuePurchase() must remain idempotent.
     |
-    | issuePurchase() should itself be idempotent so repeated webhook
-    | deliveries cannot create duplicate passes.
+    | This means:
+    |
+    | Stripe webhook #1 → PAID → issue
+    | Stripe webhook #2 → already PAID → safely recover/check issuance
     |
     */
     if (finalPurchase.status ===
@@ -599,12 +662,31 @@ async function handleCheckoutPaymentFailed(session) {
     });
     /*
     |--------------------------------------------------------------------------
-    | IMPORTANT
+    | Mark Purchase Failed
     |--------------------------------------------------------------------------
     |
-    | We do NOT mark the purchase as PAID.
+    | The purchase may still be pending.
+    |
+    | We only change it from PENDING → FAILED.
+    |
+    | We never change a PAID purchase back to FAILED.
     |
     */
+    if (!purchaseId) {
+        return;
+    }
+    await prisma_1.prisma.ticketPurchase.updateMany({
+        where: {
+            id: purchaseId,
+            status: "PENDING",
+            paymentProvider: "STRIPE",
+        },
+        data: {
+            status: "FAILED",
+            gatewayStatus: "PAYMENT_FAILED",
+            paymentFailedAt: new Date(),
+        },
+    });
 }
 /*
 |--------------------------------------------------------------------------
@@ -612,12 +694,33 @@ async function handleCheckoutPaymentFailed(session) {
 |--------------------------------------------------------------------------
 */
 async function handlePaymentIntentFailed(paymentIntent) {
+    const purchaseId = paymentIntent.metadata
+        ?.purchaseId;
     console.warn("STRIPE PAYMENT INTENT FAILED:", {
         paymentIntentId: paymentIntent.id,
-        purchaseId: paymentIntent.metadata
-            ?.purchaseId,
+        purchaseId: purchaseId ?? null,
         reason: paymentIntent.last_payment_error
             ?.message ?? null,
+    });
+    /*
+    |--------------------------------------------------------------------------
+    | Mark Purchase Failed
+    |--------------------------------------------------------------------------
+    */
+    if (!purchaseId) {
+        return;
+    }
+    await prisma_1.prisma.ticketPurchase.updateMany({
+        where: {
+            id: purchaseId,
+            status: "PENDING",
+            paymentProvider: "STRIPE",
+        },
+        data: {
+            status: "FAILED",
+            gatewayStatus: "PAYMENT_FAILED",
+            paymentFailedAt: new Date(),
+        },
     });
 }
 /*
@@ -643,8 +746,8 @@ async function handleSubscriptionCheckout(session) {
     | Subscription persistence
     |--------------------------------------------------------------------------
     |
-    | OrganizationSubscription will be connected here when we implement
-    | the organizer Stripe subscription flow.
+    | The organizer subscription service will update
+    | OrganizationSubscription.
     |
     */
 }
@@ -670,7 +773,7 @@ async function handleSubscriptionEvent(event) {
     | OrganizationSubscription persistence
     |--------------------------------------------------------------------------
     |
-    | Implement with the organizer Stripe subscription service.
+    | This will be connected to the organizer subscription service.
     |
     */
 }
