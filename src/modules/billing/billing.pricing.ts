@@ -1,4 +1,4 @@
-import {
+﻿import {
   OrganizerPlan,
 } from "@prisma/client";
 
@@ -20,13 +20,13 @@ export type BillingInterval =
 | WOWYOU is positioned as a European / international
 | event technology platform.
 |
-| GB → United Kingdom
-| EU → Eurozone
-| CH → Switzerland
-| NO → Norway
-| SE → Sweden
-| DK → Denmark
-| US → United States
+| GB â†’ United Kingdom
+| EU â†’ Eurozone
+| CH â†’ Switzerland
+| NO â†’ Norway
+| SE â†’ Sweden
+| DK â†’ Denmark
+| US â†’ United States
 |
 */
 
@@ -59,8 +59,6 @@ export interface Price {
   amount: number;
 
   currency: string;
-
-  revolutPlanVariationId?: string;
 }
 
 /*
@@ -91,7 +89,7 @@ export interface PlanPricing {
 | IMPORTANT
 |--------------------------------------------------------------------------
 |
-| The frontend does NOT need to know the Revolut variation ID.
+| The frontend does NOT need to know the Stripe recurring Price.
 |
 | The backend uses:
 |
@@ -105,7 +103,7 @@ export interface PlanPricing {
 |
 | amount
 | currency
-| Revolut variation ID
+| Stripe recurring Price
 |
 |--------------------------------------------------------------------------
 */
@@ -130,19 +128,11 @@ export const ORGANIZER_PRICING: Record<
       MONTH: {
         amount: 5.99,
         currency: "GBP",
-
-        revolutPlanVariationId:
-          process.env
-            .REVOLUT_STARTER_GBP_MONTHLY_PLAN_VARIATION_ID,
       },
 
       YEAR: {
         amount: 49.99,
         currency: "GBP",
-
-        revolutPlanVariationId:
-          process.env
-            .REVOLUT_STARTER_GBP_YEARLY_PLAN_VARIATION_ID,
       },
     },
 
@@ -150,19 +140,11 @@ export const ORGANIZER_PRICING: Record<
       MONTH: {
         amount: 16.99,
         currency: "GBP",
-
-        revolutPlanVariationId:
-          process.env
-            .REVOLUT_PROFESSIONAL_GBP_MONTHLY_PLAN_VARIATION_ID,
       },
 
       YEAR: {
         amount: 149.99,
         currency: "GBP",
-
-        revolutPlanVariationId:
-          process.env
-            .REVOLUT_PROFESSIONAL_GBP_YEARLY_PLAN_VARIATION_ID,
       },
     },
 
@@ -170,19 +152,11 @@ export const ORGANIZER_PRICING: Record<
       MONTH: {
         amount: 44.99,
         currency: "GBP",
-
-        revolutPlanVariationId:
-          process.env
-            .REVOLUT_BUSINESS_GBP_MONTHLY_PLAN_VARIATION_ID,
       },
 
       YEAR: {
         amount: 399.99,
         currency: "GBP",
-
-        revolutPlanVariationId:
-          process.env
-            .REVOLUT_BUSINESS_GBP_YEARLY_PLAN_VARIATION_ID,
       },
     },
 
@@ -190,19 +164,11 @@ export const ORGANIZER_PRICING: Record<
       MONTH: {
         amount: 169.99,
         currency: "GBP",
-
-        revolutPlanVariationId:
-          process.env
-            .REVOLUT_ENTERPRISE_GBP_MONTHLY_PLAN_VARIATION_ID,
       },
 
       YEAR: {
         amount: 1499.99,
         currency: "GBP",
-
-        revolutPlanVariationId:
-          process.env
-            .REVOLUT_ENTERPRISE_GBP_YEARLY_PLAN_VARIATION_ID,
       },
     },
   },
@@ -219,19 +185,11 @@ export const ORGANIZER_PRICING: Record<
       MONTH: {
         amount: 5.99,
         currency: "EUR",
-
-        revolutPlanVariationId:
-          process.env
-            .REVOLUT_STARTER_EUR_MONTHLY_PLAN_VARIATION_ID,
       },
 
       YEAR: {
         amount: 49.99,
         currency: "EUR",
-
-        revolutPlanVariationId:
-          process.env
-            .REVOLUT_STARTER_EUR_YEARLY_PLAN_VARIATION_ID,
       },
     },
 
@@ -239,19 +197,11 @@ export const ORGANIZER_PRICING: Record<
       MONTH: {
         amount: 16.99,
         currency: "EUR",
-
-        revolutPlanVariationId:
-          process.env
-            .REVOLUT_PROFESSIONAL_EUR_MONTHLY_PLAN_VARIATION_ID,
       },
 
       YEAR: {
         amount: 149.99,
         currency: "EUR",
-
-        revolutPlanVariationId:
-          process.env
-            .REVOLUT_PROFESSIONAL_EUR_YEARLY_PLAN_VARIATION_ID,
       },
     },
 
@@ -259,19 +209,11 @@ export const ORGANIZER_PRICING: Record<
       MONTH: {
         amount: 44.99,
         currency: "EUR",
-
-        revolutPlanVariationId:
-          process.env
-            .REVOLUT_BUSINESS_EUR_MONTHLY_PLAN_VARIATION_ID,
       },
 
       YEAR: {
         amount: 399.99,
         currency: "EUR",
-
-        revolutPlanVariationId:
-          process.env
-            .REVOLUT_BUSINESS_EUR_YEARLY_PLAN_VARIATION_ID,
       },
     },
 
@@ -279,19 +221,11 @@ export const ORGANIZER_PRICING: Record<
       MONTH: {
         amount: 169.99,
         currency: "EUR",
-
-        revolutPlanVariationId:
-          process.env
-            .REVOLUT_ENTERPRISE_EUR_MONTHLY_PLAN_VARIATION_ID,
       },
 
       YEAR: {
         amount: 1499.99,
         currency: "EUR",
-
-        revolutPlanVariationId:
-          process.env
-            .REVOLUT_ENTERPRISE_EUR_YEARLY_PLAN_VARIATION_ID,
       },
     },
   },
@@ -308,19 +242,11 @@ export const ORGANIZER_PRICING: Record<
       MONTH: {
         amount: 5.99,
         currency: "CHF",
-
-        revolutPlanVariationId:
-          process.env
-            .REVOLUT_CH_STARTER_MONTH_VARIATION_ID,
       },
 
       YEAR: {
         amount: 49.99,
         currency: "CHF",
-
-        revolutPlanVariationId:
-          process.env
-            .REVOLUT_CH_STARTER_YEAR_VARIATION_ID,
       },
     },
 
@@ -328,19 +254,11 @@ export const ORGANIZER_PRICING: Record<
       MONTH: {
         amount: 16.99,
         currency: "CHF",
-
-        revolutPlanVariationId:
-          process.env
-            .REVOLUT_CH_PROFESSIONAL_MONTH_VARIATION_ID,
       },
 
       YEAR: {
         amount: 149.99,
         currency: "CHF",
-
-        revolutPlanVariationId:
-          process.env
-            .REVOLUT_CH_PROFESSIONAL_YEAR_VARIATION_ID,
       },
     },
 
@@ -348,19 +266,11 @@ export const ORGANIZER_PRICING: Record<
       MONTH: {
         amount: 44.99,
         currency: "CHF",
-
-        revolutPlanVariationId:
-          process.env
-            .REVOLUT_CH_BUSINESS_MONTH_VARIATION_ID,
       },
 
       YEAR: {
         amount: 399.99,
         currency: "CHF",
-
-        revolutPlanVariationId:
-          process.env
-            .REVOLUT_CH_BUSINESS_YEAR_VARIATION_ID,
       },
     },
 
@@ -368,19 +278,11 @@ export const ORGANIZER_PRICING: Record<
       MONTH: {
         amount: 169.99,
         currency: "CHF",
-
-        revolutPlanVariationId:
-          process.env
-            .REVOLUT_CH_ENTERPRISE_MONTH_VARIATION_ID,
       },
 
       YEAR: {
         amount: 1499.99,
         currency: "CHF",
-
-        revolutPlanVariationId:
-          process.env
-            .REVOLUT_CH_ENTERPRISE_YEAR_VARIATION_ID,
       },
     },
   },
@@ -397,19 +299,11 @@ export const ORGANIZER_PRICING: Record<
       MONTH: {
         amount: 69,
         currency: "NOK",
-
-        revolutPlanVariationId:
-          process.env
-            .REVOLUT_NO_STARTER_MONTH_VARIATION_ID,
       },
 
       YEAR: {
         amount: 599,
         currency: "NOK",
-
-        revolutPlanVariationId:
-          process.env
-            .REVOLUT_NO_STARTER_YEAR_VARIATION_ID,
       },
     },
 
@@ -417,19 +311,11 @@ export const ORGANIZER_PRICING: Record<
       MONTH: {
         amount: 189,
         currency: "NOK",
-
-        revolutPlanVariationId:
-          process.env
-            .REVOLUT_NO_PROFESSIONAL_MONTH_VARIATION_ID,
       },
 
       YEAR: {
         amount: 1699,
         currency: "NOK",
-
-        revolutPlanVariationId:
-          process.env
-            .REVOLUT_NO_PROFESSIONAL_YEAR_VARIATION_ID,
       },
     },
 
@@ -437,19 +323,11 @@ export const ORGANIZER_PRICING: Record<
       MONTH: {
         amount: 499,
         currency: "NOK",
-
-        revolutPlanVariationId:
-          process.env
-            .REVOLUT_NO_BUSINESS_MONTH_VARIATION_ID,
       },
 
       YEAR: {
         amount: 4499,
         currency: "NOK",
-
-        revolutPlanVariationId:
-          process.env
-            .REVOLUT_NO_BUSINESS_YEAR_VARIATION_ID,
       },
     },
 
@@ -457,19 +335,11 @@ export const ORGANIZER_PRICING: Record<
       MONTH: {
         amount: 1899,
         currency: "NOK",
-
-        revolutPlanVariationId:
-          process.env
-            .REVOLUT_NO_ENTERPRISE_MONTH_VARIATION_ID,
       },
 
       YEAR: {
         amount: 16999,
         currency: "NOK",
-
-        revolutPlanVariationId:
-          process.env
-            .REVOLUT_NO_ENTERPRISE_YEAR_VARIATION_ID,
       },
     },
   },
@@ -486,19 +356,11 @@ export const ORGANIZER_PRICING: Record<
       MONTH: {
         amount: 69,
         currency: "SEK",
-
-        revolutPlanVariationId:
-          process.env
-            .REVOLUT_SE_STARTER_MONTH_VARIATION_ID,
       },
 
       YEAR: {
         amount: 599,
         currency: "SEK",
-
-        revolutPlanVariationId:
-          process.env
-            .REVOLUT_SE_STARTER_YEAR_VARIATION_ID,
       },
     },
 
@@ -506,19 +368,11 @@ export const ORGANIZER_PRICING: Record<
       MONTH: {
         amount: 189,
         currency: "SEK",
-
-        revolutPlanVariationId:
-          process.env
-            .REVOLUT_SE_PROFESSIONAL_MONTH_VARIATION_ID,
       },
 
       YEAR: {
         amount: 1699,
         currency: "SEK",
-
-        revolutPlanVariationId:
-          process.env
-            .REVOLUT_SE_PROFESSIONAL_YEAR_VARIATION_ID,
       },
     },
 
@@ -526,19 +380,11 @@ export const ORGANIZER_PRICING: Record<
       MONTH: {
         amount: 499,
         currency: "SEK",
-
-        revolutPlanVariationId:
-          process.env
-            .REVOLUT_SE_BUSINESS_MONTH_VARIATION_ID,
       },
 
       YEAR: {
         amount: 4499,
         currency: "SEK",
-
-        revolutPlanVariationId:
-          process.env
-            .REVOLUT_SE_BUSINESS_YEAR_VARIATION_ID,
       },
     },
 
@@ -546,19 +392,11 @@ export const ORGANIZER_PRICING: Record<
       MONTH: {
         amount: 1899,
         currency: "SEK",
-
-        revolutPlanVariationId:
-          process.env
-            .REVOLUT_SE_ENTERPRISE_MONTH_VARIATION_ID,
       },
 
       YEAR: {
         amount: 16999,
         currency: "SEK",
-
-        revolutPlanVariationId:
-          process.env
-            .REVOLUT_SE_ENTERPRISE_YEAR_VARIATION_ID,
       },
     },
   },
@@ -575,19 +413,11 @@ export const ORGANIZER_PRICING: Record<
       MONTH: {
         amount: 45,
         currency: "DKK",
-
-        revolutPlanVariationId:
-          process.env
-            .REVOLUT_DK_STARTER_MONTH_VARIATION_ID,
       },
 
       YEAR: {
         amount: 399,
         currency: "DKK",
-
-        revolutPlanVariationId:
-          process.env
-            .REVOLUT_DK_STARTER_YEAR_VARIATION_ID,
       },
     },
 
@@ -595,19 +425,11 @@ export const ORGANIZER_PRICING: Record<
       MONTH: {
         amount: 125,
         currency: "DKK",
-
-        revolutPlanVariationId:
-          process.env
-            .REVOLUT_DK_PROFESSIONAL_MONTH_VARIATION_ID,
       },
 
       YEAR: {
         amount: 1099,
         currency: "DKK",
-
-        revolutPlanVariationId:
-          process.env
-            .REVOLUT_DK_PROFESSIONAL_YEAR_VARIATION_ID,
       },
     },
 
@@ -615,19 +437,11 @@ export const ORGANIZER_PRICING: Record<
       MONTH: {
         amount: 325,
         currency: "DKK",
-
-        revolutPlanVariationId:
-          process.env
-            .REVOLUT_DK_BUSINESS_MONTH_VARIATION_ID,
       },
 
       YEAR: {
         amount: 2899,
         currency: "DKK",
-
-        revolutPlanVariationId:
-          process.env
-            .REVOLUT_DK_BUSINESS_YEAR_VARIATION_ID,
       },
     },
 
@@ -635,19 +449,11 @@ export const ORGANIZER_PRICING: Record<
       MONTH: {
         amount: 1250,
         currency: "DKK",
-
-        revolutPlanVariationId:
-          process.env
-            .REVOLUT_DK_ENTERPRISE_MONTH_VARIATION_ID,
       },
 
       YEAR: {
         amount: 10999,
         currency: "DKK",
-
-        revolutPlanVariationId:
-          process.env
-            .REVOLUT_DK_ENTERPRISE_YEAR_VARIATION_ID,
       },
     },
   },
@@ -664,19 +470,11 @@ export const ORGANIZER_PRICING: Record<
       MONTH: {
         amount: 6.99,
         currency: "USD",
-
-        revolutPlanVariationId:
-          process.env
-            .REVOLUT_STARTER_USD_MONTHLY_PLAN_VARIATION_ID,
       },
 
       YEAR: {
         amount: 59.99,
         currency: "USD",
-
-        revolutPlanVariationId:
-          process.env
-            .REVOLUT_STARTER_USD_YEARLY_PLAN_VARIATION_ID,
       },
     },
 
@@ -684,19 +482,11 @@ export const ORGANIZER_PRICING: Record<
       MONTH: {
         amount: 19.99,
         currency: "USD",
-
-        revolutPlanVariationId:
-          process.env
-            .REVOLUT_PROFESSIONAL_USD_MONTHLY_PLAN_VARIATION_ID,
       },
 
       YEAR: {
         amount: 179.99,
         currency: "USD",
-
-        revolutPlanVariationId:
-          process.env
-            .REVOLUT_PROFESSIONAL_USD_YEARLY_PLAN_VARIATION_ID,
       },
     },
 
@@ -704,19 +494,11 @@ export const ORGANIZER_PRICING: Record<
       MONTH: {
         amount: 49.99,
         currency: "USD",
-
-        revolutPlanVariationId:
-          process.env
-            .REVOLUT_BUSINESS_USD_MONTHLY_PLAN_VARIATION_ID,
       },
 
       YEAR: {
         amount: 449.99,
         currency: "USD",
-
-        revolutPlanVariationId:
-          process.env
-            .REVOLUT_BUSINESS_USD_YEARLY_PLAN_VARIATION_ID,
       },
     },
 
@@ -724,19 +506,11 @@ export const ORGANIZER_PRICING: Record<
       MONTH: {
         amount: 199.99,
         currency: "USD",
-
-        revolutPlanVariationId:
-          process.env
-            .REVOLUT_ENTERPRISE_USD_MONTHLY_PLAN_VARIATION_ID,
       },
 
       YEAR: {
         amount: 1699.99,
         currency: "USD",
-
-        revolutPlanVariationId:
-          process.env
-            .REVOLUT_ENTERPRISE_USD_YEARLY_PLAN_VARIATION_ID,
       },
     },
   },

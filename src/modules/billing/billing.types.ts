@@ -38,12 +38,22 @@ export interface OrganizerPlanConfigResponse {
 
 /*
 |--------------------------------------------------------------------------
-| Create Checkout
+| Create Checkout Request
 |--------------------------------------------------------------------------
+|
+| Billing country and interval are required because Stripe
+| creates/uses the recurring Price based on:
+|
+| country + plan + interval + currency + amount
+|
 */
 
 export interface CreateCheckoutRequest {
   plan: OrganizerPlan;
+
+  country: string;
+
+  interval: string;
 
   fullName: string;
 
@@ -65,9 +75,9 @@ export interface CreateCheckoutResponse {
 
   subscriptionId: string;
 
-  revolutSubscriptionId: string;
+  stripeSessionId: string;
 
-  setupOrderId: string;
+  stripePriceId: string;
 }
 
 /*

@@ -74,7 +74,9 @@ export async function plans(
 ) {
   return res.json({
     success: true,
-    plans: getPlans(),
+
+    plans:
+      getPlans(),
   });
 }
 
@@ -89,6 +91,12 @@ export async function subscription(
   res: Response,
 ) {
   try {
+    /*
+    |--------------------------------------------------------------------------
+    | Find Organization
+    |--------------------------------------------------------------------------
+    */
+
     const organization =
       await prisma.organization.findUnique({
         where: {
@@ -106,10 +114,22 @@ export async function subscription(
       });
     }
 
+    /*
+    |--------------------------------------------------------------------------
+    | Get Subscription
+    |--------------------------------------------------------------------------
+    */
+
     const result =
       await getOrganizationSubscription(
         organization.id,
       );
+
+    /*
+    |--------------------------------------------------------------------------
+    | Response
+    |--------------------------------------------------------------------------
+    */
 
     return res.json({
       success: true,
@@ -255,6 +275,30 @@ export async function checkout(
 
     /*
     |--------------------------------------------------------------------------
+    | Validate Email Format
+    |--------------------------------------------------------------------------
+    */
+
+    const normalizedEmail =
+      email
+        .trim()
+        .toLowerCase();
+
+    if (
+      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(
+        normalizedEmail,
+      )
+    ) {
+      return res.status(400).json({
+        success: false,
+
+        message:
+          "Please provide a valid email address.",
+      });
+    }
+
+    /*
+    |--------------------------------------------------------------------------
     | Validate Redirect URL
     |--------------------------------------------------------------------------
     */
@@ -305,6 +349,8 @@ export async function checkout(
     | plan
     | interval
     |
+    | Stripe handles the recurring subscription.
+    |
     */
 
     const result =
@@ -322,9 +368,7 @@ export async function checkout(
           fullName.trim(),
 
         email:
-          email
-            .trim()
-            .toLowerCase(),
+          normalizedEmail,
 
         redirectUrl:
           redirectUrl.trim(),
@@ -335,8 +379,11 @@ export async function checkout(
     | Response
     |--------------------------------------------------------------------------
     |
-    | Return the resolved pricing so the frontend knows exactly what
-    | pricing configuration was used for the checkout.
+    | Stripe replaces the previous Revolut checkout response.
+    |
+    | The webhook remains authoritative for the actual subscription
+    | status. This response only provides the Checkout information
+    | needed by the frontend to redirect the organizer.
     |
     */
 
@@ -349,11 +396,11 @@ export async function checkout(
       subscriptionId:
         result.subscription.id,
 
-      revolutSubscriptionId:
-        result.revolutSubscriptionId,
+      stripeSessionId:
+        result.stripeSessionId,
 
-      setupOrderId:
-        result.setupOrderId,
+      stripePriceId:
+        result.stripePriceId,
 
       pricing:
         result.pricing,

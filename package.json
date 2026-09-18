@@ -27,6 +27,8 @@
     "multer": "^2.2.0",
     "openai": "^6.48.0",
     "prisma": "^6.16.2",
+    "qrcode": "^1.5.4",
+    "resend": "^6.28.1",
     "socket.io": "^4.8.3",
     "stripe": "^22.2.3",
     "zod": "^4.4.3"
@@ -39,6 +41,7 @@
     "@types/morgan": "^1.9.10",
     "@types/multer": "^2.2.0",
     "@types/node": "^25.9.3",
+    "@types/qrcode": "^1.5.6",
     "ts-node-dev": "^2.0.0",
     "typescript": "^5.9.2"
   }

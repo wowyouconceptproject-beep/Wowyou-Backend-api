@@ -3,18 +3,56 @@ import {
   Response,
 } from "express";
 
-import Stripe from "stripe";
+import {
+  SubscriptionStatus,
+} from "@prisma/client";
+
+import Stripe, {
+  Subscription,
+} from "stripe";
+type StripeSubscriptionStatus =
+  Subscription["status"];
 
 import { prisma } from "../../../lib/prisma";
 
 import {
   constructStripeWebhookEvent,
+  getStripe,
   getStripeCheckoutSession,
 } from "./stripe.service";
 
 import {
   issuePurchase,
 } from "../../purchases/ticket-issuance.service";
+
+/*
+|--------------------------------------------------------------------------
+| Stripe Subscription Compatibility Type
+|--------------------------------------------------------------------------
+|
+| The installed Stripe SDK exposes Subscription, but some recurring
+| subscription period properties are not available on the inferred type.
+|
+| These properties are returned by Stripe and are required by WowYou
+| to mirror the billing period and cancellation state locally.
+|
+|--------------------------------------------------------------------------
+*/
+
+type StripeOrganizerSubscription =
+  Subscription & {
+    current_period_start?:
+      number | null;
+
+    current_period_end?:
+      number | null;
+
+    canceled_at?:
+      number | null;
+
+    cancel_at_period_end?:
+      boolean;
+  };
 
 /*
 |--------------------------------------------------------------------------
@@ -50,7 +88,6 @@ export async function webhook(
     if (!signature) {
       return res.status(400).json({
         success: false,
-
         message:
           "Missing Stripe signature.",
       });
@@ -60,15 +97,10 @@ export async function webhook(
     |--------------------------------------------------------------------------
     | Raw Request Body
     |--------------------------------------------------------------------------
-    |
-    | Stripe signature verification requires the ORIGINAL request body.
-    |
     */
 
     const rawBody =
-      Buffer.isBuffer(
-        req.body,
-      )
+      Buffer.isBuffer(req.body)
         ? req.body
         : Buffer.from(
             typeof req.body ===
@@ -80,7 +112,6 @@ export async function webhook(
     if (!rawBody.length) {
       return res.status(400).json({
         success: false,
-
         message:
           "Webhook body is unavailable.",
       });
@@ -101,11 +132,8 @@ export async function webhook(
     console.log(
       "STRIPE WEBHOOK:",
       {
-        id:
-          event.id,
-
-        type:
-          event.type,
+        id: event.id,
+        type: event.type,
       },
     );
 
@@ -118,7 +146,7 @@ export async function webhook(
     switch (event.type) {
       /*
       |--------------------------------------------------------------------------
-      | Checkout Completed
+      | Attendee Checkout Completed
       |--------------------------------------------------------------------------
       */
 
@@ -216,7 +244,7 @@ export async function webhook(
 
       /*
       |--------------------------------------------------------------------------
-      | Invoice Paid
+      | Organizer Invoice Paid
       |--------------------------------------------------------------------------
       */
 
@@ -230,7 +258,7 @@ export async function webhook(
 
       /*
       |--------------------------------------------------------------------------
-      | Invoice Payment Failed
+      | Organizer Invoice Payment Failed
       |--------------------------------------------------------------------------
       */
 
@@ -282,7 +310,6 @@ export async function webhook(
 
     return res.status(400).json({
       success: false,
-
       message:
         "Unable to process Stripe webhook.",
     });
@@ -307,8 +334,7 @@ async function handleCheckoutCompleted(
   if (
     session.mode ===
       "subscription" ||
-    session.metadata
-      ?.type ===
+    session.metadata?.type ===
       "organizer_subscription"
   ) {
     await handleSubscriptionCheckout(
@@ -345,8 +371,7 @@ async function handleCheckoutCompleted(
   | Retrieve Checkout Session From Stripe
   |--------------------------------------------------------------------------
   |
-  | Retrieve the session directly from Stripe so the financial state
-  | comes from Stripe rather than trusting the webhook payload alone.
+  | Stripe remains the financial source of truth.
   |
   */
 
@@ -390,13 +415,11 @@ async function handleCheckoutCompleted(
   const purchase =
     await prisma.ticketPurchase.findUnique({
       where: {
-        id:
-          purchaseId,
+        id: purchaseId,
       },
 
       include: {
         event: true,
-
         ticket: true,
       },
     });
@@ -406,7 +429,6 @@ async function handleCheckoutCompleted(
       "STRIPE PURCHASE NOT FOUND:",
       {
         purchaseId,
-
         sessionId:
           session.id,
       },
@@ -644,10 +666,6 @@ async function handleCheckoutCompleted(
   |
   | Stripe Checkout uses the smallest currency unit.
   |
-  | Example:
-  |
-  | USD 10.00 = 1000
-  |
   */
 
   const normalizedCurrency =
@@ -692,8 +710,7 @@ async function handleCheckoutCompleted(
     verifiedSession.amount_total;
 
   if (
-    receivedAmount ===
-      null ||
+    receivedAmount === null ||
     receivedAmount ===
       undefined ||
     receivedAmount !==
@@ -757,16 +774,6 @@ async function handleCheckoutCompleted(
   |
   | This transaction is the critical payment boundary.
   |
-  | Before this point:
-  |
-  | Purchase = PENDING
-  | Ticket sold count = unchanged
-  |
-  | After this transaction:
-  |
-  | Purchase = PAID
-  | Ticket sold count = incremented
-  |
   */
 
   let processed =
@@ -807,18 +814,13 @@ async function handleCheckoutCompleted(
 
               select: {
                 id: true,
-
                 status: true,
-
                 quantity: true,
-
                 ticketTypeId: true,
               },
             });
 
-          if (
-            !lockedPurchase
-          ) {
+          if (!lockedPurchase) {
             throw new Error(
               "Purchase not found during Stripe transaction.",
             );
@@ -828,10 +830,6 @@ async function handleCheckoutCompleted(
           |--------------------------------------------------------------------------
           | Idempotency
           |--------------------------------------------------------------------------
-          |
-          | If another Stripe webhook has already processed this purchase,
-          | do not increment inventory again.
-          |
           */
 
           if (
@@ -856,11 +854,8 @@ async function handleCheckoutCompleted(
 
               select: {
                 id: true,
-
                 quantity: true,
-
                 sold: true,
-
                 isActive: true,
               },
             });
@@ -875,11 +870,6 @@ async function handleCheckoutCompleted(
           |--------------------------------------------------------------------------
           | Verify Inventory
           |--------------------------------------------------------------------------
-          |
-          | We intentionally did not reserve inventory when Checkout was
-          | created. Therefore inventory must still be available when
-          | payment is confirmed.
-          |
           */
 
           const remaining =
@@ -968,10 +958,6 @@ async function handleCheckoutCompleted(
   |--------------------------------------------------------------------------
   | Re-fetch Final Purchase State
   |--------------------------------------------------------------------------
-  |
-  | Another webhook could have completed this purchase while this
-  | request was executing.
-  |
   */
 
   const finalPurchase =
@@ -983,9 +969,7 @@ async function handleCheckoutCompleted(
 
       select: {
         id: true,
-
         status: true,
-
         quantity: true,
       },
     });
@@ -1002,11 +986,6 @@ async function handleCheckoutCompleted(
   |--------------------------------------------------------------------------
   |
   | issuePurchase() must remain idempotent.
-  |
-  | This means:
-  |
-  | Stripe webhook #1 → PAID → issue
-  | Stripe webhook #2 → already PAID → safely recover/check issuance
   |
   */
 
@@ -1074,15 +1053,8 @@ async function handleCheckoutPaymentFailed(
 
   /*
   |--------------------------------------------------------------------------
-  | Mark Purchase Failed
+  | Only fail pending Stripe purchases.
   |--------------------------------------------------------------------------
-  |
-  | The purchase may still be pending.
-  |
-  | We only change it from PENDING → FAILED.
-  |
-  | We never change a PAID purchase back to FAILED.
-  |
   */
 
   if (!purchaseId) {
@@ -1137,16 +1109,11 @@ async function handlePaymentIntentFailed(
         purchaseId ?? null,
 
       reason:
-        paymentIntent.last_payment_error
+        paymentIntent
+          .last_payment_error
           ?.message ?? null,
     },
   );
-
-  /*
-  |--------------------------------------------------------------------------
-  | Mark Purchase Failed
-  |--------------------------------------------------------------------------
-  */
 
   if (!purchaseId) {
     return;
@@ -1179,11 +1146,268 @@ async function handlePaymentIntentFailed(
 
 /*
 |--------------------------------------------------------------------------
-| Organizer Subscription Checkout
+| Map Stripe Subscription Status
 |--------------------------------------------------------------------------
 */
 
-async function handleSubscriptionCheckout(
+function mapStripeSubscriptionStatus(
+  status: StripeSubscriptionStatus,
+): SubscriptionStatus {
+  switch (status) {
+    case "active":
+      return SubscriptionStatus.ACTIVE;
+
+    case "trialing":
+      return SubscriptionStatus.TRIALING;
+
+    case "past_due":
+      return SubscriptionStatus.PAST_DUE;
+
+    case "canceled":
+      return SubscriptionStatus.CANCELED;
+
+    case "unpaid":
+      return SubscriptionStatus.PAST_DUE;
+
+    case "incomplete_expired":
+      return SubscriptionStatus.EXPIRED;
+
+    case "incomplete":
+      return SubscriptionStatus.PENDING;
+
+    case "paused":
+      return SubscriptionStatus.PENDING;
+
+    default:
+      return SubscriptionStatus.PENDING;
+  }
+}
+
+/*
+|--------------------------------------------------------------------------
+| Sync Organizer Subscription
+|--------------------------------------------------------------------------
+|
+| Stripe is the source of truth for:
+|
+| - subscription status
+| - Stripe customer
+| - Stripe subscription
+| - Stripe recurring price
+| - billing period
+| - cancellation state
+|
+| WowYou mirrors that state locally in OrganizationSubscription.
+|
+|--------------------------------------------------------------------------
+*/
+
+async function syncStripeOrganizerSubscription(
+  stripeSubscription:
+    StripeOrganizerSubscription,
+
+  organizationSubscriptionId?:
+    string,
+) {
+  const metadata =
+    stripeSubscription.metadata ??
+    {};
+
+  /*
+  |--------------------------------------------------------------------------
+  | Resolve Local Subscription
+  |--------------------------------------------------------------------------
+  */
+
+  const localSubscriptionId =
+    organizationSubscriptionId ||
+    metadata.organizationSubscriptionId;
+
+  if (!localSubscriptionId) {
+    console.warn(
+      "STRIPE SUBSCRIPTION WITHOUT WOWYOU SUBSCRIPTION ID:",
+      {
+        stripeSubscriptionId:
+          stripeSubscription.id,
+      },
+    );
+
+    return null;
+  }
+
+  /*
+  |--------------------------------------------------------------------------
+  | Stripe Customer
+  |--------------------------------------------------------------------------
+  */
+
+  const customerId =
+    typeof stripeSubscription.customer ===
+    "string"
+      ? stripeSubscription.customer
+      : stripeSubscription.customer?.id;
+
+  /*
+  |--------------------------------------------------------------------------
+  | Stripe Price
+  |--------------------------------------------------------------------------
+  */
+
+  const firstItem =
+    stripeSubscription.items
+      .data[0];
+
+  const priceId =
+    firstItem?.price?.id ??
+    null;
+
+  /*
+  |--------------------------------------------------------------------------
+  | Status
+  |--------------------------------------------------------------------------
+  */
+
+  const status =
+    mapStripeSubscriptionStatus(
+      stripeSubscription.status,
+    );
+
+  /*
+  |--------------------------------------------------------------------------
+  | Billing Period
+  |--------------------------------------------------------------------------
+  */
+
+  const currentPeriodStart =
+    stripeSubscription
+      .current_period_start
+      ? new Date(
+          stripeSubscription
+            .current_period_start *
+            1000,
+        )
+      : null;
+
+  const currentPeriodEnd =
+    stripeSubscription
+      .current_period_end
+      ? new Date(
+          stripeSubscription
+            .current_period_end *
+            1000,
+        )
+      : null;
+
+  /*
+  |--------------------------------------------------------------------------
+  | Cancellation
+  |--------------------------------------------------------------------------
+  */
+
+  const canceledAt =
+    stripeSubscription.canceled_at
+      ? new Date(
+          stripeSubscription
+            .canceled_at *
+            1000,
+        )
+      : null;
+
+  /*
+  |--------------------------------------------------------------------------
+  | Update Local Subscription
+  |--------------------------------------------------------------------------
+  */
+
+  const updated =
+    await prisma.organizationSubscription.update({
+      where: {
+        id:
+          localSubscriptionId,
+      },
+
+      data: {
+        provider:
+          "STRIPE",
+
+        providerCustomerId:
+          customerId ?? null,
+
+        providerSubscriptionId:
+          stripeSubscription.id,
+
+        providerPriceId:
+          priceId,
+
+        /*
+        | Stripe is now the subscription provider.
+        | Revolut setup-order data is no longer used.
+        */
+
+        providerSetupOrderId:
+          null,
+
+        status,
+
+        currentPeriodStart,
+
+        currentPeriodEnd,
+
+        cancelAtPeriodEnd:
+          Boolean(
+            stripeSubscription
+              .cancel_at_period_end,
+          ),
+
+        canceledAt,
+      },
+    });
+
+  /*
+  |--------------------------------------------------------------------------
+  | Logging
+  |--------------------------------------------------------------------------
+  */
+
+  console.log(
+    "WOWYOU ORGANIZER SUBSCRIPTION SYNCED:",
+    {
+      organizationSubscriptionId:
+        updated.id,
+
+      stripeSubscriptionId:
+        stripeSubscription.id,
+
+      status:
+        updated.status,
+
+      providerCustomerId:
+        updated.providerCustomerId,
+
+      providerPriceId:
+        updated.providerPriceId,
+
+      currentPeriodStart:
+        updated.currentPeriodStart,
+
+      currentPeriodEnd:
+        updated.currentPeriodEnd,
+
+      cancelAtPeriodEnd:
+        updated.cancelAtPeriodEnd,
+    },
+  );
+
+  return updated;
+}
+
+/*
+|--------------------------------------------------------------------------
+| Get Stripe Subscription From Checkout
+|--------------------------------------------------------------------------
+*/
+
+async function getStripeSubscriptionFromCheckout(
   session: Stripe.Checkout.Session,
 ) {
   const subscriptionId =
@@ -1192,9 +1416,41 @@ async function handleSubscriptionCheckout(
       ? session.subscription
       : session.subscription?.id;
 
+  if (!subscriptionId) {
+    return null;
+  }
+
+  const stripe =
+    getStripe();
+
+  return stripe.subscriptions.retrieve(
+    subscriptionId,
+  );
+}
+
+/*
+|--------------------------------------------------------------------------
+| Organizer Subscription Checkout
+|--------------------------------------------------------------------------
+*/
+
+async function handleSubscriptionCheckout(
+  session: Stripe.Checkout.Session,
+) {
   const organizationSubscriptionId =
     session.metadata
       ?.organizationSubscriptionId;
+
+  /*
+  |--------------------------------------------------------------------------
+  | Retrieve Actual Subscription
+  |--------------------------------------------------------------------------
+  */
+
+  const stripeSubscription =
+    await getStripeSubscriptionFromCheckout(
+      session,
+    );
 
   console.log(
     "STRIPE ORGANIZER SUBSCRIPTION CHECKOUT:",
@@ -1202,11 +1458,13 @@ async function handleSubscriptionCheckout(
       sessionId:
         session.id,
 
-      subscriptionId:
-        subscriptionId ?? null,
+      stripeSubscriptionId:
+        stripeSubscription?.id ??
+        null,
 
       organizationSubscriptionId:
-        organizationSubscriptionId ?? null,
+        organizationSubscriptionId ??
+        null,
 
       paymentStatus:
         session.payment_status,
@@ -1215,13 +1473,36 @@ async function handleSubscriptionCheckout(
 
   /*
   |--------------------------------------------------------------------------
-  | Subscription persistence
+  | Stripe Subscription Missing
   |--------------------------------------------------------------------------
-  |
-  | The organizer subscription service will update
-  | OrganizationSubscription.
-  |
   */
+
+  if (!stripeSubscription) {
+    console.warn(
+      "STRIPE ORGANIZER CHECKOUT WITHOUT SUBSCRIPTION:",
+      {
+        sessionId:
+          session.id,
+
+        organizationSubscriptionId:
+          organizationSubscriptionId ??
+          null,
+      },
+    );
+
+    return;
+  }
+
+  /*
+  |--------------------------------------------------------------------------
+  | Sync Subscription
+  |--------------------------------------------------------------------------
+  */
+
+  await syncStripeOrganizerSubscription(
+    stripeSubscription as StripeOrganizerSubscription,
+    organizationSubscriptionId,
+  );
 }
 
 /*
@@ -1233,8 +1514,19 @@ async function handleSubscriptionCheckout(
 async function handleSubscriptionEvent(
   event: Stripe.Event,
 ) {
+  /*
+  |--------------------------------------------------------------------------
+  | Cast To Compatibility Type
+  |--------------------------------------------------------------------------
+  */
+
   const subscription =
-    event.data.object as Stripe.Subscription;
+    event.data.object as
+      StripeOrganizerSubscription;
+
+  const organizationSubscriptionId =
+    subscription.metadata
+      ?.organizationSubscriptionId;
 
   console.log(
     "STRIPE SUBSCRIPTION EVENT:",
@@ -1251,6 +1543,10 @@ async function handleSubscriptionEvent(
       status:
         subscription.status,
 
+      organizationSubscriptionId:
+        organizationSubscriptionId ??
+        null,
+
       customer:
         typeof subscription.customer ===
         "string"
@@ -1261,12 +1557,58 @@ async function handleSubscriptionEvent(
 
   /*
   |--------------------------------------------------------------------------
-  | OrganizationSubscription persistence
+  | Sync Local Subscription
   |--------------------------------------------------------------------------
-  |
-  | This will be connected to the organizer subscription service.
-  |
   */
+
+  await syncStripeOrganizerSubscription(
+    subscription,
+    organizationSubscriptionId,
+  );
+}
+
+/*
+|--------------------------------------------------------------------------
+| Get Subscription ID From Invoice
+|--------------------------------------------------------------------------
+*/
+
+function getInvoiceSubscriptionId(
+  invoice: Stripe.Invoice,
+): string | null {
+  /*
+  |--------------------------------------------------------------------------
+  | Stripe SDK Compatibility
+  |--------------------------------------------------------------------------
+  */
+
+  const rawInvoice =
+    invoice as Stripe.Invoice & {
+      subscription?:
+        | string
+        | Subscription
+        | null;
+    };
+
+  if (
+    typeof rawInvoice.subscription ===
+    "string"
+  ) {
+    return rawInvoice.subscription;
+  }
+
+  if (
+    rawInvoice.subscription &&
+    typeof rawInvoice.subscription ===
+      "object"
+  ) {
+    return (
+      rawInvoice.subscription.id ??
+      null
+    );
+  }
+
+  return null;
 }
 
 /*
@@ -1278,11 +1620,19 @@ async function handleSubscriptionEvent(
 async function handleInvoicePaid(
   invoice: Stripe.Invoice,
 ) {
+  const subscriptionId =
+    getInvoiceSubscriptionId(
+      invoice,
+    );
+
   console.log(
     "STRIPE INVOICE PAID:",
     {
       invoiceId:
         invoice.id,
+
+      subscriptionId:
+        subscriptionId ?? null,
 
       customer:
         typeof invoice.customer ===
@@ -1294,12 +1644,43 @@ async function handleInvoicePaid(
 
   /*
   |--------------------------------------------------------------------------
-  | Organizer subscription renewal
+  | Ticket payments are not subscriptions.
   |--------------------------------------------------------------------------
   |
-  | OrganizationSubscription renewal logic will be connected here.
+  | An invoice without a subscription is not relevant to organizer
+  | subscription billing.
   |
   */
+
+  if (!subscriptionId) {
+    return;
+  }
+
+  /*
+  |--------------------------------------------------------------------------
+  | Retrieve Current Stripe Subscription
+  |--------------------------------------------------------------------------
+  */
+
+  const stripe =
+    getStripe();
+
+  const subscription =
+    await stripe.subscriptions.retrieve(
+      subscriptionId,
+    );
+
+  /*
+  |--------------------------------------------------------------------------
+  | Only sync the WowYou organizer subscription
+  |--------------------------------------------------------------------------
+  */
+
+  await syncStripeOrganizerSubscription(
+    subscription as StripeOrganizerSubscription,
+    subscription.metadata
+      ?.organizationSubscriptionId,
+  );
 }
 
 /*
@@ -1311,11 +1692,19 @@ async function handleInvoicePaid(
 async function handleInvoicePaymentFailed(
   invoice: Stripe.Invoice,
 ) {
+  const subscriptionId =
+    getInvoiceSubscriptionId(
+      invoice,
+    );
+
   console.warn(
     "STRIPE INVOICE PAYMENT FAILED:",
     {
       invoiceId:
         invoice.id,
+
+      subscriptionId:
+        subscriptionId ?? null,
 
       customer:
         typeof invoice.customer ===
@@ -1325,12 +1714,66 @@ async function handleInvoicePaymentFailed(
     },
   );
 
+  if (!subscriptionId) {
+    return;
+  }
+
   /*
   |--------------------------------------------------------------------------
-  | Organizer subscription failure
+  | Retrieve Current Stripe Subscription
   |--------------------------------------------------------------------------
   |
-  | OrganizationSubscription failure handling will be connected here.
+  | Stripe remains authoritative.
   |
   */
+
+  const stripe =
+    getStripe();
+
+  const subscription =
+    await stripe.subscriptions.retrieve(
+      subscriptionId,
+    ) as StripeOrganizerSubscription;
+
+  /*
+  |--------------------------------------------------------------------------
+  | Synchronize Stripe State
+  |--------------------------------------------------------------------------
+  */
+
+  await syncStripeOrganizerSubscription(
+    subscription,
+    subscription.metadata
+      ?.organizationSubscriptionId,
+  );
+
+  /*
+  |--------------------------------------------------------------------------
+  | Fallback For Older Subscriptions
+  |--------------------------------------------------------------------------
+  |
+  | If an older Stripe subscription does not contain WowYou metadata,
+  | locate it through the Stripe subscription ID already stored locally.
+  |
+  */
+
+  if (
+    !subscription.metadata
+      ?.organizationSubscriptionId
+  ) {
+    await prisma.organizationSubscription.updateMany({
+      where: {
+        provider:
+          "STRIPE",
+
+        providerSubscriptionId:
+          subscriptionId,
+      },
+
+      data: {
+        status:
+          SubscriptionStatus.PAST_DUE,
+      },
+    });
+  }
 }

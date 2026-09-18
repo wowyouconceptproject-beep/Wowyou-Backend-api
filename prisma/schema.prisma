@@ -144,6 +144,21 @@ enum EventPayoutStatus {
   BLOCKED
 }
 
+enum EmailType {
+  EMAIL_VERIFICATION
+  LOGIN_OTP
+  TICKET_PURCHASE
+  ORGANIZER_TICKET_SALE
+  EVENT_REMINDER
+  EVENT_THANK_YOU
+}
+
+enum EmailDeliveryStatus {
+  PENDING
+  SENT
+  FAILED
+}
+
 model User {
   id String @id @default(cuid())
 
@@ -1272,4 +1287,34 @@ model EventPayout {
   @@index([status])
   @@index([scheduledFor])
   @@index([organizationId, status])
+}
+
+model EmailDelivery {
+  id String @id @default(cuid())
+
+  type EmailType
+
+  recipient String
+
+  userId     String?
+  purchaseId String?
+  eventId    String?
+
+  provider          String?
+  providerMessageId String?
+
+  status EmailDeliveryStatus @default(PENDING)
+
+  sentAt        DateTime?
+  failedAt      DateTime?
+  failureReason String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([purchaseId])
+  @@index([eventId])
+  @@index([type, eventId])
+  @@index([recipient])
 }
