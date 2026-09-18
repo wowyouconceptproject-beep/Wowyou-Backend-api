@@ -57,6 +57,11 @@ async function plans(_req, res) {
 */
 async function subscription(req, res) {
     try {
+        /*
+        |--------------------------------------------------------------------------
+        | Find Organization
+        |--------------------------------------------------------------------------
+        */
         const organization = await prisma_1.prisma.organization.findUnique({
             where: {
                 ownerId: req.user.userId,
@@ -68,7 +73,17 @@ async function subscription(req, res) {
                 message: "Organization not found.",
             });
         }
+        /*
+        |--------------------------------------------------------------------------
+        | Get Subscription
+        |--------------------------------------------------------------------------
+        */
         const result = await (0, billing_service_1.getOrganizationSubscription)(organization.id);
+        /*
+        |--------------------------------------------------------------------------
+        | Response
+        |--------------------------------------------------------------------------
+        */
         return res.json({
             success: true,
             subscription: result,
@@ -148,6 +163,20 @@ async function checkout(req, res) {
         }
         /*
         |--------------------------------------------------------------------------
+        | Validate Email Format
+        |--------------------------------------------------------------------------
+        */
+        const normalizedEmail = email
+            .trim()
+            .toLowerCase();
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
+            return res.status(400).json({
+                success: false,
+                message: "Please provide a valid email address.",
+            });
+        }
+        /*
+        |--------------------------------------------------------------------------
         | Validate Redirect URL
         |--------------------------------------------------------------------------
         */
@@ -185,6 +214,8 @@ async function checkout(req, res) {
         | plan
         | interval
         |
+        | Stripe handles the recurring subscription.
+        |
         */
         const result = await (0, billing_service_1.createSubscriptionCheckout)({
             organizationId: organization.id,
@@ -192,9 +223,7 @@ async function checkout(req, res) {
             country,
             interval,
             fullName: fullName.trim(),
-            email: email
-                .trim()
-                .toLowerCase(),
+            email: normalizedEmail,
             redirectUrl: redirectUrl.trim(),
         });
         /*
@@ -202,16 +231,19 @@ async function checkout(req, res) {
         | Response
         |--------------------------------------------------------------------------
         |
-        | Return the resolved pricing so the frontend knows exactly what
-        | pricing configuration was used for the checkout.
+        | Stripe replaces the previous Revolut checkout response.
+        |
+        | The webhook remains authoritative for the actual subscription
+        | status. This response only provides the Checkout information
+        | needed by the frontend to redirect the organizer.
         |
         */
         return res.status(200).json({
             success: true,
             checkoutUrl: result.checkoutUrl,
             subscriptionId: result.subscription.id,
-            revolutSubscriptionId: result.revolutSubscriptionId,
-            setupOrderId: result.setupOrderId,
+            stripeSessionId: result.stripeSessionId,
+            stripePriceId: result.stripePriceId,
             pricing: result.pricing,
         });
     }

@@ -5,178 +5,332 @@ import { prisma } from "../../lib/prisma";
 import { AuthRequest } from "./auth.middleware";
 
 import {
-registerUser,
-loginUser,
+  registerUser,
+  loginUser,
 } from "./auth.service";
 
+import {
+  sendVerificationEmail,
+  verifyUserEmail,
+} from "./email-verification.service";
+
+/*
+|--------------------------------------------------------------------------
+| Register
+|--------------------------------------------------------------------------
+*/
+
 export async function register(
-req: Request,
-res: Response
+  req: Request,
+  res: Response,
 ) {
-try {
-console.log(
-"REGISTER BODY:",
-JSON.stringify(req.body, null, 2)
-);
+  try {
+    console.log(
+      "REGISTER BODY:",
+      JSON.stringify(req.body, null, 2),
+    );
 
+    console.log(
+      "DATABASE_URL EXISTS:",
+      !!process.env.DATABASE_URL,
+    );
 
-console.log(
-  "DATABASE_URL EXISTS:",
-  !!process.env.DATABASE_URL
-);
+    console.log(
+      "JWT_SECRET EXISTS:",
+      !!process.env.JWT_SECRET,
+    );
 
-console.log(
-  "JWT_SECRET EXISTS:",
-  !!process.env.JWT_SECRET
-);
+    const result =
+      await registerUser(
+        req.body,
+      );
 
-const result =
-  await registerUser(
-    req.body
-  );
+    console.log(
+      "REGISTER SUCCESS:",
+      result.user?.email,
+    );
 
-console.log(
-  "REGISTER SUCCESS:",
-  result.user?.email
-);
+    /*
+    |--------------------------------------------------------------------------
+    | Send Verification Email
+    |--------------------------------------------------------------------------
+    */
 
-return res.status(201).json({
-  success: true,
-  ...result,
-});
+    try {
+      await sendVerificationEmail(
+        result.user.id,
+      );
+    } catch (emailError) {
+      console.error(
+        "VERIFICATION EMAIL ERROR:",
+        emailError,
+      );
+    }
 
+    return res.status(201).json({
+      success: true,
+      ...result,
+    });
+  } catch (error: any) {
+    console.error(
+      "REGISTER ERROR:",
+    );
 
-} catch (error: any) {
-console.error(
-"REGISTER ERROR:"
-);
+    console.error(error);
 
+    return res.status(400).json({
+      success: false,
 
-console.error(error);
+      message:
+        error?.message ||
+        "Registration failed",
 
-return res.status(400).json({
-  success: false,
-  message:
-    error?.message ||
-    "Registration failed",
-  stack:
-    process.env.NODE_ENV !==
-    "production"
-      ? error?.stack
-      : undefined,
-});
-
-
+      stack:
+        process.env.NODE_ENV !==
+        "production"
+          ? error?.stack
+          : undefined,
+    });
+  }
 }
-}
+
+/*
+|--------------------------------------------------------------------------
+| Login
+|--------------------------------------------------------------------------
+*/
 
 export async function login(
-req: Request,
-res: Response
+  req: Request,
+  res: Response,
 ) {
-try {
-console.log(
-"LOGIN ATTEMPT:",
-req.body?.email
-);
+  try {
+    console.log(
+      "LOGIN ATTEMPT:",
+      req.body?.email,
+    );
 
+    const {
+      email,
+      password,
+    } = req.body;
 
-const {
-  email,
-  password,
-} = req.body;
+    const result =
+      await loginUser(
+        email,
+        password,
+      );
 
-const result =
-  await loginUser(
-    email,
-    password
-  );
+    console.log(
+      "LOGIN SUCCESS:",
+      email,
+    );
 
-console.log(
-  "LOGIN SUCCESS:",
-  email
-);
+    return res.status(200).json({
+      success: true,
+      ...result,
+    });
+  } catch (error: any) {
+    console.error(
+      "LOGIN ERROR:",
+    );
 
-return res.status(200).json({
-  success: true,
-  ...result,
-});
+    console.error(error);
 
+    return res.status(400).json({
+      success: false,
 
-} catch (error: any) {
-console.error(
-"LOGIN ERROR:"
-);
-
-
-console.error(error);
-
-return res.status(400).json({
-  success: false,
-  message:
-    error?.message ||
-    "Login failed",
-});
-
-
+      message:
+        error?.message ||
+        "Login failed",
+    });
+  }
 }
+
+/*
+|--------------------------------------------------------------------------
+| Verify Email
+|--------------------------------------------------------------------------
+*/
+
+export async function verifyEmail(
+  req: Request,
+  res: Response,
+) {
+  try {
+    const token =
+      String(
+        req.query.token ?? "",
+      ).trim();
+
+    if (!token) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Verification token is required",
+      });
+    }
+
+    const result =
+      await verifyUserEmail(
+        token,
+      );
+
+    return res.status(200).json({
+      success: true,
+      message:
+        "Email verified successfully",
+      ...result,
+    });
+  } catch (error: any) {
+    console.error(
+      "VERIFY EMAIL ERROR:",
+    );
+
+    console.error(error);
+
+    return res.status(400).json({
+      success: false,
+
+      message:
+        error?.message ||
+        "Email verification failed",
+    });
+  }
 }
+
+/*
+|--------------------------------------------------------------------------
+| Resend Verification Email
+|--------------------------------------------------------------------------
+*/
+
+export async function resendVerification(
+  req: Request,
+  res: Response,
+) {
+  try {
+    const email =
+      String(
+        req.body?.email ?? "",
+      )
+        .trim()
+        .toLowerCase();
+
+    if (!email) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Email is required",
+      });
+    }
+
+    const user =
+      await prisma.user.findUnique({
+        where: {
+          email,
+        },
+      });
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message:
+          "No account found with this email",
+      });
+    }
+
+    if (user.emailVerified) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Email is already verified",
+      });
+    }
+
+    await sendVerificationEmail(
+      user.id,
+    );
+
+    return res.status(200).json({
+      success: true,
+      message:
+        "Verification email sent",
+    });
+  } catch (error: any) {
+    console.error(
+      "RESEND VERIFICATION ERROR:",
+    );
+
+    console.error(error);
+
+    return res.status(400).json({
+      success: false,
+
+      message:
+        error?.message ||
+        "Failed to resend verification email",
+    });
+  }
+}
+
+/*
+|--------------------------------------------------------------------------
+| Current User
+|--------------------------------------------------------------------------
+*/
 
 export async function me(
-req: AuthRequest,
-res: Response
+  req: AuthRequest,
+  res: Response,
 ) {
-try {
-if (!req.user?.userId) {
-return res.status(401).json({
-success: false,
-message:
-"Unauthorized",
-});
-}
+  try {
+    if (!req.user?.userId) {
+      return res.status(401).json({
+        success: false,
+        message:
+          "Unauthorized",
+      });
+    }
 
-const user =
-  await prisma.user.findUnique({
-    where: {
-      id:
-        req.user.userId,
-    },
-  });
+    const user =
+      await prisma.user.findUnique({
+        where: {
+          id:
+            req.user.userId,
+        },
+      });
 
-if (!user) {
-  return res.status(404).json({
-    success: false,
-    message:
-      "User not found",
-  });
-}
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message:
+          "User not found",
+      });
+    }
 
-const {
-  password: _,
-  ...safeUser
-} = user;
+    const {
+      password: _,
+      ...safeUser
+    } = user;
 
-return res.status(200).json({
-  success: true,
-  user: safeUser,
-});
+    return res.status(200).json({
+      success: true,
+      user: safeUser,
+    });
+  } catch (error: any) {
+    console.error(
+      "ME ERROR:",
+    );
 
+    console.error(error);
 
-} catch (error: any) {
-console.error(
-"ME ERROR:"
-);
+    return res.status(500).json({
+      success: false,
 
-
-console.error(error);
-
-return res.status(500).json({
-  success: false,
-  message:
-    error?.message ||
-    "Server error",
-});
-
-
-}
+      message:
+        error?.message ||
+        "Server error",
+    });
+  }
 }

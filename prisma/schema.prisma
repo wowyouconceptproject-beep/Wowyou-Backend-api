@@ -176,6 +176,16 @@ model User {
 
   isActive Boolean @default(true)
 
+  /**
+   * |--------------------------------------------------------------------------
+   * | Email Verification
+   * |--------------------------------------------------------------------------
+   */
+
+  emailVerified Boolean @default(false)
+
+  emailVerificationTokens EmailVerificationToken[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -1317,4 +1327,23 @@ model EmailDelivery {
   @@index([eventId])
   @@index([type, eventId])
   @@index([recipient])
+}
+
+model EmailVerificationToken {
+  id String @id @default(cuid())
+
+  userId String
+
+  tokenHash String @unique
+
+  expiresAt DateTime
+
+  usedAt DateTime?
+
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
 }

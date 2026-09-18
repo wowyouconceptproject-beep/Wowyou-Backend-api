@@ -4,6 +4,8 @@ import {
   register,
   login,
   me,
+  verifyEmail,
+  resendVerification,
 } from "./auth.controller";
 
 import {
@@ -20,23 +22,33 @@ router.get(
       message:
         "Auth routes working",
     });
-  }
+  },
 );
 
 router.post(
   "/register",
-  register
+  register,
 );
 
 router.post(
   "/login",
-  login
+  login,
+);
+
+router.get(
+  "/verify-email",
+  verifyEmail,
+);
+
+router.post(
+  "/resend-verification",
+  resendVerification,
 );
 
 router.get(
   "/me",
   auth,
-  me
+  me,
 );
 
 export default router;

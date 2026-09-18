@@ -6,6 +6,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.getStripe = getStripe;
 exports.createStripeCheckoutSession = createStripeCheckoutSession;
 exports.getStripeCheckoutSession = getStripeCheckoutSession;
+exports.createStripeOrganizerSubscriptionCheckout = createStripeOrganizerSubscriptionCheckout;
 exports.getStripePaymentIntent = getStripePaymentIntent;
 exports.constructStripeWebhookEvent = constructStripeWebhookEvent;
 const stripe_1 = __importDefault(require("stripe"));
@@ -66,15 +67,6 @@ async function createStripeCheckoutSession(input) {
     /*
     |--------------------------------------------------------------------------
     | Validate Amount
-    |--------------------------------------------------------------------------
-    |
-    | Amount is already expressed in the smallest currency unit.
-    |
-    | Example:
-    |
-    | USD 25.00 → 2500
-    | NGN 25,000 → 2500000
-    |
     |--------------------------------------------------------------------------
     */
     if (!Number.isInteger(input.amount) ||
@@ -176,11 +168,6 @@ async function createStripeCheckoutSession(input) {
     |--------------------------------------------------------------------------
     | Stripe Metadata
     |--------------------------------------------------------------------------
-    |
-    | Metadata gives the webhook enough information to identify
-    | the exact WowYou purchase.
-    |
-    |--------------------------------------------------------------------------
     */
     const metadata = {
         purchaseId,
@@ -192,50 +179,10 @@ async function createStripeCheckoutSession(input) {
     |--------------------------------------------------------------------------
     | Create Checkout Session
     |--------------------------------------------------------------------------
-    |
-    | We deliberately do NOT specify a connected account.
-    |
-    | This means the payment is created on the WowYou platform.
-    |
-    |--------------------------------------------------------------------------
     */
     const session = await stripe.checkout.sessions.create({
-        /*
-        |--------------------------------------------------------------------------
-        | Payment Mode
-        |--------------------------------------------------------------------------
-        */
         mode: "payment",
-        /*
-        |--------------------------------------------------------------------------
-        | WowYou Purchase Reference
-        |--------------------------------------------------------------------------
-        */
         client_reference_id: purchaseId,
-        /*
-        |--------------------------------------------------------------------------
-        | Ticket Line Item
-        |--------------------------------------------------------------------------
-        |
-        | input.amount is the COMPLETE purchase amount.
-        |
-        | Example:
-        |
-        | Ticket = ₦10,000
-        | Quantity = 3
-        |
-        | purchase amount = ₦30,000
-        |
-        | Stripe receives:
-        |
-        | unit_amount = 30,000 × 100
-        | quantity = 1
-        |
-        | We do this because WowYou has already calculated
-        | the complete purchase total.
-        |
-        |--------------------------------------------------------------------------
-        */
         line_items: [
             {
                 price_data: {
@@ -248,90 +195,25 @@ async function createStripeCheckoutSession(input) {
                 quantity: 1,
             },
         ],
-        /*
-        |--------------------------------------------------------------------------
-        | Customer Email
-        |--------------------------------------------------------------------------
-        */
         ...(customerEmail
             ? {
                 customer_email: customerEmail,
             }
             : {}),
-        /*
-        |--------------------------------------------------------------------------
-        | Checkout Metadata
-        |--------------------------------------------------------------------------
-        */
         metadata,
-        /*
-        |--------------------------------------------------------------------------
-        | PaymentIntent Metadata
-        |--------------------------------------------------------------------------
-        |
-        | The metadata is copied to the underlying PaymentIntent.
-        |
-        | This is useful when handling:
-        |
-        | payment_intent.succeeded
-        | payment_intent.payment_failed
-        |
-        |--------------------------------------------------------------------------
-        */
         payment_intent_data: {
             metadata,
         },
-        /*
-        |--------------------------------------------------------------------------
-        | Success URL
-        |--------------------------------------------------------------------------
-        |
-        | The browser redirect is NOT payment confirmation.
-        |
-        | The webhook is authoritative.
-        |
-        |--------------------------------------------------------------------------
-        */
         success_url: successUrl,
-        /*
-        |--------------------------------------------------------------------------
-        | Cancel URL
-        |--------------------------------------------------------------------------
-        */
         cancel_url: cancelUrl,
-        /*
-        |--------------------------------------------------------------------------
-        | Billing Address
-        |--------------------------------------------------------------------------
-        */
         billing_address_collection: "auto",
     }, {
-        /*
-        |--------------------------------------------------------------------------
-        | Idempotency
-        |--------------------------------------------------------------------------
-        |
-        | Prevent duplicate Stripe Checkout Sessions for the
-        | same WowYou purchase.
-        |
-        |--------------------------------------------------------------------------
-        */
         idempotencyKey: input.idempotencyKey?.trim() ||
             `purchase_${purchaseId}`,
     });
-    /*
-    |--------------------------------------------------------------------------
-    | Validate Checkout URL
-    |--------------------------------------------------------------------------
-    */
     if (!session.url) {
         throw new Error("Stripe did not return a checkout URL.");
     }
-    /*
-    |--------------------------------------------------------------------------
-    | Return Checkout Information
-    |--------------------------------------------------------------------------
-    */
     return {
         sessionId: session.id,
         checkoutUrl: session.url,
@@ -341,11 +223,6 @@ async function createStripeCheckoutSession(input) {
 /*
 |--------------------------------------------------------------------------
 | Retrieve Checkout Session
-|--------------------------------------------------------------------------
-|
-| Used by the webhook to independently retrieve the Checkout Session
-| before confirming the WowYou purchase.
-|
 |--------------------------------------------------------------------------
 */
 async function getStripeCheckoutSession(sessionId) {
@@ -359,6 +236,238 @@ async function getStripeCheckoutSession(sessionId) {
             "payment_intent",
         ],
     });
+}
+/*
+|--------------------------------------------------------------------------
+| Organizer Subscription Price
+|--------------------------------------------------------------------------
+|
+| Stripe Prices are created/reused automatically from a deterministic
+| lookup key.
+|
+|--------------------------------------------------------------------------
+*/
+function getOrganizerPriceLookupKey(input) {
+    const amountMinor = Math.round(input.amount * 100);
+    return [
+        "wowyou",
+        "organizer",
+        input.country.toUpperCase(),
+        input.plan.toUpperCase(),
+        input.interval.toUpperCase(),
+        input.currency.toLowerCase(),
+        amountMinor,
+    ].join("_");
+}
+async function getOrCreateOrganizerPrice(input) {
+    const stripe = getStripe();
+    const currency = String(input.currency ?? "")
+        .trim()
+        .toLowerCase();
+    const amountMinor = Math.round(Number(input.amount) * 100);
+    if (!currency ||
+        !/^[a-z]{3}$/.test(currency)) {
+        throw new Error("Invalid organizer subscription currency.");
+    }
+    if (!Number.isInteger(amountMinor) ||
+        amountMinor < 1) {
+        throw new Error("Invalid organizer subscription amount.");
+    }
+    const lookupKey = getOrganizerPriceLookupKey({
+        plan: input.plan,
+        country: input.country,
+        interval: input.interval,
+        currency,
+        amount: input.amount,
+    });
+    /*
+    |--------------------------------------------------------------------------
+    | Reuse Existing Stripe Price
+    |--------------------------------------------------------------------------
+    */
+    const existing = await stripe.prices.list({
+        lookup_keys: [
+            lookupKey,
+        ],
+        active: true,
+        type: "recurring",
+        limit: 1,
+    });
+    if (existing.data.length > 0) {
+        return existing.data[0];
+    }
+    /*
+    |--------------------------------------------------------------------------
+    | Create Stripe Price
+    |--------------------------------------------------------------------------
+    */
+    const recurringInterval = input.interval === "YEAR"
+        ? "year"
+        : "month";
+    const planName = String(input.plan)
+        .trim()
+        .toLowerCase()
+        .replace(/\b\w/g, (letter) => letter.toUpperCase());
+    const price = await stripe.prices.create({
+        currency,
+        unit_amount: amountMinor,
+        recurring: {
+            interval: recurringInterval,
+        },
+        lookup_key: lookupKey,
+        product_data: {
+            name: `WOWYOU ${planName}`,
+            metadata: {
+                platform: "WOWYOU",
+                type: "ORGANIZER_SUBSCRIPTION",
+                plan: input.plan,
+                country: input.country,
+                interval: input.interval,
+            },
+        },
+        metadata: {
+            platform: "WOWYOU",
+            type: "ORGANIZER_SUBSCRIPTION",
+            plan: input.plan,
+            country: input.country,
+            interval: input.interval,
+        },
+    }, {
+        idempotencyKey: `organizer_price_${lookupKey}`,
+    });
+    return price;
+}
+/*
+|--------------------------------------------------------------------------
+| Create Organizer Subscription Checkout
+|--------------------------------------------------------------------------
+*/
+async function createStripeOrganizerSubscriptionCheckout(input) {
+    const stripe = getStripe();
+    const organizationSubscriptionId = String(input.organizationSubscriptionId ?? "").trim();
+    const organizationId = String(input.organizationId ?? "").trim();
+    const email = String(input.email ?? "")
+        .trim()
+        .toLowerCase();
+    const fullName = String(input.fullName ?? "").trim();
+    const plan = String(input.plan ?? "")
+        .trim()
+        .toUpperCase();
+    const country = String(input.country ?? "")
+        .trim()
+        .toUpperCase();
+    const interval = String(input.interval ?? "")
+        .trim()
+        .toUpperCase();
+    const currency = String(input.currency ?? "")
+        .trim()
+        .toLowerCase();
+    const amount = Number(input.amount);
+    const successUrl = String(input.successUrl ?? "").trim();
+    const cancelUrl = String(input.cancelUrl ?? "").trim();
+    if (!organizationSubscriptionId) {
+        throw new Error("Organization subscription ID is required.");
+    }
+    if (!organizationId) {
+        throw new Error("Organization ID is required.");
+    }
+    if (!email) {
+        throw new Error("Organizer email is required.");
+    }
+    if (!fullName) {
+        throw new Error("Organizer full name is required.");
+    }
+    if (!plan) {
+        throw new Error("Organizer subscription plan is required.");
+    }
+    if (!country) {
+        throw new Error("Organizer billing country is required.");
+    }
+    if (interval !== "MONTH" &&
+        interval !== "YEAR") {
+        throw new Error("Organizer billing interval must be MONTH or YEAR.");
+    }
+    if (!currency ||
+        !/^[a-z]{3}$/.test(currency)) {
+        throw new Error("Organizer subscription currency must be a valid 3-letter currency code.");
+    }
+    if (!Number.isFinite(amount) ||
+        amount <= 0) {
+        throw new Error("Organizer subscription amount must be greater than zero.");
+    }
+    if (!successUrl) {
+        throw new Error("Stripe subscription success URL is required.");
+    }
+    if (!cancelUrl) {
+        throw new Error("Stripe subscription cancel URL is required.");
+    }
+    /*
+    |--------------------------------------------------------------------------
+    | Get / Create Recurring Price
+    |--------------------------------------------------------------------------
+    */
+    const price = await getOrCreateOrganizerPrice({
+        plan,
+        country,
+        interval,
+        currency,
+        amount,
+    });
+    /*
+    |--------------------------------------------------------------------------
+    | Metadata
+    |--------------------------------------------------------------------------
+    */
+    const metadata = {
+        type: "organizer_subscription",
+        organizationSubscriptionId,
+        organizationId,
+        plan,
+        country,
+        interval,
+        priceId: price.id,
+    };
+    /*
+    |--------------------------------------------------------------------------
+    | Success URL
+    |--------------------------------------------------------------------------
+    */
+    const checkoutSuccessUrl = successUrl.includes("?")
+        ? `${successUrl}&session_id={CHECKOUT_SESSION_ID}`
+        : `${successUrl}?session_id={CHECKOUT_SESSION_ID}`;
+    /*
+    |--------------------------------------------------------------------------
+    | Create Subscription Checkout
+    |--------------------------------------------------------------------------
+    */
+    const session = await stripe.checkout.sessions.create({
+        mode: "subscription",
+        line_items: [
+            {
+                price: price.id,
+                quantity: 1,
+            },
+        ],
+        customer_email: email,
+        client_reference_id: organizationSubscriptionId,
+        metadata,
+        subscription_data: {
+            metadata,
+        },
+        success_url: checkoutSuccessUrl,
+        cancel_url: cancelUrl,
+        billing_address_collection: "auto",
+    }, {
+        idempotencyKey: `organizer_subscription_checkout_${organizationSubscriptionId}_${price.id}`,
+    });
+    if (!session.url) {
+        throw new Error("Stripe did not return an organizer subscription checkout URL.");
+    }
+    return {
+        sessionId: session.id,
+        checkoutUrl: session.url,
+        priceId: price.id,
+    };
 }
 /*
 |--------------------------------------------------------------------------
@@ -377,53 +486,28 @@ async function getStripePaymentIntent(paymentIntentId) {
 |--------------------------------------------------------------------------
 | Construct Stripe Webhook Event
 |--------------------------------------------------------------------------
-|
-| Stripe signature verification requires the ORIGINAL raw request body.
-|
-| Therefore app.ts must mount the Stripe webhook BEFORE express.json().
-|
-|--------------------------------------------------------------------------
 */
 function constructStripeWebhookEvent(rawBody, signature) {
-    /*
-    |--------------------------------------------------------------------------
-    | Webhook Secret
-    |--------------------------------------------------------------------------
-    */
     const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET?.trim();
     if (!webhookSecret) {
         throw new Error("STRIPE_WEBHOOK_SECRET is missing.");
     }
-    /*
-    |--------------------------------------------------------------------------
-    | Signature
-    |--------------------------------------------------------------------------
-    */
     const normalizedSignature = String(signature ?? "").trim();
     if (!normalizedSignature) {
         throw new Error("Stripe signature is missing.");
     }
-    /*
-    |--------------------------------------------------------------------------
-    | Raw Body
-    |--------------------------------------------------------------------------
-    */
     if (!rawBody) {
         throw new Error("Stripe webhook raw body is empty.");
     }
     if (Buffer.isBuffer(rawBody)) {
-        if (rawBody.length === 0) {
+        if (rawBody.length ===
+            0) {
             throw new Error("Stripe webhook raw body is empty.");
         }
     }
     else if (rawBody.length === 0) {
         throw new Error("Stripe webhook raw body is empty.");
     }
-    /*
-    |--------------------------------------------------------------------------
-    | Verify Stripe Signature
-    |--------------------------------------------------------------------------
-    */
     const stripe = getStripe();
     return stripe.webhooks.constructEvent(rawBody, normalizedSignature, webhookSecret);
 }

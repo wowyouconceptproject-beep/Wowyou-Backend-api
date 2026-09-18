@@ -1,6 +1,14 @@
 import crypto from "crypto";
+import QRCode from "qrcode";
 
 import { prisma } from "../../lib/prisma";
+
+import { sendEmail } from "../email/email.service";
+
+import {
+  ticketPurchaseEmailTemplate,
+  organizerTicketSaleEmailTemplate,
+} from "../email/email.templates";
 
 /*
 |--------------------------------------------------------------------------
@@ -41,6 +49,422 @@ function generateNfcToken() {
 
 /*
 |--------------------------------------------------------------------------
+| Send Ticket Purchase Email
+|--------------------------------------------------------------------------
+*/
+
+async function sendTicketPurchaseEmail(
+  purchaseId: string,
+) {
+  /*
+  |--------------------------------------------------------------------------
+  | Check Existing Delivery
+  |--------------------------------------------------------------------------
+  */
+
+  const existingDelivery =
+    await prisma.emailDelivery.findFirst({
+      where: {
+        purchaseId,
+
+        type:
+          "TICKET_PURCHASE",
+
+        status:
+          "SENT",
+      },
+
+      orderBy: {
+        createdAt:
+          "desc",
+      },
+    });
+
+  if (existingDelivery) {
+    return {
+      success: true,
+
+      alreadySent: true,
+
+      messageId:
+        existingDelivery.providerMessageId ??
+        undefined,
+    };
+  }
+
+  /*
+  |--------------------------------------------------------------------------
+  | Load Purchase
+  |--------------------------------------------------------------------------
+  */
+
+  const purchase =
+    await prisma.ticketPurchase.findUnique({
+      where: {
+        id: purchaseId,
+      },
+
+      include: {
+        user: true,
+
+        event: {
+          include: {
+            organization: {
+              include: {
+                owner: true,
+              },
+            },
+          },
+        },
+
+        ticket: true,
+
+        passes: {
+          where: {
+            isActive: true,
+
+            isRevoked: false,
+          },
+
+          orderBy: {
+            createdAt:
+              "asc",
+          },
+        },
+      },
+    });
+
+  if (!purchase) {
+    throw new Error(
+      "Purchase not found while sending ticket email.",
+    );
+  }
+
+  if (
+    purchase.status !==
+    "PAID"
+  ) {
+    throw new Error(
+      "Cannot send ticket email for an unpaid purchase.",
+    );
+  }
+
+  if (
+    purchase.passes.length ===
+    0
+  ) {
+    throw new Error(
+      "Cannot send ticket email because no passes have been issued.",
+    );
+  }
+
+  /*
+  |--------------------------------------------------------------------------
+  | Primary Pass
+  |--------------------------------------------------------------------------
+  */
+
+  const primaryPass =
+    purchase.passes[0];
+
+  /*
+  |--------------------------------------------------------------------------
+  | Generate QR Image
+  |--------------------------------------------------------------------------
+  */
+
+  const qrBuffer =
+    await QRCode.toBuffer(
+      primaryPass.qrToken,
+      {
+        type:
+          "png",
+
+        width:
+          600,
+
+        margin:
+          2,
+
+        errorCorrectionLevel:
+          "M",
+      },
+    );
+
+  /*
+  |--------------------------------------------------------------------------
+  | Build Email
+  |--------------------------------------------------------------------------
+  */
+
+  const firstName =
+    purchase.user.firstName?.trim() ||
+    "there";
+
+  const template =
+    ticketPurchaseEmailTemplate({
+      firstName,
+
+      eventTitle:
+        purchase.event.title,
+
+      ticketName:
+        purchase.ticket.name,
+
+      quantity:
+        purchase.quantity,
+
+      totalAmount:
+        purchase.amount,
+
+      currency:
+        purchase.currency,
+
+      startDate:
+        purchase.event.startDate,
+
+      venue:
+        purchase.event.venue,
+
+      ticketId:
+        primaryPass.passNumber,
+    });
+
+  /*
+  |--------------------------------------------------------------------------
+  | Send Email
+  |--------------------------------------------------------------------------
+  */
+
+  return sendEmail({
+    type:
+      "TICKET_PURCHASE",
+
+    to:
+      purchase.user.email,
+
+    subject:
+      template.subject,
+
+    html:
+      template.html,
+
+    text:
+      template.text,
+
+    userId:
+      purchase.userId,
+
+    purchaseId:
+      purchase.id,
+
+    eventId:
+      purchase.eventId,
+
+    attachments: [
+      {
+        filename:
+          "wowyou-ticket-qr.png",
+
+        content:
+          qrBuffer,
+
+        contentType:
+          "image/png",
+
+        contentId:
+          "wowyou-ticket-qr",
+      },
+    ],
+
+    idempotencyKey:
+      `ticket_purchase_${purchase.id}`,
+  });
+}
+
+/*
+|--------------------------------------------------------------------------
+| Send Organizer Ticket Sale Email
+|--------------------------------------------------------------------------
+*/
+
+async function sendOrganizerTicketSaleEmail(
+  purchaseId: string,
+) {
+  /*
+  |--------------------------------------------------------------------------
+  | Check Existing Delivery
+  |--------------------------------------------------------------------------
+  */
+
+  const existingDelivery =
+    await prisma.emailDelivery.findFirst({
+      where: {
+        purchaseId,
+
+        type:
+          "ORGANIZER_TICKET_SALE",
+
+        status:
+          "SENT",
+      },
+
+      orderBy: {
+        createdAt:
+          "desc",
+      },
+    });
+
+  if (existingDelivery) {
+    return {
+      success: true,
+
+      alreadySent: true,
+
+      messageId:
+        existingDelivery.providerMessageId ??
+        undefined,
+    };
+  }
+
+  /*
+  |--------------------------------------------------------------------------
+  | Load Purchase
+  |--------------------------------------------------------------------------
+  */
+
+  const purchase =
+    await prisma.ticketPurchase.findUnique({
+      where: {
+        id: purchaseId,
+      },
+
+      include: {
+        user: true,
+
+        event: {
+          include: {
+            organization: {
+              include: {
+                owner: true,
+              },
+            },
+          },
+        },
+
+        ticket: true,
+      },
+    });
+
+  if (!purchase) {
+    throw new Error(
+      "Purchase not found while sending organizer sale email.",
+    );
+  }
+
+  if (
+    purchase.status !==
+    "PAID"
+  ) {
+    throw new Error(
+      "Cannot send organizer sale email for an unpaid purchase.",
+    );
+  }
+
+  /*
+  |--------------------------------------------------------------------------
+  | Organizer
+  |--------------------------------------------------------------------------
+  */
+
+  const organization =
+    purchase.event.organization;
+
+  const organizer =
+    organization.owner;
+
+  if (!organizer?.email) {
+    throw new Error(
+      "Organization owner email not found.",
+    );
+  }
+
+  /*
+  |--------------------------------------------------------------------------
+  | Build Email
+  |--------------------------------------------------------------------------
+  */
+
+  const buyerName =
+    `${purchase.user.firstName} ${purchase.user.lastName}`
+      .trim();
+
+  const template =
+    organizerTicketSaleEmailTemplate({
+      organizationName:
+        organization.name,
+
+      eventTitle:
+        purchase.event.title,
+
+      ticketName:
+        purchase.ticket.name,
+
+      quantity:
+        purchase.quantity,
+
+      totalAmount:
+        purchase.amount,
+
+      currency:
+        purchase.currency,
+
+      buyerName:
+        buyerName ||
+        "Attendee",
+
+      buyerEmail:
+        purchase.user.email,
+    });
+
+  /*
+  |--------------------------------------------------------------------------
+  | Send Email
+  |--------------------------------------------------------------------------
+  */
+
+  return sendEmail({
+    type:
+      "ORGANIZER_TICKET_SALE",
+
+    to:
+      organizer.email,
+
+    subject:
+      template.subject,
+
+    html:
+      template.html,
+
+    text:
+      template.text,
+
+    userId:
+      organizer.id,
+
+    purchaseId:
+      purchase.id,
+
+    eventId:
+      purchase.eventId,
+
+    idempotencyKey:
+      `organizer_ticket_sale_${purchase.id}`,
+  });
+}
+
+/*
+|--------------------------------------------------------------------------
 | Issue Purchase
 |--------------------------------------------------------------------------
 |
@@ -54,6 +478,8 @@ function generateNfcToken() {
 | • Generate QR Token
 | • Generate NFC Token
 | • Record PASS_ISSUED activity
+| • Send attendee ticket email
+| • Send organizer sale email
 |
 | NOT responsible for:
 |
@@ -113,13 +539,43 @@ export async function issuePurchase(
 
   /*
   |--------------------------------------------------------------------------
-  | Fast Idempotency Check
+  | Fast Idempotency
+  |--------------------------------------------------------------------------
+  |
+  | If passes already exist, do not create them again.
+  |
+  | We still run the email functions because a previous attempt may have
+  | created the passes but failed to deliver one or both emails.
+  |
   |--------------------------------------------------------------------------
   */
 
   if (
-    purchase.passes.length > 0
+    purchase.passes.length >
+    0
   ) {
+    try {
+      await sendTicketPurchaseEmail(
+        purchaseId,
+      );
+    } catch (error) {
+      console.error(
+        "Failed to send attendee ticket email:",
+        error,
+      );
+    }
+
+    try {
+      await sendOrganizerTicketSaleEmail(
+        purchaseId,
+      );
+    } catch (error) {
+      console.error(
+        "Failed to send organizer ticket sale email:",
+        error,
+      );
+    }
+
     return purchase.passes;
   }
 
@@ -127,174 +583,210 @@ export async function issuePurchase(
   |--------------------------------------------------------------------------
   | Transaction
   |--------------------------------------------------------------------------
-  |
-  | The purchase row is locked before checking/creating passes.
-  |
-  | This prevents duplicate pass issuance if Revolut delivers the same
-  | webhook more than once at nearly the same time.
-  |
   */
 
-  return prisma.$transaction(
-    async (tx) => {
-      /*
-      |--------------------------------------------------------------------------
-      | Lock Purchase Row
-      |--------------------------------------------------------------------------
-      */
+  const passes =
+    await prisma.$transaction(
+      async (tx) => {
+        /*
+        |--------------------------------------------------------------------------
+        | Lock Purchase Row
+        |--------------------------------------------------------------------------
+        */
 
-      await tx.$queryRaw`
-        SELECT id
-        FROM "TicketPurchase"
-        WHERE id = ${purchaseId}
-        FOR UPDATE
-      `;
+        await tx.$queryRaw`
+          SELECT id
+          FROM "TicketPurchase"
+          WHERE id = ${purchaseId}
+          FOR UPDATE
+        `;
 
-      /*
-      |--------------------------------------------------------------------------
-      | Re-fetch Purchase State
-      |--------------------------------------------------------------------------
-      */
+        /*
+        |--------------------------------------------------------------------------
+        | Re-fetch Purchase State
+        |--------------------------------------------------------------------------
+        */
 
-      const lockedPurchase =
-        await tx.ticketPurchase.findUnique({
-          where: {
-            id: purchaseId,
-          },
+        const lockedPurchase =
+          await tx.ticketPurchase.findUnique({
+            where: {
+              id: purchaseId,
+            },
 
-          include: {
-            event: true,
+            include: {
+              event: true,
 
-            ticket: true,
+              ticket: true,
 
-            passes: true,
-          },
-        });
-
-      if (!lockedPurchase) {
-        throw new Error(
-          "Purchase not found.",
-        );
-      }
-
-      /*
-      |--------------------------------------------------------------------------
-      | Verify Paid State
-      |--------------------------------------------------------------------------
-      */
-
-      if (
-        lockedPurchase.status !==
-        "PAID"
-      ) {
-        throw new Error(
-          "Purchase has not been paid.",
-        );
-      }
-
-      /*
-      |--------------------------------------------------------------------------
-      | Idempotency
-      |--------------------------------------------------------------------------
-      |
-      | Check again AFTER acquiring the row lock.
-      |
-      */
-
-      if (
-        lockedPurchase.passes.length >
-        0
-      ) {
-        return lockedPurchase.passes;
-      }
-
-      /*
-      |--------------------------------------------------------------------------
-      | Create Event Passes
-      |--------------------------------------------------------------------------
-      */
-
-      const passes = [];
-
-      for (
-        let i = 0;
-        i <
-        lockedPurchase.quantity;
-        i++
-      ) {
-        const pass =
-          await tx.eventPass.create({
-            data: {
-              purchaseId:
-                lockedPurchase.id,
-
-              passNumber:
-                generatePassNumber(),
-
-              qrToken:
-                generateQrToken(),
-
-              nfcToken:
-                generateNfcToken(),
-
-              isActive:
-                true,
-
-              isRevoked:
-                false,
-
-              nfcEnabled:
-                true,
-
-              issuedAt:
-                new Date(),
+              passes: true,
             },
           });
 
-        passes.push(pass);
-      }
+        if (!lockedPurchase) {
+          throw new Error(
+            "Purchase not found.",
+          );
+        }
 
-      /*
-      |--------------------------------------------------------------------------
-      | Activity
-      |--------------------------------------------------------------------------
-      */
+        /*
+        |--------------------------------------------------------------------------
+        | Verify Paid State
+        |--------------------------------------------------------------------------
+        */
 
-      await tx.eventActivity.create({
-        data: {
-          eventId:
-            lockedPurchase.eventId,
+        if (
+          lockedPurchase.status !==
+          "PAID"
+        ) {
+          throw new Error(
+            "Purchase has not been paid.",
+          );
+        }
 
-          purchaseId:
-            lockedPurchase.id,
+        /*
+        |--------------------------------------------------------------------------
+        | Idempotency After Lock
+        |--------------------------------------------------------------------------
+        */
 
-          type:
-            "PASS_ISSUED",
+        if (
+          lockedPurchase.passes.length >
+          0
+        ) {
+          return lockedPurchase.passes;
+        }
 
-          title:
-            "Ticket Issued",
+        /*
+        |--------------------------------------------------------------------------
+        | Create Event Passes
+        |--------------------------------------------------------------------------
+        */
 
-          description:
-            `${lockedPurchase.quantity} pass${
-              lockedPurchase.quantity === 1
-                ? ""
-                : "es"
-            } issued.`,
+        const createdPasses = [];
 
-          payload: {
-            paymentProvider:
-              lockedPurchase.paymentProvider,
+        for (
+          let i = 0;
+          i <
+          lockedPurchase.quantity;
+          i++
+        ) {
+          const pass =
+            await tx.eventPass.create({
+              data: {
+                purchaseId:
+                  lockedPurchase.id,
 
-            quantity:
-              lockedPurchase.quantity,
+                passNumber:
+                  generatePassNumber(),
 
-            ticketType:
-              lockedPurchase.ticket.name,
+                qrToken:
+                  generateQrToken(),
+
+                nfcToken:
+                  generateNfcToken(),
+
+                isActive:
+                  true,
+
+                isRevoked:
+                  false,
+
+                nfcEnabled:
+                  true,
+
+                issuedAt:
+                  new Date(),
+              },
+            });
+
+          createdPasses.push(
+            pass,
+          );
+        }
+
+        /*
+        |--------------------------------------------------------------------------
+        | Activity
+        |--------------------------------------------------------------------------
+        */
+
+        await tx.eventActivity.create({
+          data: {
+            eventId:
+              lockedPurchase.eventId,
+
+            purchaseId:
+              lockedPurchase.id,
+
+            type:
+              "PASS_ISSUED",
+
+            title:
+              "Ticket Issued",
+
+            description:
+              `${lockedPurchase.quantity} pass${
+                lockedPurchase.quantity === 1
+                  ? ""
+                  : "es"
+              } issued.`,
+
+            payload: {
+              paymentProvider:
+                lockedPurchase.paymentProvider,
+
+              quantity:
+                lockedPurchase.quantity,
+
+              ticketType:
+                lockedPurchase.ticket.name,
+            },
           },
-        },
-      });
+        });
 
-      return passes;
-    },
-  );
+        return createdPasses;
+      },
+    );
+
+  /*
+  |--------------------------------------------------------------------------
+  | Post-Transaction Emails
+  |--------------------------------------------------------------------------
+  |
+  | These intentionally execute after the transaction has committed.
+  |
+  | Email failure must never invalidate an already-issued ticket.
+  |
+  |--------------------------------------------------------------------------
+  */
+
+  try {
+    await sendTicketPurchaseEmail(
+      purchaseId,
+    );
+  } catch (error) {
+    console.error(
+      "Failed to send attendee ticket email:",
+      error,
+    );
+  }
+
+  try {
+    await sendOrganizerTicketSaleEmail(
+      purchaseId,
+    );
+  } catch (error) {
+    console.error(
+      "Failed to send organizer ticket sale email:",
+      error,
+    );
+  }
+
+  /*
+  |--------------------------------------------------------------------------
+  | Return Passes
+  |--------------------------------------------------------------------------
+  */
+
+  return passes;
 }

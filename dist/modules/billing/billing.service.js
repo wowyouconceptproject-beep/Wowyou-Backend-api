@@ -14,7 +14,7 @@ const client_1 = require("@prisma/client");
 const prisma_1 = require("../../lib/prisma");
 const billing_plans_1 = require("./billing.plans");
 const billing_pricing_1 = require("./billing.pricing");
-const revolut_service_1 = require("../payments/revolut/revolut.service");
+const stripe_service_1 = require("../payments/stripe/stripe.service");
 /*
 |--------------------------------------------------------------------------
 | Trial Configuration
@@ -92,10 +92,20 @@ function getPlanPricing(country, plan, interval) {
 |--------------------------------------------------------------------------
 */
 function isSubscriptionActive(subscription) {
+    /*
+    |--------------------------------------------------------------------------
+    | Paid Active Subscription
+    |--------------------------------------------------------------------------
+    */
     if (subscription.status ===
         client_1.SubscriptionStatus.ACTIVE) {
         return true;
     }
+    /*
+    |--------------------------------------------------------------------------
+    | Active Trial
+    |--------------------------------------------------------------------------
+    */
     if (subscription.status ===
         client_1.SubscriptionStatus.TRIALING) {
         if (!subscription.currentPeriodEnd) {
@@ -131,11 +141,26 @@ async function organizationHasFeature(organizationId, feature) {
 |--------------------------------------------------------------------------
 */
 async function createOrganizationTrial(organizationId, plan = client_1.OrganizerPlan.STARTER, country = DEFAULT_BILLING_COUNTRY, interval = DEFAULT_BILLING_INTERVAL) {
+    /*
+    |--------------------------------------------------------------------------
+    | Validate Plan
+    |--------------------------------------------------------------------------
+    */
     const config = billing_plans_1.ORGANIZER_PLANS[plan];
     if (!config) {
         throw new Error("Invalid organizer plan.");
     }
+    /*
+    |--------------------------------------------------------------------------
+    | Resolve Pricing
+    |--------------------------------------------------------------------------
+    */
     const pricing = getPlanPricing(country, plan, interval);
+    /*
+    |--------------------------------------------------------------------------
+    | Existing Subscription
+    |--------------------------------------------------------------------------
+    */
     const existing = await getOrganizationSubscription(organizationId);
     /*
     |--------------------------------------------------------------------------
@@ -145,10 +170,20 @@ async function createOrganizationTrial(organizationId, plan = client_1.Organizer
     if (existing) {
         return existing;
     }
+    /*
+    |--------------------------------------------------------------------------
+    | Trial Dates
+    |--------------------------------------------------------------------------
+    */
     const now = new Date();
     const trialEnd = new Date(now);
     trialEnd.setDate(trialEnd.getDate() +
         exports.ORGANIZER_TRIAL_DAYS);
+    /*
+    |--------------------------------------------------------------------------
+    | Create Trial
+    |--------------------------------------------------------------------------
+    */
     return prisma_1.prisma.organizationSubscription.create({
         data: {
             organizationId,
@@ -160,6 +195,17 @@ async function createOrganizationTrial(organizationId, plan = client_1.Organizer
             currentPeriodStart: now,
             currentPeriodEnd: trialEnd,
             cancelAtPeriodEnd: false,
+            /*
+            |--------------------------------------------------------------------------
+            | No Stripe Subscription Yet
+            |--------------------------------------------------------------------------
+            */
+            provider: null,
+            providerCustomerId: null,
+            providerSubscriptionId: null,
+            providerPriceId: null,
+            providerSetupOrderId: null,
+            canceledAt: null,
         },
     });
 }
@@ -167,13 +213,40 @@ async function createOrganizationTrial(organizationId, plan = client_1.Organizer
 |--------------------------------------------------------------------------
 | Create Initial Subscription
 |--------------------------------------------------------------------------
+|
+| Creates or resets the local subscription record
+| before Stripe Checkout is created.
+|
 */
 async function createInitialSubscription(organizationId, plan = client_1.OrganizerPlan.STARTER, country = DEFAULT_BILLING_COUNTRY, interval = DEFAULT_BILLING_INTERVAL) {
+    /*
+    |--------------------------------------------------------------------------
+    | Validate Plan
+    |--------------------------------------------------------------------------
+    */
     const config = billing_plans_1.ORGANIZER_PLANS[plan];
     if (!config) {
         throw new Error("Invalid organizer plan.");
     }
+    /*
+    |--------------------------------------------------------------------------
+    | Resolve Pricing
+    |--------------------------------------------------------------------------
+    */
     const pricing = getPlanPricing(country, plan, interval);
+    /*
+    |--------------------------------------------------------------------------
+    | Create / Reset Local Subscription
+    |--------------------------------------------------------------------------
+    |
+    | Stripe has not completed payment yet.
+    |
+    | Therefore:
+    |
+    | PENDING
+    |
+    |--------------------------------------------------------------------------
+    */
     return prisma_1.prisma.organizationSubscription.upsert({
         where: {
             organizationId,
@@ -185,6 +258,15 @@ async function createInitialSubscription(organizationId, plan = client_1.Organiz
             currency: pricing.currency,
             amount: pricing.amount,
             interval,
+            provider: "STRIPE",
+            providerCustomerId: null,
+            providerSubscriptionId: null,
+            providerPriceId: null,
+            providerSetupOrderId: null,
+            currentPeriodStart: null,
+            currentPeriodEnd: null,
+            cancelAtPeriodEnd: false,
+            canceledAt: null,
         },
         update: {
             plan,
@@ -192,25 +274,86 @@ async function createInitialSubscription(organizationId, plan = client_1.Organiz
             currency: pricing.currency,
             amount: pricing.amount,
             interval,
+            provider: "STRIPE",
+            providerCustomerId: null,
+            providerSubscriptionId: null,
+            providerPriceId: null,
+            providerSetupOrderId: null,
             currentPeriodStart: null,
             currentPeriodEnd: null,
             cancelAtPeriodEnd: false,
+            canceledAt: null,
         },
     });
 }
 /*
 |--------------------------------------------------------------------------
-| Create Organizer Checkout
+| Create Organizer Subscription Checkout
 |--------------------------------------------------------------------------
 |
-| Pricing is resolved by:
+| Stripe owns:
 |
-| country + plan + interval
+| - Customer creation
+| - Recurring subscription
+| - Payment method
+| - Recurring invoices
+| - Subscription lifecycle
 |
-| The Revolut variation is resolved from the selected price.
+| WowYou owns:
 |
+| - OrganizationSubscription
+| - Feature access
+| - Platform entitlement
+|
+|--------------------------------------------------------------------------
 */
 async function createSubscriptionCheckout(data) {
+    /*
+    |--------------------------------------------------------------------------
+    | Normalize Request Values
+    |--------------------------------------------------------------------------
+    */
+    const organizationId = String(data.organizationId ?? "").trim();
+    const fullName = String(data.fullName ?? "").trim();
+    const email = String(data.email ?? "")
+        .trim()
+        .toLowerCase();
+    const redirectUrl = String(data.redirectUrl ?? "").trim();
+    /*
+    |--------------------------------------------------------------------------
+    | Validate Organization
+    |--------------------------------------------------------------------------
+    */
+    if (!organizationId) {
+        throw new Error("Organization ID is required.");
+    }
+    /*
+    |--------------------------------------------------------------------------
+    | Validate Name
+    |--------------------------------------------------------------------------
+    */
+    if (!fullName) {
+        throw new Error("Organizer full name is required.");
+    }
+    /*
+    |--------------------------------------------------------------------------
+    | Validate Email
+    |--------------------------------------------------------------------------
+    */
+    if (!email) {
+        throw new Error("Organizer email is required.");
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        throw new Error("A valid organizer email is required.");
+    }
+    /*
+    |--------------------------------------------------------------------------
+    | Validate Redirect URL
+    |--------------------------------------------------------------------------
+    */
+    if (!redirectUrl) {
+        throw new Error("Billing redirect URL is required.");
+    }
     /*
     |--------------------------------------------------------------------------
     | Validate Plan
@@ -228,126 +371,147 @@ async function createSubscriptionCheckout(data) {
     const pricing = getPlanPricing(data.country, data.plan, data.interval);
     /*
     |--------------------------------------------------------------------------
-    | Resolve Revolut Variation
-    |--------------------------------------------------------------------------
-    */
-    const revolutPlanVariationId = pricing.revolutPlanVariationId;
-    if (!revolutPlanVariationId ||
-        typeof revolutPlanVariationId !==
-            "string") {
-        throw new Error(`Revolut plan variation is not configured for ${data.country} / ${data.plan} / ${data.interval}.`);
-    }
-    /*
-    |--------------------------------------------------------------------------
     | Existing Subscription
     |--------------------------------------------------------------------------
     */
-    const existing = await getOrganizationSubscription(data.organizationId);
+    const existing = await getOrganizationSubscription(organizationId);
     /*
     |--------------------------------------------------------------------------
     | Active Paid Subscription
     |--------------------------------------------------------------------------
     |
-    | A TRIALING subscription is intentionally allowed to proceed.
+    | IMPORTANT:
     |
-    | The organization receives a free trial first and can then convert
-    | that trial into a paid Revolut subscription.
+    | ACTIVE means there is already a paid Stripe
+    | subscription.
     |
-    | Only an already ACTIVE paid subscription should block creation
-    | of another paid checkout.
+    | We must not create another subscription.
+    |
+    | TRIALING is deliberately NOT blocked here.
+    |
+    | A user on a WowYou trial must be able to
+    | transition into the Stripe paid subscription.
     |
     */
     if (existing &&
         existing.status ===
             client_1.SubscriptionStatus.ACTIVE) {
-        throw new Error("Organization already has an active paid subscription.");
+        throw new Error("Organization already has an active subscription.");
     }
     /*
     |--------------------------------------------------------------------------
     | Create / Update Pending Local Subscription
     |--------------------------------------------------------------------------
     */
-    const subscription = await createInitialSubscription(data.organizationId, data.plan, data.country, data.interval);
+    const subscription = await createInitialSubscription(organizationId, data.plan, data.country, data.interval);
     /*
     |--------------------------------------------------------------------------
-    | Create Revolut Customer
+    | Create Stripe Checkout
     |--------------------------------------------------------------------------
     */
-    const customer = await (0, revolut_service_1.createRevolutCustomer)({
-        fullName: data.fullName,
-        email: data.email,
-    });
-    /*
-    |--------------------------------------------------------------------------
-    | External Reference
-    |--------------------------------------------------------------------------
-    */
-    const externalReference = `org_${data.organizationId}_${Date.now()}`;
-    /*
-    |--------------------------------------------------------------------------
-    | Create Revolut Subscription
-    |--------------------------------------------------------------------------
-    */
-    const revolutSubscription = await (0, revolut_service_1.createRevolutSubscription)({
-        customerId: customer.id,
-        planVariationId: revolutPlanVariationId,
-        externalReference,
-        redirectUrl: data.redirectUrl,
-        idempotencyKey: externalReference,
-    });
-    /*
-    |--------------------------------------------------------------------------
-    | Setup Order
-    |--------------------------------------------------------------------------
-    */
-    const setupOrderId = revolutSubscription
-        .setup_order_id;
-    if (!setupOrderId) {
-        throw new Error("Revolut did not return a subscription setup order.");
-    }
-    /*
-    |--------------------------------------------------------------------------
-    | Get Hosted Checkout URL
-    |--------------------------------------------------------------------------
-    */
-    const order = await (0, revolut_service_1.getRevolutOrder)(setupOrderId);
-    if (!order.checkout_url) {
-        throw new Error("Revolut checkout URL was not returned.");
-    }
-    /*
-    |--------------------------------------------------------------------------
-    | Store Revolut References
-    |--------------------------------------------------------------------------
-    */
-    const updated = await prisma_1.prisma.organizationSubscription.update({
-        where: {
-            id: subscription.id,
-        },
-        data: {
-            status: client_1.SubscriptionStatus.PENDING,
-            provider: "REVOLUT",
-            providerCustomerId: customer.id,
-            providerSubscriptionId: revolutSubscription.id,
-            providerPriceId: revolutPlanVariationId,
-            providerSetupOrderId: setupOrderId,
-        },
-    });
-    /*
-    |--------------------------------------------------------------------------
-    | Return Checkout
-    |--------------------------------------------------------------------------
-    */
-    return {
-        subscription: updated,
-        checkoutUrl: order.checkout_url,
-        revolutSubscriptionId: revolutSubscription.id,
-        setupOrderId,
-        pricing: {
+    try {
+        const checkout = await (0, stripe_service_1.createStripeOrganizerSubscriptionCheckout)({
+            /*
+            |--------------------------------------------------------------------------
+            | WowYou Subscription
+            |--------------------------------------------------------------------------
+            */
+            organizationSubscriptionId: subscription.id,
+            organizationId,
+            /*
+            |--------------------------------------------------------------------------
+            | Plan
+            |--------------------------------------------------------------------------
+            */
+            plan: data.plan,
+            /*
+            |--------------------------------------------------------------------------
+            | Billing Country
+            |--------------------------------------------------------------------------
+            */
+            country: data.country,
+            /*
+            |--------------------------------------------------------------------------
+            | Billing Interval
+            |--------------------------------------------------------------------------
+            */
+            interval: data.interval,
+            /*
+            |--------------------------------------------------------------------------
+            | Organizer
+            |--------------------------------------------------------------------------
+            */
+            fullName,
+            email,
+            /*
+            |--------------------------------------------------------------------------
+            | Pricing
+            |--------------------------------------------------------------------------
+            */
             amount: pricing.amount,
             currency: pricing.currency,
-            interval: data.interval,
-            country: data.country,
-            plan: data.plan,
-        },
-    };
+            /*
+            |--------------------------------------------------------------------------
+            | Stripe Redirects
+            |--------------------------------------------------------------------------
+            */
+            successUrl: redirectUrl,
+            cancelUrl: redirectUrl,
+        });
+        /*
+        |--------------------------------------------------------------------------
+        | Store Stripe Price Reference
+        |--------------------------------------------------------------------------
+        |
+        | The Price is created/reused by stripe.service.ts.
+        |
+        | The actual Stripe Subscription ID and Customer ID
+        | are populated later by the webhook.
+        |
+        |--------------------------------------------------------------------------
+        */
+        const updated = await prisma_1.prisma.organizationSubscription.update({
+            where: {
+                id: subscription.id,
+            },
+            data: {
+                status: client_1.SubscriptionStatus.PENDING,
+                provider: "STRIPE",
+                providerPriceId: checkout.priceId,
+                providerSetupOrderId: null,
+            },
+        });
+        /*
+        |--------------------------------------------------------------------------
+        | Return Checkout
+        |--------------------------------------------------------------------------
+        */
+        return {
+            subscription: updated,
+            checkoutUrl: checkout.checkoutUrl,
+            stripeSessionId: checkout.sessionId,
+            stripePriceId: checkout.priceId,
+            pricing: {
+                amount: pricing.amount,
+                currency: pricing.currency,
+                interval: data.interval,
+                country: data.country,
+                plan: data.plan,
+            },
+        };
+    }
+    catch (error) {
+        /*
+        |--------------------------------------------------------------------------
+        | Stripe Checkout Failed
+        |--------------------------------------------------------------------------
+        |
+        | Keep the local subscription PENDING so the billing
+        | attempt remains traceable.
+        |
+        |--------------------------------------------------------------------------
+        */
+        console.error("STRIPE ORGANIZER SUBSCRIPTION CHECKOUT ERROR:", error);
+        throw error;
+    }
 }
