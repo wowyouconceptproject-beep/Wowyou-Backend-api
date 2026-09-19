@@ -172,6 +172,8 @@ model User {
 
   role UserRole
 
+  loginOtps LoginOtp[]
+
   settings UserSettings?
 
   isActive Boolean @default(true)
@@ -1345,5 +1347,19 @@ model EmailVerificationToken {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
+  @@index([expiresAt])
+}
+
+model LoginOtp {
+  id String @id @default(cuid())
+  userId String
+  codeHash String
+  expiresAt DateTime
+  attempts Int @default(0)
+  usedAt DateTime?
+  createdAt DateTime @default(now())
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([userId])
+  @@index([userId, createdAt])
   @@index([expiresAt])
 }

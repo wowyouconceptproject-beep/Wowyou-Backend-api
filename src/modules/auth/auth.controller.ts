@@ -7,12 +7,17 @@ import { AuthRequest } from "./auth.middleware";
 import {
   registerUser,
   loginUser,
+  completeLogin,
 } from "./auth.service";
 
 import {
   sendVerificationEmail,
   verifyUserEmail,
 } from "./email-verification.service";
+
+import {
+  resendLoginOtp,
+} from "./login-otp.service";
 
 /*
 |--------------------------------------------------------------------------
@@ -122,7 +127,7 @@ export async function login(
       );
 
     console.log(
-      "LOGIN SUCCESS:",
+      "LOGIN OTP REQUESTED:",
       email,
     );
 
@@ -143,6 +148,126 @@ export async function login(
       message:
         error?.message ||
         "Login failed",
+    });
+  }
+}
+
+/*
+|--------------------------------------------------------------------------
+| Verify Login OTP
+|--------------------------------------------------------------------------
+*/
+
+export async function verifyLoginCode(
+  req: Request,
+  res: Response,
+) {
+  try {
+    const email =
+      String(
+        req.body?.email ?? "",
+      )
+        .trim()
+        .toLowerCase();
+
+    const otp =
+      String(
+        req.body?.otp ?? "",
+      ).trim();
+
+    if (!email || !otp) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Email and verification code are required",
+      });
+    }
+
+    const result =
+      await completeLogin(
+        email,
+        otp,
+      );
+
+    console.log(
+      "LOGIN OTP VERIFIED:",
+      email,
+    );
+
+    return res.status(200).json({
+      success: true,
+      ...result,
+    });
+  } catch (error: any) {
+    console.error(
+      "VERIFY LOGIN OTP ERROR:",
+    );
+
+    console.error(error);
+
+    return res.status(400).json({
+      success: false,
+
+      message:
+        error?.message ||
+        "Verification failed",
+    });
+  }
+}
+
+/*
+|--------------------------------------------------------------------------
+| Resend Login OTP
+|--------------------------------------------------------------------------
+*/
+
+export async function resendLoginCode(
+  req: Request,
+  res: Response,
+) {
+  try {
+    const email =
+      String(
+        req.body?.email ?? "",
+      )
+        .trim()
+        .toLowerCase();
+
+    if (!email) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Email is required",
+      });
+    }
+
+    await resendLoginOtp(
+      email,
+    );
+
+    console.log(
+      "LOGIN OTP RESENT:",
+      email,
+    );
+
+    return res.status(200).json({
+      success: true,
+      message:
+        "Login code sent",
+    });
+  } catch (error: any) {
+    console.error(
+      "RESEND LOGIN OTP ERROR:",
+    );
+
+    console.error(error);
+
+    return res.status(400).json({
+      success: false,
+
+      message:
+        error?.message ||
+        "Failed to resend login code",
     });
   }
 }

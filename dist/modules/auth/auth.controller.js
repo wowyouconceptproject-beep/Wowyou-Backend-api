@@ -2,12 +2,15 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.register = register;
 exports.login = login;
+exports.verifyLoginCode = verifyLoginCode;
+exports.resendLoginCode = resendLoginCode;
 exports.verifyEmail = verifyEmail;
 exports.resendVerification = resendVerification;
 exports.me = me;
 const prisma_1 = require("../../lib/prisma");
 const auth_service_1 = require("./auth.service");
 const email_verification_service_1 = require("./email-verification.service");
+const login_otp_service_1 = require("./login-otp.service");
 /*
 |--------------------------------------------------------------------------
 | Register
@@ -60,7 +63,7 @@ async function login(req, res) {
         console.log("LOGIN ATTEMPT:", req.body?.email);
         const { email, password, } = req.body;
         const result = await (0, auth_service_1.loginUser)(email, password);
-        console.log("LOGIN SUCCESS:", email);
+        console.log("LOGIN OTP REQUESTED:", email);
         return res.status(200).json({
             success: true,
             ...result,
@@ -73,6 +76,73 @@ async function login(req, res) {
             success: false,
             message: error?.message ||
                 "Login failed",
+        });
+    }
+}
+/*
+|--------------------------------------------------------------------------
+| Verify Login OTP
+|--------------------------------------------------------------------------
+*/
+async function verifyLoginCode(req, res) {
+    try {
+        const email = String(req.body?.email ?? "")
+            .trim()
+            .toLowerCase();
+        const otp = String(req.body?.otp ?? "").trim();
+        if (!email || !otp) {
+            return res.status(400).json({
+                success: false,
+                message: "Email and verification code are required",
+            });
+        }
+        const result = await (0, auth_service_1.completeLogin)(email, otp);
+        console.log("LOGIN OTP VERIFIED:", email);
+        return res.status(200).json({
+            success: true,
+            ...result,
+        });
+    }
+    catch (error) {
+        console.error("VERIFY LOGIN OTP ERROR:");
+        console.error(error);
+        return res.status(400).json({
+            success: false,
+            message: error?.message ||
+                "Verification failed",
+        });
+    }
+}
+/*
+|--------------------------------------------------------------------------
+| Resend Login OTP
+|--------------------------------------------------------------------------
+*/
+async function resendLoginCode(req, res) {
+    try {
+        const email = String(req.body?.email ?? "")
+            .trim()
+            .toLowerCase();
+        if (!email) {
+            return res.status(400).json({
+                success: false,
+                message: "Email is required",
+            });
+        }
+        await (0, login_otp_service_1.resendLoginOtp)(email);
+        console.log("LOGIN OTP RESENT:", email);
+        return res.status(200).json({
+            success: true,
+            message: "Login code sent",
+        });
+    }
+    catch (error) {
+        console.error("RESEND LOGIN OTP ERROR:");
+        console.error(error);
+        return res.status(400).json({
+            success: false,
+            message: error?.message ||
+                "Failed to resend login code",
         });
     }
 }

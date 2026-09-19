@@ -6,7 +6,14 @@ import {
 
 import { prisma } from "../../lib/prisma";
 
-import { generateToken } from "./jwt";
+import {
+  generateToken,
+} from "./jwt";
+
+import {
+  createLoginOtp,
+  verifyLoginOtp,
+} from "./login-otp.service";
 
 /*
 |--------------------------------------------------------------------------
@@ -164,6 +171,10 @@ export async function registerUser(
   |--------------------------------------------------------------------------
   | Generate JWT
   |--------------------------------------------------------------------------
+  |
+  | We retain the existing registration behavior so we do not break the
+  | current organizer/attendee onboarding flow.
+  |
   */
 
   const token =
@@ -192,6 +203,9 @@ export async function registerUser(
     token,
 
     user: safeUser,
+
+    requiresEmailVerification:
+      !user.emailVerified,
   };
 }
 
@@ -199,6 +213,18 @@ export async function registerUser(
 |--------------------------------------------------------------------------
 | Login User
 |--------------------------------------------------------------------------
+|
+| Step 1:
+|   Verify email + password.
+|
+| Step 2:
+|   Send a 6-digit OTP.
+|
+| Step 3:
+|   Client submits OTP to /auth/verify-login-otp.
+|
+| JWT is NOT issued until the OTP is successfully verified.
+|
 */
 
 export async function loginUser(
@@ -209,6 +235,18 @@ export async function loginUser(
     email
       ?.trim()
       .toLowerCase();
+
+  /*
+  |--------------------------------------------------------------------------
+  | Validate Email
+  |--------------------------------------------------------------------------
+  */
+
+  if (!normalizedEmail) {
+    throw new Error(
+      "Email is required",
+    );
+  }
 
   /*
   |--------------------------------------------------------------------------
@@ -262,7 +300,73 @@ export async function loginUser(
 
   /*
   |--------------------------------------------------------------------------
-  | Generate JWT
+  | Generate Login OTP
+  |--------------------------------------------------------------------------
+  */
+
+  await createLoginOtp(
+    user.id,
+  );
+
+  /*
+  |--------------------------------------------------------------------------
+  | Do NOT issue JWT yet
+  |--------------------------------------------------------------------------
+  */
+
+  return {
+    requiresOtp: true,
+
+    email:
+      user.email,
+
+    message:
+      "A verification code has been sent to your email.",
+  };
+}
+
+/*
+|--------------------------------------------------------------------------
+| Complete Login
+|--------------------------------------------------------------------------
+|
+| Step 2 of authentication.
+|
+| Password has already been verified by loginUser().
+| The OTP now proves control of the verified email address.
+|
+*/
+
+export async function completeLogin(
+  email: string,
+  otp: string,
+) {
+  const normalizedEmail =
+    email
+      ?.trim()
+      .toLowerCase();
+
+  if (!normalizedEmail) {
+    throw new Error(
+      "Email is required",
+    );
+  }
+
+  /*
+  |--------------------------------------------------------------------------
+  | Verify OTP
+  |--------------------------------------------------------------------------
+  */
+
+  const user =
+    await verifyLoginOtp(
+      normalizedEmail,
+      otp,
+    );
+
+  /*
+  |--------------------------------------------------------------------------
+  | Final JWT
   |--------------------------------------------------------------------------
   */
 
@@ -284,7 +388,7 @@ export async function loginUser(
 
   /*
   |--------------------------------------------------------------------------
-  | Response
+  | Authenticated Response
   |--------------------------------------------------------------------------
   */
 

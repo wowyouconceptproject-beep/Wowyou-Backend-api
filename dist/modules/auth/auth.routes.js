@@ -12,6 +12,8 @@ router.get("/test", (_req, res) => {
 });
 router.post("/register", auth_controller_1.register);
 router.post("/login", auth_controller_1.login);
+router.post("/verify-login-otp", auth_controller_1.verifyLoginCode);
+router.post("/resend-login-otp", auth_controller_1.resendLoginCode);
 router.get("/verify-email", auth_controller_1.verifyEmail);
 router.post("/resend-verification", auth_controller_1.resendVerification);
 router.get("/me", auth_middleware_1.auth, auth_controller_1.me);
