@@ -93,8 +93,8 @@ async function registerUser(data) {
     | Generate JWT
     |--------------------------------------------------------------------------
     |
-    | We retain the existing registration behavior so we do not break the
-    | current organizer/attendee onboarding flow.
+    | Registration still returns a token for compatibility with the existing
+    | onboarding flow. Login remains blocked until email verification.
     |
     */
     const token = (0, jwt_1.generateToken)(user.id);
@@ -120,16 +120,13 @@ async function registerUser(data) {
 | Login User
 |--------------------------------------------------------------------------
 |
-| Step 1:
-|   Verify email + password.
+| Authentication flow:
 |
-| Step 2:
-|   Send a 6-digit OTP.
-|
-| Step 3:
-|   Client submits OTP to /auth/verify-login-otp.
-|
-| JWT is NOT issued until the OTP is successfully verified.
+| 1. Verify email + password.
+| 2. Confirm the account email has been verified.
+| 3. Send a 6-digit OTP.
+| 4. Client submits the OTP to /auth/verify-login-otp.
+| 5. JWT is issued only after successful OTP verification.
 |
 */
 async function loginUser(email, password) {
@@ -170,6 +167,15 @@ async function loginUser(email, password) {
     |--------------------------------------------------------------------------
     | Verify Email
     |--------------------------------------------------------------------------
+    |
+    | Email verification and login OTP are intentionally separate.
+    |
+    | Unverified account:
+    |   Password -> blocked -> verify email first
+    |
+    | Verified account:
+    |   Password -> login OTP -> JWT
+    |
     */
     if (!user.emailVerified) {
         throw new Error("Please verify your email address before logging in");
@@ -196,16 +202,21 @@ async function loginUser(email, password) {
 | Complete Login
 |--------------------------------------------------------------------------
 |
-| Step 2 of authentication.
+| Final authentication step.
 |
 | Password has already been verified by loginUser().
-| The OTP now proves control of the verified email address.
+| The OTP proves control of the verified email address.
 |
 */
 async function completeLogin(email, otp) {
     const normalizedEmail = email
         ?.trim()
         .toLowerCase();
+    /*
+    |--------------------------------------------------------------------------
+    | Validate Email
+    |--------------------------------------------------------------------------
+    */
     if (!normalizedEmail) {
         throw new Error("Email is required");
     }
