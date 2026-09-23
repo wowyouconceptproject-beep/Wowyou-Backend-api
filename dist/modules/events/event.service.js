@@ -1,6 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.createEvent = createEvent;
+exports.updateEvent = updateEvent;
 exports.getMyEvents = getMyEvents;
 exports.getEventById = getEventById;
 exports.publishEvent = publishEvent;
@@ -63,6 +64,177 @@ async function createEvent(userId, data) {
             },
         });
         return event;
+    });
+}
+/*
+|--------------------------------------------------------------------------
+| Update Event
+|--------------------------------------------------------------------------
+*/
+async function updateEvent(userId, eventId, data) {
+    const organization = await prisma_1.prisma.organization.findUnique({
+        where: {
+            ownerId: userId,
+        },
+    });
+    if (!organization) {
+        throw new Error("Organization not found");
+    }
+    const existingEvent = await prisma_1.prisma.event.findFirst({
+        where: {
+            id: eventId,
+            organizationId: organization.id,
+        },
+    });
+    if (!existingEvent) {
+        throw new Error("Event not found");
+    }
+    /*
+    |--------------------------------------------------------------------------
+    | Dates
+    |--------------------------------------------------------------------------
+    */
+    const startDate = data.startDate !== undefined
+        ? new Date(data.startDate)
+        : existingEvent.startDate;
+    const endDate = data.endDate !== undefined
+        ? new Date(data.endDate)
+        : existingEvent.endDate;
+    if (isNaN(startDate.getTime())) {
+        throw new Error(`Invalid startDate: ${data.startDate}`);
+    }
+    if (isNaN(endDate.getTime())) {
+        throw new Error(`Invalid endDate: ${data.endDate}`);
+    }
+    if (endDate <= startDate) {
+        throw new Error("End date must be after start date");
+    }
+    /*
+    |--------------------------------------------------------------------------
+    | Coordinates
+    |--------------------------------------------------------------------------
+    */
+    if (data.venueLatitude !== undefined &&
+        (data.venueLatitude < -90 ||
+            data.venueLatitude > 90)) {
+        throw new Error("Invalid venue latitude.");
+    }
+    if (data.venueLongitude !== undefined &&
+        (data.venueLongitude < -180 ||
+            data.venueLongitude > 180)) {
+        throw new Error("Invalid venue longitude.");
+    }
+    /*
+    |--------------------------------------------------------------------------
+    | Capacity
+    |--------------------------------------------------------------------------
+    */
+    if (data.capacity !== undefined) {
+        const capacity = Number(data.capacity);
+        if (!Number.isFinite(capacity) ||
+            capacity < 1) {
+            throw new Error("Capacity must be at least 1.");
+        }
+        if (capacity <
+            existingEvent.currentOccupancy) {
+            throw new Error(`Capacity cannot be lower than the current occupancy of ${existingEvent.currentOccupancy}.`);
+        }
+    }
+    /*
+    |--------------------------------------------------------------------------
+    | Text Validation
+    |--------------------------------------------------------------------------
+    */
+    if (data.title !== undefined &&
+        !data.title.trim()) {
+        throw new Error("Event title is required.");
+    }
+    if (data.description !== undefined &&
+        !data.description.trim()) {
+        throw new Error("Event description is required.");
+    }
+    if (data.venue !== undefined &&
+        !data.venue.trim()) {
+        throw new Error("Event venue is required.");
+    }
+    /*
+    |--------------------------------------------------------------------------
+    | Update
+    |--------------------------------------------------------------------------
+    */
+    return prisma_1.prisma.event.update({
+        where: {
+            id: existingEvent.id,
+        },
+        data: {
+            ...(data.title !== undefined
+                ? {
+                    title: data.title.trim(),
+                }
+                : {}),
+            ...(data.description !== undefined
+                ? {
+                    description: data.description.trim(),
+                }
+                : {}),
+            ...(data.venue !== undefined
+                ? {
+                    venue: data.venue.trim(),
+                }
+                : {}),
+            ...(data.venueAddress !== undefined
+                ? {
+                    venueAddress: data.venueAddress.trim(),
+                }
+                : {}),
+            ...(data.venueLatitude !== undefined
+                ? {
+                    venueLatitude: data.venueLatitude,
+                }
+                : {}),
+            ...(data.venueLongitude !== undefined
+                ? {
+                    venueLongitude: data.venueLongitude,
+                }
+                : {}),
+            ...(data.city !== undefined
+                ? {
+                    city: data.city.trim(),
+                }
+                : {}),
+            ...(data.country !== undefined
+                ? {
+                    country: data.country.trim(),
+                }
+                : {}),
+            ...(data.coverImage !== undefined
+                ? {
+                    coverImage: data.coverImage,
+                }
+                : {}),
+            ...(data.category !== undefined
+                ? {
+                    category: data.category,
+                }
+                : {}),
+            ...(data.capacity !== undefined
+                ? {
+                    capacity: Number(data.capacity),
+                }
+                : {}),
+            ...(data.currency !== undefined
+                ? {
+                    currency: data.currency,
+                }
+                : {}),
+            startDate,
+            endDate,
+            ...(data.isPublic !== undefined
+                ? {
+                    isPublic: data.isPublic,
+                }
+                : {}),
+        },
     });
 }
 async function getMyEvents(userId) {

@@ -20,6 +20,7 @@ import {
 
 import {
   create,
+  update,
   myEvents,
   getEvent,
   publish,
@@ -96,6 +97,28 @@ router.get(
   requireActiveSubscription,
   getEvent,
 );
+
+/*
+|--------------------------------------------------------------------------
+| Update Event
+|--------------------------------------------------------------------------
+|
+| Organizer can update an event belonging to their organization.
+|
+*/
+
+router.patch(
+  "/:id",
+  auth,
+  requireActiveSubscription,
+  update,
+);
+
+/*
+|--------------------------------------------------------------------------
+| Publish Event
+|--------------------------------------------------------------------------
+*/
 
 router.patch(
   "/:id/publish",

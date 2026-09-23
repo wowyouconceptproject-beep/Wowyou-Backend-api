@@ -9,6 +9,7 @@ import {
 
 import {
   createEvent,
+  updateEvent,
   getMyEvents,
   getEventById,
   getPublicEventById,
@@ -118,18 +119,122 @@ export async function create(
 
 /**
  * |--------------------------------------------------------------------------
+ * | Update Event
+ * |--------------------------------------------------------------------------
+ */
+
+export async function update(
+  req: AuthRequest,
+  res: Response,
+) {
+  try {
+    const {
+      title,
+      description,
+
+      venue,
+      venueAddress,
+      venueLatitude,
+      venueLongitude,
+      city,
+      country,
+
+      coverImage,
+      category,
+
+      capacity,
+      currency,
+
+      startDate,
+      endDate,
+
+      isPublic,
+    } = req.body;
+
+    const event =
+      await updateEvent(
+        req.user!.userId,
+        String(
+          req.params.id,
+        ),
+        {
+          title,
+          description,
+
+          venue,
+          venueAddress,
+
+          venueLatitude:
+            venueLatitude !== undefined &&
+            venueLatitude !== null
+              ? Number(
+                  venueLatitude,
+                )
+              : undefined,
+
+          venueLongitude:
+            venueLongitude !== undefined &&
+            venueLongitude !== null
+              ? Number(
+                  venueLongitude,
+                )
+              : undefined,
+
+          city,
+          country,
+
+          coverImage,
+          category,
+
+          capacity:
+            capacity !== undefined &&
+            capacity !== null
+              ? Number(
+                  capacity,
+                )
+              : undefined,
+
+          currency,
+
+          startDate,
+          endDate,
+
+          isPublic,
+        },
+      );
+
+    return res.json({
+      success: true,
+      event,
+    });
+  } catch (error: any) {
+    console.error(
+      "UPDATE EVENT ERROR:",
+      error,
+    );
+
+    return res.status(400).json({
+      success: false,
+      message:
+        error.message,
+    });
+  }
+}
+
+/**
+ * |--------------------------------------------------------------------------
  * | Organizer Events
  * |--------------------------------------------------------------------------
  */
 
 export async function myEvents(
   req: AuthRequest,
-  res: Response
+  res: Response,
 ) {
   try {
     const events =
       await getMyEvents(
-        req.user!.userId
+        req.user!.userId,
       );
 
     return res.json({
@@ -153,15 +258,15 @@ export async function myEvents(
 
 export async function getEvent(
   req: AuthRequest,
-  res: Response
+  res: Response,
 ) {
   try {
     const event =
       await getEventById(
         req.user!.userId,
         String(
-          req.params.id
-        )
+          req.params.id,
+        ),
       );
 
     return res.json({
@@ -185,15 +290,15 @@ export async function getEvent(
 
 export async function publish(
   req: AuthRequest,
-  res: Response
+  res: Response,
 ) {
   try {
     const event =
       await publishEvent(
         req.user!.userId,
         String(
-          req.params.id
-        )
+          req.params.id,
+        ),
       );
 
     return res.json({
@@ -209,6 +314,12 @@ export async function publish(
   }
 }
 
+/**
+ * |--------------------------------------------------------------------------
+ * | Public Event
+ * |--------------------------------------------------------------------------
+ */
+
 export async function getPublicEvent(
   req: Request,
   res: Response,
@@ -216,7 +327,9 @@ export async function getPublicEvent(
   try {
     const event =
       await getPublicEventById(
-        String(req.params.id),
+        String(
+          req.params.id,
+        ),
       );
 
     return res.json({
@@ -226,7 +339,6 @@ export async function getPublicEvent(
   } catch (error: any) {
     return res.status(404).json({
       success: false,
-
       message:
         error.message,
     });
@@ -241,7 +353,7 @@ export async function getPublicEvent(
 
 export async function publicEvents(
   _req: Request,
-  res: Response
+  res: Response,
 ) {
   try {
     const events =
@@ -268,14 +380,14 @@ export async function publicEvents(
 
 export async function register(
   req: AuthRequest,
-  res: Response
+  res: Response,
 ) {
   try {
     await registerForEvent(
       req.user!.userId,
       String(
-        req.params.id
-      )
+        req.params.id,
+      ),
     );
 
     return res.json({
@@ -300,12 +412,12 @@ export async function register(
 
 export async function myRegistrations(
   req: AuthRequest,
-  res: Response
+  res: Response,
 ) {
   try {
     const events =
       await getMyRegistrations(
-        req.user!.userId
+        req.user!.userId,
       );
 
     return res.json({
@@ -329,14 +441,14 @@ export async function myRegistrations(
 
 export async function attendees(
   req: AuthRequest,
-  res: Response
+  res: Response,
 ) {
   try {
     const attendees =
       await getEventAttendees(
         req.user!.userId,
         req.params
-          .eventId as string
+          .eventId as string,
       );
 
     return res.json({
@@ -351,4 +463,3 @@ export async function attendees(
     });
   }
 }
-

@@ -1,6 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.create = create;
+exports.update = update;
 exports.myEvents = myEvents;
 exports.getEvent = getEvent;
 exports.publish = publish;
@@ -49,6 +50,53 @@ async function create(req, res) {
     }
     catch (error) {
         console.error("CREATE EVENT ERROR:", error);
+        return res.status(400).json({
+            success: false,
+            message: error.message,
+        });
+    }
+}
+/**
+ * |--------------------------------------------------------------------------
+ * | Update Event
+ * |--------------------------------------------------------------------------
+ */
+async function update(req, res) {
+    try {
+        const { title, description, venue, venueAddress, venueLatitude, venueLongitude, city, country, coverImage, category, capacity, currency, startDate, endDate, isPublic, } = req.body;
+        const event = await (0, event_service_1.updateEvent)(req.user.userId, String(req.params.id), {
+            title,
+            description,
+            venue,
+            venueAddress,
+            venueLatitude: venueLatitude !== undefined &&
+                venueLatitude !== null
+                ? Number(venueLatitude)
+                : undefined,
+            venueLongitude: venueLongitude !== undefined &&
+                venueLongitude !== null
+                ? Number(venueLongitude)
+                : undefined,
+            city,
+            country,
+            coverImage,
+            category,
+            capacity: capacity !== undefined &&
+                capacity !== null
+                ? Number(capacity)
+                : undefined,
+            currency,
+            startDate,
+            endDate,
+            isPublic,
+        });
+        return res.json({
+            success: true,
+            event,
+        });
+    }
+    catch (error) {
+        console.error("UPDATE EVENT ERROR:", error);
         return res.status(400).json({
             success: false,
             message: error.message,
@@ -115,6 +163,11 @@ async function publish(req, res) {
         });
     }
 }
+/**
+ * |--------------------------------------------------------------------------
+ * | Public Event
+ * |--------------------------------------------------------------------------
+ */
 async function getPublicEvent(req, res) {
     try {
         const event = await (0, event_service_1.getPublicEventById)(String(req.params.id));

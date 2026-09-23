@@ -40,6 +40,20 @@ router.get("/public/:id", event_controller_1.getPublicEvent);
 router.get("/my", auth_middleware_1.auth, billing_middleware_1.requireActiveSubscription, event_controller_1.myEvents);
 router.get("/my-registrations", auth_middleware_1.auth, event_controller_1.myRegistrations);
 router.get("/:id", auth_middleware_1.auth, billing_middleware_1.requireActiveSubscription, event_controller_1.getEvent);
+/*
+|--------------------------------------------------------------------------
+| Update Event
+|--------------------------------------------------------------------------
+|
+| Organizer can update an event belonging to their organization.
+|
+*/
+router.patch("/:id", auth_middleware_1.auth, billing_middleware_1.requireActiveSubscription, event_controller_1.update);
+/*
+|--------------------------------------------------------------------------
+| Publish Event
+|--------------------------------------------------------------------------
+*/
 router.patch("/:id/publish", auth_middleware_1.auth, billing_middleware_1.requireActiveSubscription, event_controller_1.publish);
 /*
 |--------------------------------------------------------------------------
