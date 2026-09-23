@@ -218,6 +218,46 @@ export async function createPurchase(
 
   /*
   |--------------------------------------------------------------------------
+  | Load Attendee
+  |--------------------------------------------------------------------------
+  |
+  | The authenticated attendee is the source of truth for the payment
+  | customer email.
+  |
+  | This email is intentionally kept separate from the organizer email.
+  |
+  */
+
+  const attendee =
+    await prisma.user.findUnique({
+      where: {
+        id: userId,
+      },
+
+      select: {
+        email: true,
+      },
+    });
+
+  if (!attendee?.email) {
+    throw new Error(
+      "Attendee email address not found.",
+    );
+  }
+
+  const attendeeEmail =
+    attendee.email
+      .trim()
+      .toLowerCase();
+
+  if (!attendeeEmail) {
+    throw new Error(
+      "Attendee email address not found.",
+    );
+  }
+
+  /*
+  |--------------------------------------------------------------------------
   | Load Ticket
   |--------------------------------------------------------------------------
   */
@@ -659,6 +699,22 @@ export async function createPurchase(
           `${ticket.event.title} - ${ticket.name}`,
 
         quantity,
+
+        /*
+        |--------------------------------------------------------------------------
+        | Attendee Customer Email
+        |--------------------------------------------------------------------------
+        |
+        | IMPORTANT:
+        | This must always be the attendee's email.
+        |
+        | It is used by Stripe Checkout as the customer email and prevents
+        | Stripe payment receipts from being associated with the organizer.
+        |
+        */
+
+        customerEmail:
+          attendeeEmail,
 
         successUrl:
           paymentReturnUrl,

@@ -103,6 +103,8 @@ enum EventCategory {
   FAMILY
   CHARITY
   GOVERNMENT
+  ENTERTAINMENT
+  COMMUNITY
   OTHER
 }
 
