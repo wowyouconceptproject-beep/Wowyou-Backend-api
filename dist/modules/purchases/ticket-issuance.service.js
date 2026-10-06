@@ -42,7 +42,19 @@ function generateNfcToken() {
 }
 /*
 |--------------------------------------------------------------------------
-| Send Ticket Purchase Email
+| Send Attendee Ticket Purchase Email
+|--------------------------------------------------------------------------
+|
+| SOURCE OF TRUTH:
+|
+| The attendee email comes ONLY from:
+|
+|     purchase.user.email
+|
+| This email contains the attendee's ticket and QR code.
+|
+| It must NEVER use the organization owner email.
+|
 |--------------------------------------------------------------------------
 */
 async function sendTicketPurchaseEmail(purchaseId) {
@@ -79,14 +91,21 @@ async function sendTicketPurchaseEmail(purchaseId) {
             id: purchaseId,
         },
         include: {
+            /*
+            |--------------------------------------------------------------------------
+            | Attendee
+            |--------------------------------------------------------------------------
+            |
+            | THIS IS THE SOURCE OF TRUTH FOR THE ATTENDEE EMAIL.
+            |
+            */
             user: true,
             event: {
-                include: {
-                    organization: {
-                        include: {
-                            owner: true,
-                        },
-                    },
+                select: {
+                    id: true,
+                    title: true,
+                    startDate: true,
+                    venue: true,
                 },
             },
             ticket: true,
@@ -102,15 +121,39 @@ async function sendTicketPurchaseEmail(purchaseId) {
         },
     });
     if (!purchase) {
-        throw new Error("Purchase not found while sending ticket email.");
+        throw new Error("Purchase not found while sending attendee ticket email.");
     }
+    /*
+    |--------------------------------------------------------------------------
+    | Verify Purchase
+    |--------------------------------------------------------------------------
+    */
     if (purchase.status !==
         "PAID") {
-        throw new Error("Cannot send ticket email for an unpaid purchase.");
+        throw new Error("Cannot send attendee ticket email for an unpaid purchase.");
     }
+    /*
+    |--------------------------------------------------------------------------
+    | Verify Passes
+    |--------------------------------------------------------------------------
+    */
     if (purchase.passes.length ===
         0) {
-        throw new Error("Cannot send ticket email because no passes have been issued.");
+        throw new Error("Cannot send attendee ticket email because no passes have been issued.");
+    }
+    /*
+    |--------------------------------------------------------------------------
+    | Attendee Email
+    |--------------------------------------------------------------------------
+    |
+    | Normalize the attendee email independently.
+    |
+    */
+    const attendeeEmail = purchase.user.email
+        ?.trim()
+        .toLowerCase();
+    if (!attendeeEmail) {
+        throw new Error("Attendee email address not found.");
     }
     /*
     |--------------------------------------------------------------------------
@@ -131,10 +174,11 @@ async function sendTicketPurchaseEmail(purchaseId) {
     });
     /*
     |--------------------------------------------------------------------------
-    | Build Email
+    | Build Attendee Email
     |--------------------------------------------------------------------------
     */
-    const firstName = purchase.user.firstName?.trim() ||
+    const firstName = purchase.user.firstName
+        ?.trim() ||
         "there";
     const template = (0, email_templates_1.ticketPurchaseEmailTemplate)({
         firstName,
@@ -149,12 +193,17 @@ async function sendTicketPurchaseEmail(purchaseId) {
     });
     /*
     |--------------------------------------------------------------------------
-    | Send Email
+    | Send Attendee Email
     |--------------------------------------------------------------------------
+    |
+    | IMPORTANT:
+    |
+    | `to` is explicitly the attendee email.
+    |
     */
     return (0, email_service_1.sendEmail)({
         type: "TICKET_PURCHASE",
-        to: purchase.user.email,
+        to: attendeeEmail,
         subject: template.subject,
         html: template.html,
         text: template.text,
@@ -175,6 +224,16 @@ async function sendTicketPurchaseEmail(purchaseId) {
 /*
 |--------------------------------------------------------------------------
 | Send Organizer Ticket Sale Email
+|--------------------------------------------------------------------------
+|
+| SOURCE OF TRUTH:
+|
+| The organizer email comes ONLY from:
+|
+|     purchase.event.organization.owner.email
+|
+| This is completely separate from the attendee email.
+|
 |--------------------------------------------------------------------------
 */
 async function sendOrganizerTicketSaleEmail(purchaseId) {
@@ -211,6 +270,14 @@ async function sendOrganizerTicketSaleEmail(purchaseId) {
             id: purchaseId,
         },
         include: {
+            /*
+            |--------------------------------------------------------------------------
+            | Buyer
+            |--------------------------------------------------------------------------
+            |
+            | Used only for buyer information displayed to organizer.
+            |
+            */
             user: true,
             event: {
                 include: {
@@ -227,6 +294,11 @@ async function sendOrganizerTicketSaleEmail(purchaseId) {
     if (!purchase) {
         throw new Error("Purchase not found while sending organizer sale email.");
     }
+    /*
+    |--------------------------------------------------------------------------
+    | Verify Purchase
+    |--------------------------------------------------------------------------
+    */
     if (purchase.status !==
         "PAID") {
         throw new Error("Cannot send organizer sale email for an unpaid purchase.");
@@ -238,16 +310,34 @@ async function sendOrganizerTicketSaleEmail(purchaseId) {
     */
     const organization = purchase.event.organization;
     const organizer = organization.owner;
-    if (!organizer?.email) {
+    /*
+    |--------------------------------------------------------------------------
+    | Organizer Email
+    |--------------------------------------------------------------------------
+    |
+    | This is intentionally NOT purchase.user.email.
+    |
+    */
+    const organizerEmail = organizer?.email
+        ?.trim()
+        .toLowerCase();
+    if (!organizerEmail) {
         throw new Error("Organization owner email not found.");
     }
     /*
     |--------------------------------------------------------------------------
-    | Build Email
+    | Buyer Information
     |--------------------------------------------------------------------------
     */
-    const buyerName = `${purchase.user.firstName} ${purchase.user.lastName}`
-        .trim();
+    const buyerName = `${purchase.user.firstName ?? ""} ${purchase.user.lastName ?? ""}`.trim();
+    const buyerEmail = purchase.user.email
+        ?.trim()
+        .toLowerCase();
+    /*
+    |--------------------------------------------------------------------------
+    | Build Organizer Email
+    |--------------------------------------------------------------------------
+    */
     const template = (0, email_templates_1.organizerTicketSaleEmailTemplate)({
         organizationName: organization.name,
         eventTitle: purchase.event.title,
@@ -257,19 +347,34 @@ async function sendOrganizerTicketSaleEmail(purchaseId) {
         currency: purchase.currency,
         buyerName: buyerName ||
             "Attendee",
-        buyerEmail: purchase.user.email,
+        buyerEmail: buyerEmail ||
+            "Unavailable",
     });
     /*
     |--------------------------------------------------------------------------
-    | Send Email
+    | Send Organizer Email
     |--------------------------------------------------------------------------
+    |
+    | IMPORTANT:
+    |
+    | `to` is explicitly the organizer email.
+    |
     */
     return (0, email_service_1.sendEmail)({
         type: "ORGANIZER_TICKET_SALE",
-        to: organizer.email,
+        to: organizerEmail,
         subject: template.subject,
         html: template.html,
         text: template.text,
+        /*
+        |--------------------------------------------------------------------------
+        | Delivery User
+        |--------------------------------------------------------------------------
+        |
+        | The email recipient is the organizer, therefore the delivery record
+        | belongs to the organizer.
+        |
+        */
         userId: organizer.id,
         purchaseId: purchase.id,
         eventId: purchase.eventId,
@@ -305,7 +410,7 @@ async function sendOrganizerTicketSaleEmail(purchaseId) {
 async function issuePurchase(purchaseId) {
     /*
     |--------------------------------------------------------------------------
-    | Purchase
+    | Initial Purchase Lookup
     |--------------------------------------------------------------------------
     */
     const purchase = await prisma_1.prisma.ticketPurchase.findUnique({
@@ -324,7 +429,7 @@ async function issuePurchase(purchaseId) {
     }
     /*
     |--------------------------------------------------------------------------
-    | Purchase Status
+    | Verify Paid State
     |--------------------------------------------------------------------------
     */
     if (purchase.status !==
@@ -336,21 +441,31 @@ async function issuePurchase(purchaseId) {
     | Fast Idempotency
     |--------------------------------------------------------------------------
     |
-    | If passes already exist, do not create them again.
+    | If passes already exist:
     |
-    | We still run the email functions because a previous attempt may have
-    | created the passes but failed to deliver one or both emails.
+    | 1. Do not create them again.
+    | 2. Retry attendee email if necessary.
+    | 3. Retry organizer email if necessary.
     |
-    |--------------------------------------------------------------------------
     */
     if (purchase.passes.length >
         0) {
+        /*
+        |--------------------------------------------------------------------------
+        | Attendee Email
+        |--------------------------------------------------------------------------
+        */
         try {
             await sendTicketPurchaseEmail(purchaseId);
         }
         catch (error) {
             console.error("Failed to send attendee ticket email:", error);
         }
+        /*
+        |--------------------------------------------------------------------------
+        | Organizer Email
+        |--------------------------------------------------------------------------
+        */
         try {
             await sendOrganizerTicketSaleEmail(purchaseId);
         }
@@ -445,7 +560,8 @@ async function issuePurchase(purchaseId) {
                 purchaseId: lockedPurchase.id,
                 type: "PASS_ISSUED",
                 title: "Ticket Issued",
-                description: `${lockedPurchase.quantity} pass${lockedPurchase.quantity === 1
+                description: `${lockedPurchase.quantity} pass${lockedPurchase.quantity ===
+                    1
                     ? ""
                     : "es"} issued.`,
                 payload: {
@@ -459,14 +575,13 @@ async function issuePurchase(purchaseId) {
     });
     /*
     |--------------------------------------------------------------------------
-    | Post-Transaction Emails
+    | Post-Transaction Attendee Email
     |--------------------------------------------------------------------------
     |
-    | These intentionally execute after the transaction has committed.
+    | The transaction has already committed.
     |
-    | Email failure must never invalidate an already-issued ticket.
+    | Email failure must NEVER invalidate an already-issued ticket.
     |
-    |--------------------------------------------------------------------------
     */
     try {
         await sendTicketPurchaseEmail(purchaseId);
@@ -474,6 +589,11 @@ async function issuePurchase(purchaseId) {
     catch (error) {
         console.error("Failed to send attendee ticket email:", error);
     }
+    /*
+    |--------------------------------------------------------------------------
+    | Post-Transaction Organizer Email
+    |--------------------------------------------------------------------------
+    */
     try {
         await sendOrganizerTicketSaleEmail(purchaseId);
     }

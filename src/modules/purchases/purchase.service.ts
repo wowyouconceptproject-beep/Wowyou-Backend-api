@@ -1,6 +1,8 @@
 import { prisma } from "../../lib/prisma";
 
-import { createStripeCheckoutSession } from "../payments/stripe/stripe.service";
+import {
+  createStripeCheckoutSession,
+} from "../payments/stripe/stripe.service";
 
 import {
   issuePurchase,
@@ -10,15 +12,6 @@ import {
 |--------------------------------------------------------------------------
 | Purchase Checkout Channel
 |--------------------------------------------------------------------------
-|
-| MOBILE:
-| Existing attendee mobile app flow.
-|
-| WEB:
-| Public event page → Stripe Checkout → web attendee dashboard.
-|
-| MOBILE remains the default so existing callers remain compatible.
-|
 */
 
 export type PurchaseCheckoutChannel =
@@ -29,21 +22,12 @@ export type PurchaseCheckoutChannel =
 |--------------------------------------------------------------------------
 | Currency Minor Units
 |--------------------------------------------------------------------------
-|
-| Stripe expects payment amounts in the smallest currency unit.
-|
-| Example:
-|
-| USD 25.00 → 2500
-| EUR 25.00 → 2500
-| JPY 2500 → 2500
-|
 */
 
 function toMinorUnits(
   amount: number,
   currency: string,
-) {
+): number {
   const normalized =
     currency
       .trim()
@@ -74,9 +58,7 @@ function toMinorUnits(
       normalized,
     )
   ) {
-    return Math.round(
-      amount,
-    );
+    return Math.round(amount);
   }
 
   return Math.round(
@@ -86,25 +68,14 @@ function toMinorUnits(
 
 /*
 |--------------------------------------------------------------------------
-| Build Payment Return URL
+| Payment Return URL
 |--------------------------------------------------------------------------
-|
-| IMPORTANT:
-|
-| We do NOT accept an arbitrary redirect URL from the browser.
-|
-| The backend decides the destination based on the checkout channel.
-|
-| Stripe redirects the attendee here after Checkout.
-|
-| Payment confirmation itself remains controlled by the Stripe webhook.
-|
 */
 
 function getPaymentReturnUrl(
   purchaseId: string,
   channel: PurchaseCheckoutChannel,
-) {
+): string {
   /*
   |--------------------------------------------------------------------------
   | Web Attendee Checkout
@@ -116,12 +87,9 @@ function getPaymentReturnUrl(
   ) {
     const webUrl =
       (
-        process.env
-          .ATTENDEE_WEB_URL ??
-        process.env
-          .WEB_APP_URL ??
-        process.env
-          .FRONTEND_URL ??
+        process.env.ATTENDEE_WEB_URL ??
+        process.env.WEB_APP_URL ??
+        process.env.FRONTEND_URL ??
         ""
       ).replace(
         /\/+$/,
@@ -141,18 +109,13 @@ function getPaymentReturnUrl(
 
   /*
   |--------------------------------------------------------------------------
-  | Existing Mobile Attendee Checkout
+  | Mobile Attendee Checkout
   |--------------------------------------------------------------------------
-  |
-  | Keep the existing mobile callback behavior.
-  |
   */
 
   const mobileReturnUrl =
-    process.env
-      .PAYMENT_RETURN_URL ??
-    process.env
-      .FRONTEND_URL;
+    process.env.PAYMENT_RETURN_URL ??
+    process.env.FRONTEND_URL;
 
   if (!mobileReturnUrl) {
     throw new Error(
@@ -175,8 +138,7 @@ export async function createPurchase(
   userId: string,
   ticketTypeId: string,
   quantity: number,
-  channel: PurchaseCheckoutChannel =
-    "mobile",
+  channel: PurchaseCheckoutChannel = "mobile",
 ) {
   /*
   |--------------------------------------------------------------------------
@@ -197,9 +159,7 @@ export async function createPurchase(
   }
 
   if (
-    !Number.isInteger(
-      quantity,
-    ) ||
+    !Number.isInteger(quantity) ||
     quantity < 1
   ) {
     throw new Error(
@@ -218,13 +178,14 @@ export async function createPurchase(
 
   /*
   |--------------------------------------------------------------------------
-  | Load Attendee
+  | Attendee Email
   |--------------------------------------------------------------------------
   |
-  | The authenticated attendee is the source of truth for the payment
-  | customer email.
+  | The authenticated attendee is the source of truth.
   |
-  | This email is intentionally kept separate from the organizer email.
+  | IMPORTANT:
+  | This is deliberately loaded from the User record and is completely
+  | separate from the event organization/organizer email.
   |
   */
 
@@ -235,11 +196,18 @@ export async function createPurchase(
       },
 
       select: {
+        id: true,
         email: true,
       },
     });
 
-  if (!attendee?.email) {
+  if (!attendee) {
+    throw new Error(
+      "Attendee account not found.",
+    );
+  }
+
+  if (!attendee.email) {
     throw new Error(
       "Attendee email address not found.",
     );
@@ -281,7 +249,7 @@ export async function createPurchase(
 
   /*
   |--------------------------------------------------------------------------
-  | Availability
+  | Ticket Availability
   |--------------------------------------------------------------------------
   */
 
@@ -331,8 +299,7 @@ export async function createPurchase(
   }
 
   if (
-    quantity >
-    remaining
+    quantity > remaining
   ) {
     throw new Error(
       `Only ${remaining} ticket${
@@ -389,12 +356,6 @@ export async function createPurchase(
   |--------------------------------------------------------------------------
   | Free Ticket
   |--------------------------------------------------------------------------
-  |
-  | Free tickets do not go through Stripe.
-  |
-  | The existing registration + purchase + ticket issuance behavior
-  | remains intact.
-  |
   */
 
   if (
@@ -412,8 +373,7 @@ export async function createPurchase(
           const currentTicket =
             await tx.ticketType.findUnique({
               where: {
-                id:
-                  ticketTypeId,
+                id: ticketTypeId,
               },
             });
 
@@ -465,11 +425,9 @@ export async function createPurchase(
           const inventory =
             await tx.ticketType.updateMany({
               where: {
-                id:
-                  ticketTypeId,
+                id: ticketTypeId,
 
-                isActive:
-                  true,
+                isActive: true,
 
                 sold: {
                   lte:
@@ -480,15 +438,13 @@ export async function createPurchase(
 
               data: {
                 sold: {
-                  increment:
-                    quantity,
+                  increment: quantity,
                 },
               },
             });
 
           if (
-            inventory.count !==
-            1
+            inventory.count !== 1
           ) {
             throw new Error(
               "Ticket inventory changed. Please try again.",
@@ -567,14 +523,10 @@ export async function createPurchase(
   | Paid Ticket
   |--------------------------------------------------------------------------
   |
-  | Create a pending purchase first.
-  |
-  | IMPORTANT:
+  | Create a pending purchase.
   |
   | Inventory is NOT reserved here.
-  |
-  | Inventory is only incremented after Stripe confirms payment through
-  | the authoritative Stripe webhook.
+  | Stripe webhook remains authoritative.
   |
   */
 
@@ -613,11 +565,8 @@ export async function createPurchase(
 
   /*
   |--------------------------------------------------------------------------
-  | Convert Amount
+  | Stripe Amount
   |--------------------------------------------------------------------------
-  |
-  | Stripe Checkout expects the amount in minor currency units.
-  |
   */
 
   const stripeAmount =
@@ -634,8 +583,7 @@ export async function createPurchase(
   ) {
     await prisma.ticketPurchase.delete({
       where: {
-        id:
-          purchase.id,
+        id: purchase.id,
       },
     });
 
@@ -646,7 +594,7 @@ export async function createPurchase(
 
   /*
   |--------------------------------------------------------------------------
-  | Return URL
+  | Payment Return URL
   |--------------------------------------------------------------------------
   */
 
@@ -658,14 +606,8 @@ export async function createPurchase(
 
   /*
   |--------------------------------------------------------------------------
-  | Create Stripe Checkout Session
+  | Stripe Checkout
   |--------------------------------------------------------------------------
-  |
-  | Stripe handles the customer-facing payment page.
-  |
-  | The backend keeps the purchase PENDING until the Stripe webhook
-  | confirms the payment.
-  |
   */
 
   try {
@@ -686,15 +628,6 @@ export async function createPurchase(
 
         currency,
 
-        /*
-        |--------------------------------------------------------------------------
-        | Stripe Service Contract
-        |--------------------------------------------------------------------------
-        |
-        | stripe.service.ts expects `productName`.
-        |
-        */
-
         productName:
           `${ticket.event.title} - ${ticket.name}`,
 
@@ -702,14 +635,12 @@ export async function createPurchase(
 
         /*
         |--------------------------------------------------------------------------
-        | Attendee Customer Email
+        | ATTENDEE EMAIL
         |--------------------------------------------------------------------------
         |
-        | IMPORTANT:
-        | This must always be the attendee's email.
+        | This is the purchaser's email.
         |
-        | It is used by Stripe Checkout as the customer email and prevents
-        | Stripe payment receipts from being associated with the organizer.
+        | Do NOT replace this with the organization email.
         |
         */
 
@@ -729,13 +660,17 @@ export async function createPurchase(
     |--------------------------------------------------------------------------
     */
 
-    if (!session.sessionId) {
+    if (
+      !session.sessionId
+    ) {
       throw new Error(
         "Stripe did not return a Checkout Session ID.",
       );
     }
 
-    if (!session.checkoutUrl) {
+    if (
+      !session.checkoutUrl
+    ) {
       throw new Error(
         "Stripe did not return a Checkout URL.",
       );
@@ -743,20 +678,14 @@ export async function createPurchase(
 
     /*
     |--------------------------------------------------------------------------
-    | Store Stripe Checkout Session Reference
+    | Store Stripe Session
     |--------------------------------------------------------------------------
-    |
-    | stripe.service.ts returns `sessionId`.
-    |
-    | We store the Stripe Checkout Session ID as the payment reference.
-    |
     */
 
     const updatedPurchase =
       await prisma.ticketPurchase.update({
         where: {
-          id:
-            purchase.id,
+          id: purchase.id,
         },
 
         data: {
@@ -796,17 +725,12 @@ export async function createPurchase(
     |--------------------------------------------------------------------------
     | Cleanup Pending Purchase
     |--------------------------------------------------------------------------
-    |
-    | If Stripe Checkout could not be initialized, the purchase is not
-    | useful and no payment exists. Remove the pending record.
-    |
     */
 
     try {
       await prisma.ticketPurchase.delete({
         where: {
-          id:
-            purchase.id,
+          id: purchase.id,
         },
       });
     } catch (
@@ -873,12 +797,12 @@ export async function getMyTickets(
       passes: {
         where: {
           isActive: true,
+
           isRevoked: false,
         },
 
         orderBy: {
-          createdAt:
-            "asc",
+          createdAt: "asc",
         },
       },
 
@@ -903,8 +827,7 @@ export async function getMyTickets(
     },
 
     orderBy: {
-      createdAt:
-        "desc",
+      createdAt: "desc",
     },
   });
 }
@@ -922,21 +845,28 @@ export async function getPurchasePaymentStatus(
   const purchase =
     await prisma.ticketPurchase.findFirst({
       where: {
-        id:
-          purchaseId,
+        id: purchaseId,
 
         userId,
       },
 
       select: {
         id: true,
+
         status: true,
+
         gatewayStatus: true,
+
         paymentProvider: true,
+
         paymentReference: true,
+
         paymentCompletedAt: true,
+
         amount: true,
+
         currency: true,
+
         quantity: true,
 
         event: {
@@ -955,10 +885,9 @@ export async function getPurchasePaymentStatus(
 
         passes: {
           where: {
-            isActive:
-              true,
-            isRevoked:
-              false,
+            isActive: true,
+
+            isRevoked: false,
           },
 
           select: {
@@ -975,8 +904,7 @@ export async function getPurchasePaymentStatus(
   }
 
   return {
-    id:
-      purchase.id,
+    id: purchase.id,
 
     status:
       purchase.status,
@@ -1012,8 +940,7 @@ export async function getPurchasePaymentStatus(
       purchase.passes,
 
     hasPass:
-      purchase.passes.length >
-      0,
+      purchase.passes.length > 0,
   };
 }
 
@@ -1040,13 +967,12 @@ export async function getMyEvents(
             where: {
               OR: [
                 {
-                  expiresAt:
-                    null,
+                  expiresAt: null,
                 },
+
                 {
                   expiresAt: {
-                    gt:
-                      new Date(),
+                    gt: new Date(),
                   },
                 },
               ],
@@ -1054,12 +980,11 @@ export async function getMyEvents(
 
             orderBy: [
               {
-                isPinned:
-                  "desc",
+                isPinned: "desc",
               },
+
               {
-                createdAt:
-                  "desc",
+                createdAt: "desc",
               },
             ],
 
@@ -1072,10 +997,9 @@ export async function getMyEvents(
 
       passes: {
         where: {
-          isActive:
-            true,
-          isRevoked:
-            false,
+          isActive: true,
+
+          isRevoked: false,
         },
       },
 
@@ -1084,8 +1008,7 @@ export async function getMyEvents(
 
     orderBy: {
       event: {
-        startDate:
-          "asc",
+        startDate: "asc",
       },
     },
   });
@@ -1104,29 +1027,38 @@ export async function getMyEvent(
   const purchase =
     await prisma.ticketPurchase.findFirst({
       where: {
-        id:
-          purchaseId,
+        id: purchaseId,
 
         userId,
 
-        status:
-          "PAID",
+        status: "PAID",
       },
 
       include: {
+        /*
+        |--------------------------------------------------------------------------
+        | Event
+        |--------------------------------------------------------------------------
+        */
+
         event: {
           include: {
+            /*
+            |--------------------------------------------------------------------------
+            | Announcements
+            |--------------------------------------------------------------------------
+            */
+
             announcements: {
               where: {
                 OR: [
                   {
-                    expiresAt:
-                      null,
+                    expiresAt: null,
                   },
+
                   {
                     expiresAt: {
-                      gt:
-                        new Date(),
+                      gt: new Date(),
                     },
                   },
                 ],
@@ -1134,35 +1066,56 @@ export async function getMyEvent(
 
               orderBy: [
                 {
-                  isPinned:
-                    "desc",
+                  isPinned: "desc",
                 },
+
                 {
-                  createdAt:
-                    "desc",
+                  createdAt: "desc",
                 },
               ],
             },
 
+            /*
+            |--------------------------------------------------------------------------
+            | Sessions
+            |--------------------------------------------------------------------------
+            */
+
             sessions: {
               orderBy: {
-                startTime:
-                  "asc",
+                startTime: "asc",
               },
             },
           },
         },
 
+        /*
+        |--------------------------------------------------------------------------
+        | Purchased Ticket
+        |--------------------------------------------------------------------------
+        */
+
         ticket: true,
+
+        /*
+        |--------------------------------------------------------------------------
+        | Active Passes
+        |--------------------------------------------------------------------------
+        */
 
         passes: {
           where: {
-            isActive:
-              true,
-            isRevoked:
-              false,
+            isActive: true,
+
+            isRevoked: false,
           },
         },
+
+        /*
+        |--------------------------------------------------------------------------
+        | Check-In
+        |--------------------------------------------------------------------------
+        */
 
         checkIn: {
           include: {
@@ -1170,17 +1123,27 @@ export async function getMyEvent(
           },
         },
 
+        /*
+        |--------------------------------------------------------------------------
+        | Attendee Activities
+        |--------------------------------------------------------------------------
+        */
+
         activities: {
           orderBy: {
-            createdAt:
-              "desc",
+            createdAt: "desc",
           },
         },
 
+        /*
+        |--------------------------------------------------------------------------
+        | Attendee
+        |--------------------------------------------------------------------------
+        */
+
         user: {
           include: {
-            attendeeProfile:
-              true,
+            attendeeProfile: true,
           },
         },
       },

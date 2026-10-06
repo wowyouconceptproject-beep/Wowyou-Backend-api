@@ -12,15 +12,6 @@ const ticket_issuance_service_1 = require("./ticket-issuance.service");
 |--------------------------------------------------------------------------
 | Currency Minor Units
 |--------------------------------------------------------------------------
-|
-| Stripe expects payment amounts in the smallest currency unit.
-|
-| Example:
-|
-| USD 25.00 → 2500
-| EUR 25.00 → 2500
-| JPY 2500 → 2500
-|
 */
 function toMinorUnits(amount, currency) {
     const normalized = currency
@@ -51,19 +42,8 @@ function toMinorUnits(amount, currency) {
 }
 /*
 |--------------------------------------------------------------------------
-| Build Payment Return URL
+| Payment Return URL
 |--------------------------------------------------------------------------
-|
-| IMPORTANT:
-|
-| We do NOT accept an arbitrary redirect URL from the browser.
-|
-| The backend decides the destination based on the checkout channel.
-|
-| Stripe redirects the attendee here after Checkout.
-|
-| Payment confirmation itself remains controlled by the Stripe webhook.
-|
 */
 function getPaymentReturnUrl(purchaseId, channel) {
     /*
@@ -72,12 +52,9 @@ function getPaymentReturnUrl(purchaseId, channel) {
     |--------------------------------------------------------------------------
     */
     if (channel === "web") {
-        const webUrl = (process.env
-            .ATTENDEE_WEB_URL ??
-            process.env
-                .WEB_APP_URL ??
-            process.env
-                .FRONTEND_URL ??
+        const webUrl = (process.env.ATTENDEE_WEB_URL ??
+            process.env.WEB_APP_URL ??
+            process.env.FRONTEND_URL ??
             "").replace(/\/+$/, "");
         if (!webUrl) {
             throw new Error("Attendee web application URL is not configured.");
@@ -86,16 +63,11 @@ function getPaymentReturnUrl(purchaseId, channel) {
     }
     /*
     |--------------------------------------------------------------------------
-    | Existing Mobile Attendee Checkout
+    | Mobile Attendee Checkout
     |--------------------------------------------------------------------------
-    |
-    | Keep the existing mobile callback behavior.
-    |
     */
-    const mobileReturnUrl = process.env
-        .PAYMENT_RETURN_URL ??
-        process.env
-            .FRONTEND_URL;
+    const mobileReturnUrl = process.env.PAYMENT_RETURN_URL ??
+        process.env.FRONTEND_URL;
     if (!mobileReturnUrl) {
         throw new Error("Mobile payment return URL is not configured.");
     }
@@ -128,6 +100,39 @@ async function createPurchase(userId, ticketTypeId, quantity, channel = "mobile"
     }
     /*
     |--------------------------------------------------------------------------
+    | Attendee Email
+    |--------------------------------------------------------------------------
+    |
+    | The authenticated attendee is the source of truth.
+    |
+    | IMPORTANT:
+    | This is deliberately loaded from the User record and is completely
+    | separate from the event organization/organizer email.
+    |
+    */
+    const attendee = await prisma_1.prisma.user.findUnique({
+        where: {
+            id: userId,
+        },
+        select: {
+            id: true,
+            email: true,
+        },
+    });
+    if (!attendee) {
+        throw new Error("Attendee account not found.");
+    }
+    if (!attendee.email) {
+        throw new Error("Attendee email address not found.");
+    }
+    const attendeeEmail = attendee.email
+        .trim()
+        .toLowerCase();
+    if (!attendeeEmail) {
+        throw new Error("Attendee email address not found.");
+    }
+    /*
+    |--------------------------------------------------------------------------
     | Load Ticket
     |--------------------------------------------------------------------------
     */
@@ -144,7 +149,7 @@ async function createPurchase(userId, ticketTypeId, quantity, channel = "mobile"
     }
     /*
     |--------------------------------------------------------------------------
-    | Availability
+    | Ticket Availability
     |--------------------------------------------------------------------------
     */
     if (!ticket.isActive) {
@@ -169,8 +174,7 @@ async function createPurchase(userId, ticketTypeId, quantity, channel = "mobile"
     if (remaining <= 0) {
         throw new Error("This ticket is sold out.");
     }
-    if (quantity >
-        remaining) {
+    if (quantity > remaining) {
         throw new Error(`Only ${remaining} ticket${remaining === 1
             ? ""
             : "s"} remaining.`);
@@ -198,12 +202,6 @@ async function createPurchase(userId, ticketTypeId, quantity, channel = "mobile"
     |--------------------------------------------------------------------------
     | Free Ticket
     |--------------------------------------------------------------------------
-    |
-    | Free tickets do not go through Stripe.
-    |
-    | The existing registration + purchase + ticket issuance behavior
-    | remains intact.
-    |
     */
     if (amount === 0) {
         const purchase = await prisma_1.prisma.$transaction(async (tx) => {
@@ -258,8 +256,7 @@ async function createPurchase(userId, ticketTypeId, quantity, channel = "mobile"
                     },
                 },
             });
-            if (inventory.count !==
-                1) {
+            if (inventory.count !== 1) {
                 throw new Error("Ticket inventory changed. Please try again.");
             }
             /*
@@ -302,14 +299,10 @@ async function createPurchase(userId, ticketTypeId, quantity, channel = "mobile"
     | Paid Ticket
     |--------------------------------------------------------------------------
     |
-    | Create a pending purchase first.
-    |
-    | IMPORTANT:
+    | Create a pending purchase.
     |
     | Inventory is NOT reserved here.
-    |
-    | Inventory is only incremented after Stripe confirms payment through
-    | the authoritative Stripe webhook.
+    | Stripe webhook remains authoritative.
     |
     */
     const purchase = await prisma_1.prisma.ticketPurchase.create({
@@ -329,11 +322,8 @@ async function createPurchase(userId, ticketTypeId, quantity, channel = "mobile"
     });
     /*
     |--------------------------------------------------------------------------
-    | Convert Amount
+    | Stripe Amount
     |--------------------------------------------------------------------------
-    |
-    | Stripe Checkout expects the amount in minor currency units.
-    |
     */
     const stripeAmount = toMinorUnits(amount, currency);
     if (!Number.isInteger(stripeAmount) ||
@@ -347,20 +337,14 @@ async function createPurchase(userId, ticketTypeId, quantity, channel = "mobile"
     }
     /*
     |--------------------------------------------------------------------------
-    | Return URL
+    | Payment Return URL
     |--------------------------------------------------------------------------
     */
     const paymentReturnUrl = getPaymentReturnUrl(purchase.id, channel);
     /*
     |--------------------------------------------------------------------------
-    | Create Stripe Checkout Session
+    | Stripe Checkout
     |--------------------------------------------------------------------------
-    |
-    | Stripe handles the customer-facing payment page.
-    |
-    | The backend keeps the purchase PENDING until the Stripe webhook
-    | confirms the payment.
-    |
     */
     try {
         const session = await (0, stripe_service_1.createStripeCheckoutSession)({
@@ -370,16 +354,19 @@ async function createPurchase(userId, ticketTypeId, quantity, channel = "mobile"
             ticketTypeId,
             amount: stripeAmount,
             currency,
-            /*
-            |--------------------------------------------------------------------------
-            | Stripe Service Contract
-            |--------------------------------------------------------------------------
-            |
-            | stripe.service.ts expects `productName`.
-            |
-            */
             productName: `${ticket.event.title} - ${ticket.name}`,
             quantity,
+            /*
+            |--------------------------------------------------------------------------
+            | ATTENDEE EMAIL
+            |--------------------------------------------------------------------------
+            |
+            | This is the purchaser's email.
+            |
+            | Do NOT replace this with the organization email.
+            |
+            */
+            customerEmail: attendeeEmail,
             successUrl: paymentReturnUrl,
             cancelUrl: paymentReturnUrl,
         });
@@ -396,13 +383,8 @@ async function createPurchase(userId, ticketTypeId, quantity, channel = "mobile"
         }
         /*
         |--------------------------------------------------------------------------
-        | Store Stripe Checkout Session Reference
+        | Store Stripe Session
         |--------------------------------------------------------------------------
-        |
-        | stripe.service.ts returns `sessionId`.
-        |
-        | We store the Stripe Checkout Session ID as the payment reference.
-        |
         */
         const updatedPurchase = await prisma_1.prisma.ticketPurchase.update({
             where: {
@@ -431,10 +413,6 @@ async function createPurchase(userId, ticketTypeId, quantity, channel = "mobile"
         |--------------------------------------------------------------------------
         | Cleanup Pending Purchase
         |--------------------------------------------------------------------------
-        |
-        | If Stripe Checkout could not be initialized, the purchase is not
-        | useful and no payment exists. Remove the pending record.
-        |
         */
         try {
             await prisma_1.prisma.ticketPurchase.delete({
@@ -576,8 +554,7 @@ async function getPurchasePaymentStatus(userId, purchaseId) {
         event: purchase.event,
         ticket: purchase.ticket,
         passes: purchase.passes,
-        hasPass: purchase.passes.length >
-            0,
+        hasPass: purchase.passes.length > 0,
     };
 }
 /*
@@ -648,8 +625,18 @@ async function getMyEvent(userId, purchaseId) {
             status: "PAID",
         },
         include: {
+            /*
+            |--------------------------------------------------------------------------
+            | Event
+            |--------------------------------------------------------------------------
+            */
             event: {
                 include: {
+                    /*
+                    |--------------------------------------------------------------------------
+                    | Announcements
+                    |--------------------------------------------------------------------------
+                    */
                     announcements: {
                         where: {
                             OR: [
@@ -672,6 +659,11 @@ async function getMyEvent(userId, purchaseId) {
                             },
                         ],
                     },
+                    /*
+                    |--------------------------------------------------------------------------
+                    | Sessions
+                    |--------------------------------------------------------------------------
+                    */
                     sessions: {
                         orderBy: {
                             startTime: "asc",
@@ -679,23 +671,48 @@ async function getMyEvent(userId, purchaseId) {
                     },
                 },
             },
+            /*
+            |--------------------------------------------------------------------------
+            | Purchased Ticket
+            |--------------------------------------------------------------------------
+            */
             ticket: true,
+            /*
+            |--------------------------------------------------------------------------
+            | Active Passes
+            |--------------------------------------------------------------------------
+            */
             passes: {
                 where: {
                     isActive: true,
                     isRevoked: false,
                 },
             },
+            /*
+            |--------------------------------------------------------------------------
+            | Check-In
+            |--------------------------------------------------------------------------
+            */
             checkIn: {
                 include: {
                     staff: true,
                 },
             },
+            /*
+            |--------------------------------------------------------------------------
+            | Attendee Activities
+            |--------------------------------------------------------------------------
+            */
             activities: {
                 orderBy: {
                     createdAt: "desc",
                 },
             },
+            /*
+            |--------------------------------------------------------------------------
+            | Attendee
+            |--------------------------------------------------------------------------
+            */
             user: {
                 include: {
                     attendeeProfile: true,
