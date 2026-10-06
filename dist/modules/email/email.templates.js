@@ -7,216 +7,466 @@ exports.organizerTicketSaleEmailTemplate = organizerTicketSaleEmailTemplate;
 exports.eventReminderEmailTemplate = eventReminderEmailTemplate;
 exports.eventThankYouEmailTemplate = eventThankYouEmailTemplate;
 const email_helpers_1 = require("./email.helpers");
-const BRAND = "WOWYOU";
+/*
+|--------------------------------------------------------------------------
+| Wowyou EventOS Brand
+|--------------------------------------------------------------------------
+*/
+const BRAND_NAME = "Wowyou";
+const PRODUCT_NAME = "EventOS";
+const FULL_BRAND = `${BRAND_NAME} ${PRODUCT_NAME}`;
+const BRAND_PRIMARY = "#3E86A4";
+const BRAND_PRIMARY_DARK = "#2F6B86";
+const EMAIL_LOGO_URL = process.env.EVENTOS_LOGO_URL?.trim() || "";
+const EMAIL_WEBSITE_URL = (process.env.EVENTOS_WEB_URL ??
+    process.env.WEB_APP_URL ??
+    process.env.FRONTEND_URL ??
+    "").replace(/\/+$/, "");
+/*
+|--------------------------------------------------------------------------
+| Brand Header
+|--------------------------------------------------------------------------
+|
+| The logo is loaded from a publicly accessible HTTPS URL.
+|
+| Set:
+|
+| EVENTOS_LOGO_URL=https://your-domain.com/logo.png
+|
+| If the logo URL is unavailable, the email falls back to a clean
+| text-based Wowyou EventOS wordmark.
+|
+*/
+function brandHeader() {
+    if (EMAIL_LOGO_URL) {
+        return `
+      <a
+        href="${(0, email_helpers_1.escapeHtml)(EMAIL_WEBSITE_URL || "#")}"
+        style="
+          display:inline-block;
+          text-decoration:none;
+        "
+      >
+        <img
+          src="${(0, email_helpers_1.escapeHtml)(EMAIL_LOGO_URL)}"
+          alt="${FULL_BRAND}"
+          style="
+            display:block;
+            width:auto;
+            max-width:220px;
+            max-height:52px;
+            border:0;
+            outline:none;
+            text-decoration:none;
+          "
+        />
+      </a>
+    `;
+    }
+    return `
+    <a
+      href="${(0, email_helpers_1.escapeHtml)(EMAIL_WEBSITE_URL || "#")}"
+      style="
+        display:inline-block;
+        text-decoration:none;
+        color:#ffffff;
+      "
+    >
+      <table
+        cellpadding="0"
+        cellspacing="0"
+        border="0"
+      >
+        <tr>
+          <td
+            style="
+              width:38px;
+              height:38px;
+              background:${BRAND_PRIMARY};
+              border-radius:10px;
+              text-align:center;
+              vertical-align:middle;
+              color:#ffffff;
+              font-size:19px;
+              font-weight:900;
+              line-height:38px;
+            "
+          >
+            W
+          </td>
+
+          <td
+            style="
+              padding-left:11px;
+              vertical-align:middle;
+            "
+          >
+            <div
+              style="
+                color:#ffffff;
+                font-size:17px;
+                font-weight:800;
+                line-height:20px;
+              "
+            >
+              Wowyou
+            </div>
+
+            <div
+              style="
+                margin-top:1px;
+                color:${BRAND_PRIMARY};
+                font-size:10px;
+                font-weight:800;
+                letter-spacing:.16em;
+                text-transform:uppercase;
+                line-height:13px;
+              "
+            >
+              EventOS
+            </div>
+          </td>
+        </tr>
+      </table>
+    </a>
+  `;
+}
+/*
+|--------------------------------------------------------------------------
+| Email Layout
+|--------------------------------------------------------------------------
+*/
 function layout(content) {
     return `
 <!DOCTYPE html>
 <html>
 <head>
   <meta charset="UTF-8" />
+
   <meta
     name="viewport"
     content="width=device-width, initial-scale=1.0"
   />
-  <title>WOWYOU</title>
+
+  <meta
+    name="color-scheme"
+    content="dark"
+  />
+
+  <meta
+    name="supported-color-schemes"
+    content="dark"
+  />
+
+  <title>${FULL_BRAND}</title>
 </head>
 
 <body
   style="
     margin:0;
     padding:0;
-    background:#080808;
+    width:100%;
+    background:#07090B;
     color:#ffffff;
-    font-family:Arial,Helvetica,sans-serif;
+    font-family:
+      Arial,
+      Helvetica,
+      sans-serif;
   "
 >
-  <div
+  <table
+    width="100%"
+    cellpadding="0"
+    cellspacing="0"
+    border="0"
     style="
       width:100%;
-      padding:40px 16px;
-      box-sizing:border-box;
+      margin:0;
+      padding:0;
+      background:#07090B;
     "
   >
-    <div
-      style="
-        max-width:560px;
-        margin:0 auto;
-        background:#111111;
-        border:1px solid #242424;
-        border-radius:18px;
-        overflow:hidden;
-      "
-    >
-
-      <div
+    <tr>
+      <td
+        align="center"
         style="
-          padding:28px 30px;
-          border-bottom:1px solid #242424;
+          padding:42px 16px;
         "
       >
-        <div
+        <table
+          width="100%"
+          cellpadding="0"
+          cellspacing="0"
+          border="0"
           style="
-            font-size:18px;
-            font-weight:800;
-            letter-spacing:0.16em;
+            width:100%;
+            max-width:600px;
+            background:#101316;
+            border:1px solid #20262A;
+            border-radius:20px;
+            overflow:hidden;
           "
         >
-          ${BRAND}
-        </div>
-      </div>
 
-      <div style="padding:30px;">
-        ${content}
-      </div>
+          <!-- Brand Header -->
 
-      <div
-        style="
-          padding:22px 30px;
-          border-top:1px solid #242424;
-          color:#777777;
-          font-size:12px;
-          line-height:1.6;
-        "
-      >
-        This is a transactional email from WOWYOU.
-      </div>
+          <tr>
+            <td
+              style="
+                padding:26px 30px;
+                border-bottom:1px solid #20262A;
+                background:#0C0F11;
+              "
+            >
+              ${brandHeader()}
+            </td>
+          </tr>
 
-    </div>
-  </div>
+          <!-- Content -->
+
+          <tr>
+            <td
+              style="
+                padding:34px 30px;
+              "
+            >
+              ${content}
+            </td>
+          </tr>
+
+          <!-- Footer -->
+
+          <tr>
+            <td
+              style="
+                padding:24px 30px;
+                border-top:1px solid #20262A;
+                background:#0C0F11;
+              "
+            >
+              <div
+                style="
+                  color:#ffffff;
+                  font-size:13px;
+                  font-weight:700;
+                  margin-bottom:7px;
+                "
+              >
+                ${FULL_BRAND}
+              </div>
+
+              <div
+                style="
+                  color:#6F777C;
+                  font-size:12px;
+                  line-height:1.7;
+                "
+              >
+                Event technology for modern events,
+                organisers, attendees and vendors.
+              </div>
+
+              <div
+                style="
+                  margin-top:14px;
+                  color:#555D62;
+                  font-size:11px;
+                  line-height:1.6;
+                "
+              >
+                This is a transactional email from
+                ${FULL_BRAND}.
+              </div>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
 </body>
 </html>
 `;
 }
+/*
+|--------------------------------------------------------------------------
+| Button
+|--------------------------------------------------------------------------
+*/
 function button(label, url) {
     return `
-<a
-  href="${(0, email_helpers_1.escapeHtml)(url)}"
-  style="
-    display:inline-block;
-    padding:13px 20px;
-    background:#3E86A4;
-    color:#ffffff;
-    text-decoration:none;
-    border-radius:10px;
-    font-size:14px;
-    font-weight:700;
-  "
->
-  ${(0, email_helpers_1.escapeHtml)(label)}
-</a>
-`;
-}
-function verificationEmailTemplate(input) {
-    const content = `
-    <p
+    <a
+      href="${(0, email_helpers_1.escapeHtml)(url)}"
       style="
-        margin:0 0 8px;
-        color:#3E86A4;
-        font-size:12px;
-        font-weight:700;
-        text-transform:uppercase;
-        letter-spacing:.12em;
+        display:inline-block;
+        padding:14px 22px;
+        background:${BRAND_PRIMARY};
+        color:#ffffff;
+        text-decoration:none;
+        border-radius:11px;
+        font-size:14px;
+        font-weight:800;
+        line-height:1;
       "
     >
-      Verify your email
+      ${(0, email_helpers_1.escapeHtml)(label)}
+    </a>
+  `;
+}
+/*
+|--------------------------------------------------------------------------
+| Section Label
+|--------------------------------------------------------------------------
+*/
+function sectionLabel(text) {
+    return `
+    <p
+      style="
+        margin:0 0 9px;
+        color:${BRAND_PRIMARY};
+        font-size:11px;
+        font-weight:800;
+        text-transform:uppercase;
+        letter-spacing:.14em;
+      "
+    >
+      ${(0, email_helpers_1.escapeHtml)(text)}
     </p>
+  `;
+}
+/*
+|--------------------------------------------------------------------------
+| Verification Email
+|--------------------------------------------------------------------------
+*/
+function verificationEmailTemplate(input) {
+    const content = `
+    ${sectionLabel("Verify your email")}
 
     <h1
       style="
         margin:0 0 18px;
-        font-size:28px;
-        line-height:1.2;
+        color:#ffffff;
+        font-size:30px;
+        line-height:1.18;
+        letter-spacing:-.02em;
       "
     >
-      Welcome to WOWYOU.
+      Welcome to Wowyou EventOS.
     </h1>
 
     <p
       style="
-        color:#aaaaaa;
+        margin:0;
+        color:#AAB1B6;
         font-size:15px;
-        line-height:1.7;
+        line-height:1.75;
       "
     >
       Hi ${(0, email_helpers_1.escapeHtml)(input.firstName)},
       confirm your email address to finish
-      setting up your account.
+      setting up your EventOS account.
     </p>
 
-    <div style="margin-top:26px;">
+    <div
+      style="
+        margin-top:28px;
+      "
+    >
       ${button("Verify email", input.verificationUrl)}
     </div>
+
+    <p
+      style="
+        margin:24px 0 0;
+        color:#626B70;
+        font-size:12px;
+        line-height:1.6;
+      "
+    >
+      If you did not create an EventOS account,
+      you can safely ignore this email.
+    </p>
   `;
     return {
-        subject: "Verify your WOWYOU email",
+        subject: "Verify your Wowyou EventOS email",
         html: layout(content),
         text: `
-Welcome to WOWYOU.
+Welcome to Wowyou EventOS.
 
 Hi ${input.firstName},
 
-Verify your email:
+Confirm your email address:
+
 ${input.verificationUrl}
+
+If you did not create an EventOS account,
+you can safely ignore this email.
     `.trim(),
     };
 }
+/*
+|--------------------------------------------------------------------------
+| Login OTP
+|--------------------------------------------------------------------------
+*/
 function loginOtpEmailTemplate(input) {
+    const greeting = input.firstName
+        ? `Hi ${(0, email_helpers_1.escapeHtml)(input.firstName)},`
+        : "Hi,";
     const content = `
-    <p
-      style="
-        margin:0 0 8px;
-        color:#3E86A4;
-        font-size:12px;
-        font-weight:700;
-        text-transform:uppercase;
-        letter-spacing:.12em;
-      "
-    >
-      Login verification
-    </p>
+    ${sectionLabel("Login verification")}
 
     <h1
       style="
         margin:0 0 18px;
-        font-size:28px;
+        color:#ffffff;
+        font-size:30px;
+        line-height:1.18;
       "
     >
-      Your login code
+      Your EventOS login code
     </h1>
 
     <p
       style="
-        color:#aaaaaa;
+        margin:0;
+        color:#AAB1B6;
         font-size:15px;
-        line-height:1.7;
+        line-height:1.75;
       "
     >
-      ${input.firstName
-        ? `Hi ${(0, email_helpers_1.escapeHtml)(input.firstName)},`
-        : "Hi,"}
+      ${greeting}
       use the code below to complete your login.
     </p>
 
     <div
       style="
-        margin:26px 0;
-        padding:20px;
-        background:#181818;
-        border:1px solid #292929;
-        border-radius:12px;
+        margin:28px 0;
+        padding:22px;
+        background:#171C20;
+        border:1px solid #293136;
+        border-radius:14px;
         text-align:center;
-        font-size:34px;
-        font-weight:800;
-        letter-spacing:.28em;
       "
     >
-      ${(0, email_helpers_1.escapeHtml)(input.otp)}
+      <div
+        style="
+          color:#ffffff;
+          font-size:36px;
+          font-weight:900;
+          letter-spacing:.28em;
+        "
+      >
+        ${(0, email_helpers_1.escapeHtml)(input.otp)}
+      </div>
     </div>
 
     <p
       style="
-        color:#666666;
-        font-size:13px;
+        margin:0;
+        color:#626B70;
+        font-size:12px;
         line-height:1.6;
       "
     >
@@ -225,10 +475,10 @@ function loginOtpEmailTemplate(input) {
     </p>
   `;
     return {
-        subject: `${input.otp} is your WOWYOU login code`,
+        subject: `${input.otp} is your Wowyou EventOS login code`,
         html: layout(content),
         text: `
-Your WOWYOU login code is:
+Your Wowyou EventOS login code is:
 
 ${input.otp}
 
@@ -237,91 +487,171 @@ you can safely ignore this email.
     `.trim(),
     };
 }
+/*
+|--------------------------------------------------------------------------
+| Ticket Purchase Email
+|--------------------------------------------------------------------------
+*/
 function ticketPurchaseEmailTemplate(input) {
     const content = `
-    <p
-      style="
-        margin:0 0 8px;
-        color:#3E86A4;
-        font-size:12px;
-        font-weight:700;
-        text-transform:uppercase;
-        letter-spacing:.12em;
-      "
-    >
-      Ticket confirmed
-    </p>
+    ${sectionLabel("Ticket confirmed")}
 
     <h1
       style="
         margin:0 0 18px;
-        font-size:28px;
+        color:#ffffff;
+        font-size:30px;
+        line-height:1.18;
+        letter-spacing:-.02em;
       "
     >
-      You're going to ${(0, email_helpers_1.escapeHtml)(input.eventTitle)}.
+      You're going to
+      ${(0, email_helpers_1.escapeHtml)(input.eventTitle)}.
     </h1>
 
     <p
       style="
-        color:#aaaaaa;
+        margin:0;
+        color:#AAB1B6;
         font-size:15px;
-        line-height:1.7;
+        line-height:1.75;
       "
     >
       Hi ${(0, email_helpers_1.escapeHtml)(input.firstName)},
       your ticket purchase is confirmed.
+      Your digital event pass is attached below.
     </p>
 
     <div
       style="
-        margin-top:24px;
-        padding:20px;
-        background:#181818;
-        border:1px solid #292929;
-        border-radius:14px;
+        margin-top:26px;
+        padding:21px;
+        background:#171C20;
+        border:1px solid #293136;
+        border-radius:15px;
       "
     >
-      <div style="margin-bottom:15px;">
-        <div style="color:#666;font-size:11px;text-transform:uppercase;">
+      <div style="margin-bottom:16px;">
+        <div
+          style="
+            color:#687177;
+            font-size:10px;
+            font-weight:700;
+            text-transform:uppercase;
+            letter-spacing:.1em;
+          "
+        >
           Ticket
         </div>
-        <div style="margin-top:4px;font-weight:700;">
+
+        <div
+          style="
+            margin-top:5px;
+            color:#ffffff;
+            font-size:15px;
+            font-weight:800;
+          "
+        >
           ${(0, email_helpers_1.escapeHtml)(input.ticketName)}
         </div>
       </div>
 
-      <div style="margin-bottom:15px;">
-        <div style="color:#666;font-size:11px;text-transform:uppercase;">
+      <div style="margin-bottom:16px;">
+        <div
+          style="
+            color:#687177;
+            font-size:10px;
+            font-weight:700;
+            text-transform:uppercase;
+            letter-spacing:.1em;
+          "
+        >
           Quantity
         </div>
-        <div style="margin-top:4px;font-weight:700;">
+
+        <div
+          style="
+            margin-top:5px;
+            color:#ffffff;
+            font-size:15px;
+            font-weight:800;
+          "
+        >
           ${input.quantity}
         </div>
       </div>
 
-      <div style="margin-bottom:15px;">
-        <div style="color:#666;font-size:11px;text-transform:uppercase;">
+      <div style="margin-bottom:16px;">
+        <div
+          style="
+            color:#687177;
+            font-size:10px;
+            font-weight:700;
+            text-transform:uppercase;
+            letter-spacing:.1em;
+          "
+        >
           Date
         </div>
-        <div style="margin-top:4px;font-weight:700;">
+
+        <div
+          style="
+            margin-top:5px;
+            color:#ffffff;
+            font-size:15px;
+            font-weight:800;
+          "
+        >
           ${(0, email_helpers_1.escapeHtml)((0, email_helpers_1.formatDateTime)(input.startDate))}
         </div>
       </div>
 
-      <div style="margin-bottom:15px;">
-        <div style="color:#666;font-size:11px;text-transform:uppercase;">
+      <div style="margin-bottom:16px;">
+        <div
+          style="
+            color:#687177;
+            font-size:10px;
+            font-weight:700;
+            text-transform:uppercase;
+            letter-spacing:.1em;
+          "
+        >
           Venue
         </div>
-        <div style="margin-top:4px;font-weight:700;">
+
+        <div
+          style="
+            margin-top:5px;
+            color:#ffffff;
+            font-size:15px;
+            font-weight:800;
+          "
+        >
           ${(0, email_helpers_1.escapeHtml)(input.venue)}
         </div>
       </div>
 
       <div>
-        <div style="color:#666;font-size:11px;text-transform:uppercase;">
+        <div
+          style="
+            color:#687177;
+            font-size:10px;
+            font-weight:700;
+            text-transform:uppercase;
+            letter-spacing:.1em;
+          "
+        >
           Total
         </div>
-        <div style="margin-top:4px;font-weight:700;">
+
+        <div
+          style="
+            margin-top:5px;
+            color:#ffffff;
+            font-size:17px;
+            font-weight:900;
+          "
+        >
           ${(0, email_helpers_1.escapeHtml)((0, email_helpers_1.formatMoney)(input.totalAmount, input.currency))}
         </div>
       </div>
@@ -329,52 +659,73 @@ function ticketPurchaseEmailTemplate(input) {
 
     <div
       style="
-        margin-top:28px;
+        margin-top:30px;
+        padding:24px;
+        background:#0C0F11;
+        border:1px solid #293136;
+        border-radius:15px;
         text-align:center;
       "
     >
       <div
         style="
-          margin-bottom:10px;
-          color:#777;
+          margin-bottom:11px;
+          color:${BRAND_PRIMARY};
           font-size:11px;
+          font-weight:800;
           text-transform:uppercase;
-          letter-spacing:.12em;
+          letter-spacing:.13em;
         "
       >
-        Your ticket QR code
+        Your EventOS ticket
       </div>
 
       <img
         src="cid:wowyou-ticket-qr"
-        alt="WOWYOU ticket QR code"
+        alt="Wowyou EventOS ticket QR code"
         width="220"
         height="220"
         style="
+          display:block;
           width:220px;
           height:220px;
+          max-width:100%;
+          margin:0 auto;
           background:#ffffff;
           padding:10px;
-          border-radius:12px;
+          border-radius:13px;
         "
       />
 
       <div
         style="
-          margin-top:12px;
-          color:#666;
+          margin-top:13px;
+          color:#687177;
           font-size:11px;
         "
       >
-        Ticket ID: ${(0, email_helpers_1.escapeHtml)(input.ticketId)}
+        Ticket ID:
+        ${(0, email_helpers_1.escapeHtml)(input.ticketId)}
       </div>
     </div>
+
+    <p
+      style="
+        margin:24px 0 0;
+        color:#626B70;
+        font-size:12px;
+        line-height:1.6;
+      "
+    >
+      Keep this email and your QR code safe.
+      You will use your EventOS pass for event check-in.
+    </p>
   `;
     return {
-        subject: `Your WOWYOU ticket — ${input.eventTitle}`,
+        subject: `Your Wowyou EventOS ticket — ${input.eventTitle}`,
         html: layout(content),
         text: `
-Your ticket is confirmed.
+Your Wowyou EventOS ticket is confirmed.
 
 Event: ${input.eventTitle}
 Ticket: ${input.ticketName}
@@ -383,28 +734,26 @@ Date: ${(0, email_helpers_1.formatDateTime)(input.startDate)}
 Venue: ${input.venue}
 Total: ${(0, email_helpers_1.formatMoney)(input.totalAmount, input.currency)}
 Ticket ID: ${input.ticketId}
+
+Your QR ticket is included in this email.
     `.trim(),
     };
 }
+/*
+|--------------------------------------------------------------------------
+| Organizer Ticket Sale Email
+|--------------------------------------------------------------------------
+*/
 function organizerTicketSaleEmailTemplate(input) {
     const content = `
-    <p
-      style="
-        margin:0 0 8px;
-        color:#3E86A4;
-        font-size:12px;
-        font-weight:700;
-        text-transform:uppercase;
-        letter-spacing:.12em;
-      "
-    >
-      New ticket sale
-    </p>
+    ${sectionLabel("New ticket sale")}
 
     <h1
       style="
         margin:0 0 18px;
-        font-size:28px;
+        color:#ffffff;
+        font-size:30px;
+        line-height:1.18;
       "
     >
       A ticket was sold.
@@ -412,37 +761,62 @@ function organizerTicketSaleEmailTemplate(input) {
 
     <p
       style="
-        color:#aaaaaa;
+        margin:0;
+        color:#AAB1B6;
         font-size:15px;
-        line-height:1.7;
+        line-height:1.75;
       "
     >
       ${(0, email_helpers_1.escapeHtml)(input.organizationName)},
-      your event just received a ticket purchase.
+      your event just received a ticket purchase
+      through Wowyou EventOS.
     </p>
 
     <div
       style="
-        margin-top:24px;
-        padding:20px;
-        background:#181818;
-        border:1px solid #292929;
-        border-radius:14px;
+        margin-top:26px;
+        padding:21px;
+        background:#171C20;
+        border:1px solid #293136;
+        border-radius:15px;
       "
     >
-      <p><strong>Event:</strong> ${(0, email_helpers_1.escapeHtml)(input.eventTitle)}</p>
-      <p><strong>Ticket:</strong> ${(0, email_helpers_1.escapeHtml)(input.ticketName)}</p>
-      <p><strong>Quantity:</strong> ${input.quantity}</p>
-      <p><strong>Total:</strong> ${(0, email_helpers_1.escapeHtml)((0, email_helpers_1.formatMoney)(input.totalAmount, input.currency))}</p>
-      <p><strong>Buyer:</strong> ${(0, email_helpers_1.escapeHtml)(input.buyerName)}</p>
-      <p><strong>Email:</strong> ${(0, email_helpers_1.escapeHtml)(input.buyerEmail)}</p>
+      <p style="margin:0 0 12px;color:#AAB1B6;">
+        <strong style="color:#ffffff;">Event:</strong>
+        ${(0, email_helpers_1.escapeHtml)(input.eventTitle)}
+      </p>
+
+      <p style="margin:0 0 12px;color:#AAB1B6;">
+        <strong style="color:#ffffff;">Ticket:</strong>
+        ${(0, email_helpers_1.escapeHtml)(input.ticketName)}
+      </p>
+
+      <p style="margin:0 0 12px;color:#AAB1B6;">
+        <strong style="color:#ffffff;">Quantity:</strong>
+        ${input.quantity}
+      </p>
+
+      <p style="margin:0 0 12px;color:#AAB1B6;">
+        <strong style="color:#ffffff;">Total:</strong>
+        ${(0, email_helpers_1.escapeHtml)((0, email_helpers_1.formatMoney)(input.totalAmount, input.currency))}
+      </p>
+
+      <p style="margin:0 0 12px;color:#AAB1B6;">
+        <strong style="color:#ffffff;">Buyer:</strong>
+        ${(0, email_helpers_1.escapeHtml)(input.buyerName)}
+      </p>
+
+      <p style="margin:0;color:#AAB1B6;">
+        <strong style="color:#ffffff;">Email:</strong>
+        ${(0, email_helpers_1.escapeHtml)(input.buyerEmail)}
+      </p>
     </div>
   `;
     return {
         subject: `New ticket sale — ${input.eventTitle}`,
         html: layout(content),
         text: `
-New ticket sale.
+New ticket sale through Wowyou EventOS.
 
 Event: ${input.eventTitle}
 Ticket: ${input.ticketName}
@@ -453,25 +827,34 @@ Email: ${input.buyerEmail}
     `.trim(),
     };
 }
+/*
+|--------------------------------------------------------------------------
+| Event Reminder
+|--------------------------------------------------------------------------
+*/
 function eventReminderEmailTemplate(input) {
     const content = `
-    <p
+    ${sectionLabel("Event reminder")}
+
+    <h1
       style="
-        color:#3E86A4;
-        font-size:12px;
-        font-weight:700;
-        text-transform:uppercase;
-        letter-spacing:.12em;
+        margin:0 0 18px;
+        color:#ffffff;
+        font-size:30px;
+        line-height:1.18;
       "
     >
-      Event reminder
-    </p>
-
-    <h1 style="margin:0 0 18px;font-size:28px;">
       Your event is in 3 days.
     </h1>
 
-    <p style="color:#aaaaaa;font-size:15px;line-height:1.7;">
+    <p
+      style="
+        margin:0;
+        color:#AAB1B6;
+        font-size:15px;
+        line-height:1.75;
+      "
+    >
       Hi ${(0, email_helpers_1.escapeHtml)(input.firstName)},
       ${(0, email_helpers_1.escapeHtml)(input.eventTitle)}
       is almost here.
@@ -479,16 +862,27 @@ function eventReminderEmailTemplate(input) {
 
     <div
       style="
-        margin-top:24px;
-        padding:20px;
-        background:#181818;
-        border:1px solid #292929;
-        border-radius:14px;
+        margin-top:26px;
+        padding:21px;
+        background:#171C20;
+        border:1px solid #293136;
+        border-radius:15px;
       "
     >
-      <p><strong>Event:</strong> ${(0, email_helpers_1.escapeHtml)(input.eventTitle)}</p>
-      <p><strong>Date:</strong> ${(0, email_helpers_1.escapeHtml)((0, email_helpers_1.formatDateTime)(input.startDate))}</p>
-      <p><strong>Venue:</strong> ${(0, email_helpers_1.escapeHtml)(input.venue)}</p>
+      <p style="margin:0 0 12px;color:#AAB1B6;">
+        <strong style="color:#ffffff;">Event:</strong>
+        ${(0, email_helpers_1.escapeHtml)(input.eventTitle)}
+      </p>
+
+      <p style="margin:0 0 12px;color:#AAB1B6;">
+        <strong style="color:#ffffff;">Date:</strong>
+        ${(0, email_helpers_1.escapeHtml)((0, email_helpers_1.formatDateTime)(input.startDate))}
+      </p>
+
+      <p style="margin:0;color:#AAB1B6;">
+        <strong style="color:#ffffff;">Venue:</strong>
+        ${(0, email_helpers_1.escapeHtml)(input.venue)}
+      </p>
     </div>
   `;
     return {
@@ -503,29 +897,71 @@ ${input.venue}
     `.trim(),
     };
 }
+/*
+|--------------------------------------------------------------------------
+| Event Thank You
+|--------------------------------------------------------------------------
+*/
 function eventThankYouEmailTemplate(input) {
     const content = `
-    <p
+    ${sectionLabel("Thank you")}
+
+    <h1
       style="
-        color:#3E86A4;
-        font-size:12px;
-        font-weight:700;
-        text-transform:uppercase;
-        letter-spacing:.12em;
+        margin:0 0 18px;
+        color:#ffffff;
+        font-size:30px;
+        line-height:1.18;
       "
     >
-      Thank you
-    </p>
-
-    <h1 style="margin:0 0 18px;font-size:28px;">
       Thanks for attending.
     </h1>
 
-    <p style="color:#aaaaaa;font-size:15px;line-height:1.7;">
+    <p
+      style="
+        margin:0;
+        color:#AAB1B6;
+        font-size:15px;
+        line-height:1.75;
+      "
+    >
       Hi ${(0, email_helpers_1.escapeHtml)(input.firstName)},
       thank you for being part of
       ${(0, email_helpers_1.escapeHtml)(input.eventTitle)}.
     </p>
+
+    <div
+      style="
+        margin-top:26px;
+        padding:21px;
+        background:#171C20;
+        border:1px solid #293136;
+        border-radius:15px;
+      "
+    >
+      <div
+        style="
+          color:${BRAND_PRIMARY};
+          font-size:11px;
+          font-weight:800;
+          text-transform:uppercase;
+          letter-spacing:.12em;
+          margin-bottom:8px;
+        "
+      >
+        Powered by EventOS
+      </div>
+
+      <div
+        style="
+          color:#ffffff;
+          font-size:17px;
+          font-weight:800;
+        "
+      >
+        ${(0, email_helpers_1.escapeHtml)(input.eventTitle)}
+      </div>
+    </div>
   `;
     return {
         subject: `Thanks for attending ${input.eventTitle}`,
@@ -534,6 +970,8 @@ function eventThankYouEmailTemplate(input) {
 Thanks for attending ${input.eventTitle}.
 
 We hope you had a great experience.
+
+Powered by Wowyou EventOS.
     `.trim(),
     };
 }

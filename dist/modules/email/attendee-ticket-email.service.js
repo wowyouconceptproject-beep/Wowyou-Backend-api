@@ -7,6 +7,7 @@ exports.sendAttendeeTicketEmail = sendAttendeeTicketEmail;
 const qrcode_1 = __importDefault(require("qrcode"));
 const prisma_1 = require("../../lib/prisma");
 const email_service_1 = require("./email.service");
+const email_layout_1 = require("./email.layout");
 const email_templates_1 = require("./email.templates");
 /*
 |--------------------------------------------------------------------------
@@ -17,14 +18,18 @@ const email_templates_1 = require("./email.templates");
 |
 | IMPORTANT:
 |
-| The recipient ALWAYS comes from:
+| Recipient:
 |
 | TicketPurchase → User → email
 |
-| It NEVER comes from the Event → Organization owner.
+| NEVER:
 |
-| This service should only be called after the purchase is PAID and
-| EventPass records have been issued.
+| Event → Organization → owner email
+|
+| This service should only be called after:
+|
+| 1. Purchase is PAID
+| 2. EventPass records have been issued
 |
 |--------------------------------------------------------------------------
 */
@@ -39,6 +44,11 @@ async function sendAttendeeTicketEmail(purchaseId) {
             id: purchaseId,
         },
         include: {
+            /*
+            |--------------------------------------------------------------------------
+            | Attendee
+            |--------------------------------------------------------------------------
+            */
             user: {
                 select: {
                     id: true,
@@ -47,6 +57,11 @@ async function sendAttendeeTicketEmail(purchaseId) {
                     lastName: true,
                 },
             },
+            /*
+            |--------------------------------------------------------------------------
+            | Event
+            |--------------------------------------------------------------------------
+            */
             event: {
                 select: {
                     id: true,
@@ -56,12 +71,22 @@ async function sendAttendeeTicketEmail(purchaseId) {
                     currency: true,
                 },
             },
+            /*
+            |--------------------------------------------------------------------------
+            | Ticket
+            |--------------------------------------------------------------------------
+            */
             ticket: {
                 select: {
                     id: true,
                     name: true,
                 },
             },
+            /*
+            |--------------------------------------------------------------------------
+            | Event Passes
+            |--------------------------------------------------------------------------
+            */
             passes: {
                 where: {
                     isActive: true,
@@ -97,14 +122,38 @@ async function sendAttendeeTicketEmail(purchaseId) {
     }
     /*
     |--------------------------------------------------------------------------
+    | Validate Attendee
+    |--------------------------------------------------------------------------
+    */
+    if (!purchase.user) {
+        throw new Error("Attendee account not found for this purchase.");
+    }
+    /*
+    |--------------------------------------------------------------------------
     | Validate Attendee Email
     |--------------------------------------------------------------------------
     */
-    const recipient = purchase.user?.email
+    const recipient = purchase.user.email
         ?.trim()
         .toLowerCase();
     if (!recipient) {
         throw new Error("Attendee email address not found.");
+    }
+    /*
+    |--------------------------------------------------------------------------
+    | Validate Event
+    |--------------------------------------------------------------------------
+    */
+    if (!purchase.event) {
+        throw new Error("Event not found for this purchase.");
+    }
+    /*
+    |--------------------------------------------------------------------------
+    | Validate Ticket
+    |--------------------------------------------------------------------------
+    */
+    if (!purchase.ticket) {
+        throw new Error("Ticket type not found for this purchase.");
     }
     /*
     |--------------------------------------------------------------------------
@@ -119,24 +168,33 @@ async function sendAttendeeTicketEmail(purchaseId) {
     | Primary Pass
     |--------------------------------------------------------------------------
     |
-    | The first pass is used for the email's QR attachment.
+    | The first active pass is used for the email QR attachment.
     |
-    | Each issued EventPass still has its own validated passNumber/qrToken.
+    | Every EventPass still retains its own:
+    |
+    | - passNumber
+    | - qrToken
     |
     */
     const primaryPass = purchase.passes[0];
     if (!primaryPass.qrToken) {
         throw new Error("Ticket QR token not found.");
     }
+    if (!primaryPass.passNumber) {
+        throw new Error("Ticket pass number not found.");
+    }
     /*
     |--------------------------------------------------------------------------
-    | Generate QR
+    | Generate QR Code
     |--------------------------------------------------------------------------
     |
-    | IMPORTANT:
+    | QR content comes directly from the issued EventPass.
     |
-    | QR content comes from the issued EventPass.
-    | We do not generate a QR from the purchase ID or ticket type ID.
+    | We do NOT generate the QR from:
+    |
+    | - purchase ID
+    | - ticket type ID
+    | - event ID
     |
     */
     const qrBuffer = await qrcode_1.default.toBuffer(primaryPass.qrToken, {
@@ -147,11 +205,28 @@ async function sendAttendeeTicketEmail(purchaseId) {
     });
     /*
     |--------------------------------------------------------------------------
-    | Email Template
+    | Attendee Name
     |--------------------------------------------------------------------------
     */
-    const firstName = purchase.user.firstName?.trim() ||
+    const firstName = purchase.user.firstName
+        ?.trim() ||
         "Attendee";
+    /*
+    |--------------------------------------------------------------------------
+    | Build Ticket Email Content
+    |--------------------------------------------------------------------------
+    |
+    | The ticket template remains responsible for the actual ticket content.
+    |
+    | The centralized email layout is responsible for:
+    |
+    | - Wowyou EventOS logo
+    | - brand name
+    | - global styling
+    | - footer
+    | - support information
+    |
+    */
     const template = (0, email_templates_1.ticketPurchaseEmailTemplate)({
         firstName,
         eventTitle: purchase.event.title,
@@ -166,27 +241,54 @@ async function sendAttendeeTicketEmail(purchaseId) {
     });
     /*
     |--------------------------------------------------------------------------
-    | Send
+    | Apply Centralized Wowyou EventOS Branding
+    |--------------------------------------------------------------------------
+    */
+    const brandedHtml = (0, email_layout_1.renderEmail)(template.html);
+    /*
+    |--------------------------------------------------------------------------
+    | Send Attendee Email
     |--------------------------------------------------------------------------
     |
-    | This is explicitly TICKET_PURCHASE.
+    | This is explicitly:
     |
-    | It is separate from ORGANIZER_TICKET_SALE.
+    | TICKET_PURCHASE
+    |
+    | It is completely separate from:
+    |
+    | ORGANIZER_TICKET_SALE
     |
     */
     return (0, email_service_1.sendEmail)({
         type: "TICKET_PURCHASE",
+        /*
+        |--------------------------------------------------------------------------
+        | CRITICAL:
+        |
+        | This MUST be the attendee's email.
+        |--------------------------------------------------------------------------
+        */
         to: recipient,
         subject: template.subject,
-        html: template.html,
+        html: brandedHtml,
         ...(template.text
             ? {
                 text: template.text,
             }
             : {}),
+        /*
+        |--------------------------------------------------------------------------
+        | Email Delivery Metadata
+        |--------------------------------------------------------------------------
+        */
         userId: purchase.user.id,
         purchaseId: purchase.id,
         eventId: purchase.event.id,
+        /*
+        |--------------------------------------------------------------------------
+        | QR Attachment
+        |--------------------------------------------------------------------------
+        */
         attachments: [
             {
                 filename: "wowyou-ticket-qr.png",
@@ -195,6 +297,14 @@ async function sendAttendeeTicketEmail(purchaseId) {
                 contentId: "wowyou-ticket-qr",
             },
         ],
+        /*
+        |--------------------------------------------------------------------------
+        | Idempotency
+        |--------------------------------------------------------------------------
+        |
+        | Prevents duplicate attendee ticket emails for the same purchase.
+        |
+        */
         idempotencyKey: `ticket-purchase:${purchase.id}`,
     });
 }
