@@ -75,16 +75,11 @@ async function create(req, res) {
         | Create Purchase
         |--------------------------------------------------------------------------
         |
-        | The purchase service handles the payment provider.
+        | The purchase service is the final authority for purchase eligibility.
         |
-        | Paid tickets:
-        | Stripe Checkout is initialized and checkoutUrl is returned.
-        |
-        | Free tickets:
-        | The purchase is completed immediately and checkoutUrl is null.
-        |
-        | Payment confirmation for paid tickets is NOT performed here.
-        | The Stripe webhook is authoritative.
+        | It verifies that the authenticated user is an ATTENDEE before any
+        | inventory reservation, purchase creation, or Stripe Checkout session
+        | can occur.
         |
         */
         const result = await (0, purchase_service_1.createPurchase)(userId, ticketTypeId, quantity, channel);
@@ -114,6 +109,22 @@ async function create(req, res) {
     }
     catch (error) {
         console.error("CREATE PURCHASE ERROR:", error);
+        /*
+        |--------------------------------------------------------------------------
+        | Attendee Authorization
+        |--------------------------------------------------------------------------
+        |
+        | A valid authenticated user can still be forbidden from purchasing if
+        | their account role is ORGANIZER or VENDOR.
+        |
+        */
+        if (error?.code ===
+            "ATTENDEE_REQUIRED") {
+            return res.status(403).json({
+                success: false,
+                message: "Only attendee accounts can purchase event tickets.",
+            });
+        }
         return res.status(400).json({
             success: false,
             message: error?.message ??
@@ -179,22 +190,12 @@ async function paymentStatus(req, res) {
 async function myTickets(req, res) {
     try {
         const userId = req.user?.userId;
-        /*
-        |--------------------------------------------------------------------------
-        | Authentication
-        |--------------------------------------------------------------------------
-        */
         if (!userId) {
             return res.status(401).json({
                 success: false,
                 message: "Authentication required.",
             });
         }
-        /*
-        |--------------------------------------------------------------------------
-        | Paid Tickets
-        |--------------------------------------------------------------------------
-        */
         const tickets = await (0, purchase_service_1.getMyTickets)(userId);
         return res.status(200).json({
             success: true,
@@ -218,22 +219,12 @@ async function myTickets(req, res) {
 async function myEvents(req, res) {
     try {
         const userId = req.user?.userId;
-        /*
-        |--------------------------------------------------------------------------
-        | Authentication
-        |--------------------------------------------------------------------------
-        */
         if (!userId) {
             return res.status(401).json({
                 success: false,
                 message: "Authentication required.",
             });
         }
-        /*
-        |--------------------------------------------------------------------------
-        | Purchased Events
-        |--------------------------------------------------------------------------
-        */
         const events = await (0, purchase_service_1.getMyEvents)(userId);
         return res.status(200).json({
             success: true,
@@ -257,22 +248,12 @@ async function myEvents(req, res) {
 async function getMyEvent(req, res) {
     try {
         const userId = req.user?.userId;
-        /*
-        |--------------------------------------------------------------------------
-        | Authentication
-        |--------------------------------------------------------------------------
-        */
         if (!userId) {
             return res.status(401).json({
                 success: false,
                 message: "Authentication required.",
             });
         }
-        /*
-        |--------------------------------------------------------------------------
-        | Purchase ID
-        |--------------------------------------------------------------------------
-        */
         const purchaseId = Array.isArray(req.params.purchaseId)
             ? req.params.purchaseId[0]
             : req.params.purchaseId;
@@ -282,11 +263,6 @@ async function getMyEvent(req, res) {
                 message: "Purchase ID is required.",
             });
         }
-        /*
-        |--------------------------------------------------------------------------
-        | Event Hub
-        |--------------------------------------------------------------------------
-        */
         const event = await (0, purchase_service_1.getMyEvent)(userId, purchaseId);
         return res.status(200).json({
             success: true,
@@ -295,11 +271,6 @@ async function getMyEvent(req, res) {
     }
     catch (error) {
         console.error("GET MY EVENT ERROR:", error);
-        /*
-        |--------------------------------------------------------------------------
-        | Not Found / Unauthorized Purchase
-        |--------------------------------------------------------------------------
-        */
         if (error?.message ===
             "Event not found.") {
             return res.status(404).json({

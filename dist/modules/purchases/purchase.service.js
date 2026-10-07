@@ -100,14 +100,19 @@ async function createPurchase(userId, ticketTypeId, quantity, channel = "mobile"
     }
     /*
     |--------------------------------------------------------------------------
-    | Attendee Email
+    | Authenticated User / Attendee Authorization
     |--------------------------------------------------------------------------
     |
-    | The authenticated attendee is the source of truth.
+    | The JWT gives us the user ID.
     |
-    | IMPORTANT:
-    | This is deliberately loaded from the User record and is completely
-    | separate from the event organization/organizer email.
+    | We NEVER trust the frontend to tell us that the user is an attendee.
+    |
+    | This service is shared by:
+    |
+    | - Flutter/mobile attendee checkout
+    | - Public web attendee checkout
+    |
+    | Therefore the role must be checked here before any purchase is created.
     |
     */
     const attendee = await prisma_1.prisma.user.findUnique({
@@ -117,11 +122,43 @@ async function createPurchase(userId, ticketTypeId, quantity, channel = "mobile"
         select: {
             id: true,
             email: true,
+            role: true,
         },
     });
     if (!attendee) {
         throw new Error("Attendee account not found.");
     }
+    /*
+    |--------------------------------------------------------------------------
+    | Role Authorization
+    |--------------------------------------------------------------------------
+    |
+    | Only ATTENDEE accounts can purchase event tickets.
+    |
+    | ORGANIZER and VENDOR accounts must never be able to create a
+    | TicketPurchase, regardless of whether they possess a valid JWT.
+    |
+    */
+    if (attendee.role !==
+        "ATTENDEE") {
+        const error = new Error("Only attendee accounts can purchase event tickets.");
+        error.code =
+            "ATTENDEE_REQUIRED";
+        throw error;
+    }
+    /*
+    |--------------------------------------------------------------------------
+    | Attendee Email
+    |--------------------------------------------------------------------------
+    |
+    | The authenticated attendee is the source of truth.
+    |
+    | IMPORTANT:
+    |
+    | This is deliberately loaded from the User record and is completely
+    | separate from the event organization/organizer email.
+    |
+    */
     if (!attendee.email) {
         throw new Error("Attendee email address not found.");
     }
@@ -302,6 +339,7 @@ async function createPurchase(userId, ticketTypeId, quantity, channel = "mobile"
     | Create a pending purchase.
     |
     | Inventory is NOT reserved here.
+    |
     | Stripe webhook remains authoritative.
     |
     */
@@ -362,6 +400,8 @@ async function createPurchase(userId, ticketTypeId, quantity, channel = "mobile"
             |--------------------------------------------------------------------------
             |
             | This is the purchaser's email.
+            |
+            | It comes from the authenticated ATTENDEE account.
             |
             | Do NOT replace this with the organization email.
             |

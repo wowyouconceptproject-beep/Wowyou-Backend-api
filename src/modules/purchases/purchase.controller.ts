@@ -117,16 +117,11 @@ export async function create(
     | Create Purchase
     |--------------------------------------------------------------------------
     |
-    | The purchase service handles the payment provider.
+    | The purchase service is the final authority for purchase eligibility.
     |
-    | Paid tickets:
-    | Stripe Checkout is initialized and checkoutUrl is returned.
-    |
-    | Free tickets:
-    | The purchase is completed immediately and checkoutUrl is null.
-    |
-    | Payment confirmation for paid tickets is NOT performed here.
-    | The Stripe webhook is authoritative.
+    | It verifies that the authenticated user is an ATTENDEE before any
+    | inventory reservation, purchase creation, or Stripe Checkout session
+    | can occur.
     |
     */
 
@@ -173,6 +168,28 @@ export async function create(
       "CREATE PURCHASE ERROR:",
       error,
     );
+
+    /*
+    |--------------------------------------------------------------------------
+    | Attendee Authorization
+    |--------------------------------------------------------------------------
+    |
+    | A valid authenticated user can still be forbidden from purchasing if
+    | their account role is ORGANIZER or VENDOR.
+    |
+    */
+
+    if (
+      error?.code ===
+      "ATTENDEE_REQUIRED"
+    ) {
+      return res.status(403).json({
+        success: false,
+
+        message:
+          "Only attendee accounts can purchase event tickets.",
+      });
+    }
 
     return res.status(400).json({
       success: false,
@@ -276,12 +293,6 @@ export async function myTickets(
     const userId =
       req.user?.userId;
 
-    /*
-    |--------------------------------------------------------------------------
-    | Authentication
-    |--------------------------------------------------------------------------
-    */
-
     if (!userId) {
       return res.status(401).json({
         success: false,
@@ -290,12 +301,6 @@ export async function myTickets(
           "Authentication required.",
       });
     }
-
-    /*
-    |--------------------------------------------------------------------------
-    | Paid Tickets
-    |--------------------------------------------------------------------------
-    */
 
     const tickets =
       await getMyTickets(
@@ -337,12 +342,6 @@ export async function myEvents(
     const userId =
       req.user?.userId;
 
-    /*
-    |--------------------------------------------------------------------------
-    | Authentication
-    |--------------------------------------------------------------------------
-    */
-
     if (!userId) {
       return res.status(401).json({
         success: false,
@@ -351,12 +350,6 @@ export async function myEvents(
           "Authentication required.",
       });
     }
-
-    /*
-    |--------------------------------------------------------------------------
-    | Purchased Events
-    |--------------------------------------------------------------------------
-    */
 
     const events =
       await getMyEvents(
@@ -398,12 +391,6 @@ export async function getMyEvent(
     const userId =
       req.user?.userId;
 
-    /*
-    |--------------------------------------------------------------------------
-    | Authentication
-    |--------------------------------------------------------------------------
-    */
-
     if (!userId) {
       return res.status(401).json({
         success: false,
@@ -412,12 +399,6 @@ export async function getMyEvent(
           "Authentication required.",
       });
     }
-
-    /*
-    |--------------------------------------------------------------------------
-    | Purchase ID
-    |--------------------------------------------------------------------------
-    */
 
     const purchaseId =
       Array.isArray(
@@ -435,12 +416,6 @@ export async function getMyEvent(
       });
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | Event Hub
-    |--------------------------------------------------------------------------
-    */
-
     const event =
       await getMyEventService(
         userId,
@@ -457,12 +432,6 @@ export async function getMyEvent(
       "GET MY EVENT ERROR:",
       error,
     );
-
-    /*
-    |--------------------------------------------------------------------------
-    | Not Found / Unauthorized Purchase
-    |--------------------------------------------------------------------------
-    */
 
     if (
       error?.message ===
