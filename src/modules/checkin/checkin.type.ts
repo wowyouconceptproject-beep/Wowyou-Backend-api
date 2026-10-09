@@ -25,4 +25,16 @@ export interface CheckInResult {
   pass: any;
 
   event: any;
+
+  checkIn?: any;
+
+  capacity?: {
+    currentOccupancy: number;
+
+    totalCheckIns: number;
+
+    totalCheckOuts: number;
+
+    occupancyPercentage: number;
+  };
 }

@@ -1,5 +1,3 @@
-import { Prisma } from "@prisma/client";
-
 import { prisma } from "../../lib/prisma";
 
 import {
@@ -22,6 +20,7 @@ import {
 import {
   CheckInInput,
 } from "./checkin.type";
+
 /*
 |--------------------------------------------------------------------------
 | Check In
@@ -78,188 +77,279 @@ export async function performCheckIn(
 
   /*
   |--------------------------------------------------------------------------
+  | Check In Timestamp
+  |--------------------------------------------------------------------------
+  */
+
+  const checkedInAt =
+    new Date();
+
+  /*
+  |--------------------------------------------------------------------------
   | Transaction
   |--------------------------------------------------------------------------
   */
 
-  return prisma.$transaction(
-    async (tx) => {
-      /*
-      |--------------------------------------------------------------------------
-      | Purchase
-      |--------------------------------------------------------------------------
-      */
+  const result =
+    await prisma.$transaction(
+      async (tx) => {
+        /*
+        |--------------------------------------------------------------------------
+        | Atomic Check-In
+        |--------------------------------------------------------------------------
+        |
+        | Only one scanner can change this purchase from
+        | checkedIn = false to checkedIn = true.
+        |
+        */
 
-      await tx.ticketPurchase.update({
-        where: {
-          id:
-            purchase.id,
-        },
+        const updatedPurchase =
+          await tx.ticketPurchase.updateMany({
+            where: {
+              id:
+                purchase.id,
 
-        data: {
-          checkedIn:
-            true,
+              checkedIn:
+                false,
+            },
 
-          checkedInAt:
-            new Date(),
-        },
-      });
+            data: {
+              checkedIn:
+                true,
 
-      /*
-      |--------------------------------------------------------------------------
-      | Event Pass
-      |--------------------------------------------------------------------------
-      */
+              checkedInAt,
+            },
+          });
 
-      if (
-        purchase.passes.length >
-        0
-      ) {
-        await tx.eventPass.update({
-          where: {
-            id:
-              purchase
-                .passes[0]
-                .id,
-          },
+        /*
+        |--------------------------------------------------------------------------
+        | Duplicate Scan
+        |--------------------------------------------------------------------------
+        */
 
+        if (
+          updatedPurchase.count !==
+          1
+        ) {
+          const existingPurchase =
+            await tx.ticketPurchase.findUnique({
+              where: {
+                id:
+                  purchase.id,
+              },
+
+              include: {
+                user: true,
+
+                event: true,
+
+                passes: true,
+
+                checkIn: true,
+              },
+            });
+
+          return {
+            success: true,
+
+            alreadyCheckedIn:
+              true,
+
+            attendee:
+              existingPurchase?.user,
+
+            purchase:
+              existingPurchase,
+
+            pass:
+              existingPurchase
+                ?.passes[0],
+
+            event:
+              existingPurchase?.event,
+
+            checkIn:
+              existingPurchase?.checkIn,
+          };
+        }
+
+        /*
+        |--------------------------------------------------------------------------
+        | Event Pass
+        |--------------------------------------------------------------------------
+        */
+
+        if (
+          purchase.passes.length >
+          0
+        ) {
+          await tx.eventPass.update({
+            where: {
+              id:
+                purchase
+                  .passes[0]
+                  .id,
+            },
+
+            data: {
+              ...(input.scanType ===
+              "NFC"
+                ? {
+                    lastNfcReadAt:
+                      checkedInAt,
+                  }
+                : {}),
+
+              lastGeneratedAt:
+                checkedInAt,
+            },
+          });
+        }
+
+        /*
+        |--------------------------------------------------------------------------
+        | Ticket Check In
+        |--------------------------------------------------------------------------
+        */
+
+        const checkIn =
+          await tx.ticketCheckIn.create({
+            data: {
+              purchaseId:
+                purchase.id,
+
+              checkedInBy:
+                input.staffId,
+
+              station:
+                input.station,
+
+              deviceId:
+                input.deviceId,
+
+              checkedInAt,
+            },
+          });
+
+        /*
+        |--------------------------------------------------------------------------
+        | Capacity
+        |--------------------------------------------------------------------------
+        */
+
+        const updatedEvent =
+          await tx.event.update({
+            where: {
+              id:
+                purchase.eventId,
+            },
+
+            data: {
+              currentOccupancy: {
+                increment: 1,
+              },
+
+              totalCheckIns: {
+                increment: 1,
+              },
+            },
+
+            select: {
+              id: true,
+
+              capacity: true,
+
+              currentOccupancy:
+                true,
+
+              totalCheckIns:
+                true,
+
+              totalCheckOuts:
+                true,
+            },
+          });
+
+        /*
+        |--------------------------------------------------------------------------
+        | Occupancy Percentage
+        |--------------------------------------------------------------------------
+        */
+
+        const occupancyPercentage =
+          updatedEvent.capacity ===
+          0
+            ? 0
+            : Number(
+                (
+                  (updatedEvent.currentOccupancy /
+                    updatedEvent.capacity) *
+                  100
+                ).toFixed(2),
+              );
+
+        /*
+        |--------------------------------------------------------------------------
+        | Activity
+        |--------------------------------------------------------------------------
+        */
+
+        await tx.eventActivity.create({
           data: {
-            ...(input.scanType ===
-            "NFC"
-              ? {
-                  lastNfcReadAt:
-                    new Date(),
-                }
-              : {}),
+            eventId:
+              purchase.eventId,
 
-            lastGeneratedAt:
-              new Date(),
-          },
-        });
-      }
-
-      /*
-      |--------------------------------------------------------------------------
-      | Ticket Check In
-      |--------------------------------------------------------------------------
-      */
-
-      const checkIn =
-        await tx.ticketCheckIn.create({
-          data: {
             purchaseId:
               purchase.id,
 
-            checkedInBy:
-              input.staffId,
+            type:
+              "ATTENDEE_CHECKED_IN",
 
-            station:
-              input.station,
+            title:
+              "Attendee Checked In",
 
-            deviceId:
-              input.deviceId,
+            description:
+              `${purchase.user.firstName} ${purchase.user.lastName} checked in.`,
 
-            checkedInAt:
-              new Date(),
+            payload: {
+              scanType:
+                input.scanType,
+
+              station:
+                input.station,
+
+              deviceId:
+                input.deviceId,
+            },
           },
         });
 
-      /*
-      |--------------------------------------------------------------------------
-      | Capacity
-      |--------------------------------------------------------------------------
-      */
+        /*
+        |--------------------------------------------------------------------------
+        | Transaction Result
+        |--------------------------------------------------------------------------
+        */
 
-      const updatedEvent =
-        await tx.event.update({
-          where: {
-            id:
-              purchase.eventId,
-          },
+        return {
+          success: true,
 
-          data: {
-            currentOccupancy: {
-              increment: 1,
-            },
+          alreadyCheckedIn:
+            false,
 
-            totalCheckIns: {
-              increment: 1,
-            },
-          },
+          attendee:
+            purchase.user,
 
-          select: {
-            id: true,
+          purchase,
 
-            capacity: true,
+          pass:
+            purchase.passes[0],
 
-            currentOccupancy:
-              true,
+          event:
+            purchase.event,
 
-            totalCheckIns:
-              true,
+          checkIn,
 
-            totalCheckOuts:
-              true,
-          },
-        });
-
-      /*
-      |--------------------------------------------------------------------------
-      | Activity
-      |--------------------------------------------------------------------------
-      */
-
-      await tx.eventActivity.create({
-        data: {
-          eventId:
-            purchase.eventId,
-
-          purchaseId:
-            purchase.id,
-
-          type:
-            "ATTENDEE_CHECKED_IN",
-
-          title:
-            "Attendee Checked In",
-
-          description:
-            `${purchase.user.firstName} ${purchase.user.lastName} checked in.`,
-
-          payload: {
-  scanType:
-    input.scanType,
-
-  station:
-    input.station,
-
-  deviceId:
-    input.deviceId,
-},
-        },
-      });
-
-      /*
-      |--------------------------------------------------------------------------
-      | Live Capacity Update
-      |--------------------------------------------------------------------------
-      */
-
-      getIO()
-        .to(
-          eventRoom(
-            purchase.eventId,
-          ),
-        )
-        .emit(
-          SocketEvents.CapacityUpdated,
-          {
-            eventId:
-              updatedEvent.id,
-
-            capacity:
-              updatedEvent.capacity,
-
+          capacity: {
             currentOccupancy:
               updatedEvent.currentOccupancy,
 
@@ -269,105 +359,150 @@ export async function performCheckIn(
             totalCheckOuts:
               updatedEvent.totalCheckOuts,
 
-            occupancyPercentage:
-              updatedEvent.capacity ===
-              0
-                ? 0
-                : Number(
-                    (
-                      (updatedEvent.currentOccupancy /
-                        updatedEvent.capacity) *
-                      100
-                    ).toFixed(
-                      2,
-                    ),
-                  ),
+            occupancyPercentage,
           },
-        );
+        };
+      },
+    );
 
-        /*
-|--------------------------------------------------------------------------
-| Notify Attendee
-|--------------------------------------------------------------------------
-*/
+  /*
+  |--------------------------------------------------------------------------
+  | Duplicate Scan
+  |--------------------------------------------------------------------------
+  |
+  | Another scanner already completed the check-in.
+  | Do not emit another realtime check-in event.
+  |
+  */
 
-getIO()
-  .to(
-    attendeeRoom(
-      purchase.userId,
-    ),
-  )
-  .emit(
-    SocketEvents.PassCheckedIn,
-    {
-      passId:
-        purchase.passes[0]?.id,
+  if (
+    result.alreadyCheckedIn ||
+    !result.capacity
+  ) {
+    return result;
+  }
 
-      purchaseId:
-        purchase.id,
+  /*
+  |--------------------------------------------------------------------------
+  | Realtime Data
+  |--------------------------------------------------------------------------
+  |
+  | At this point the transaction has successfully committed.
+  |
+  */
 
-      attendeeId:
-        purchase.userId,
+  const io =
+    getIO();
 
-      checkedIn:
-        true,
+  /*
+  |--------------------------------------------------------------------------
+  | Live Capacity Update
+  |--------------------------------------------------------------------------
+  */
 
-      checkedInAt:
-        checkIn.checkedInAt,
+  io
+    .to(
+      eventRoom(
+        result.event.id,
+      ),
+    )
+    .emit(
+      SocketEvents.CapacityUpdated,
+      {
+        eventId:
+          result.event.id,
 
-      checkedInBy:
-        input.staffId,
+        capacity:
+          result.event.capacity,
 
-      station:
-        input.station,
+        currentOccupancy:
+          result.capacity
+            .currentOccupancy,
 
-      status:
-        "CHECKED_IN",
-    },
-  );
+        totalCheckIns:
+          result.capacity
+            .totalCheckIns,
 
-      return {
-        success: true,
+        totalCheckOuts:
+          result.capacity
+            .totalCheckOuts,
 
-        alreadyCheckedIn:
-          false,
+        occupancyPercentage:
+          result.capacity
+            .occupancyPercentage,
+      },
+    );
 
-        attendee:
-          purchase.user,
+  /*
+  |--------------------------------------------------------------------------
+  | Notify Attendee
+  |--------------------------------------------------------------------------
+  */
 
-        purchase,
+  io
+    .to(
+      attendeeRoom(
+        result.purchase.userId,
+      ),
+    )
+    .emit(
+      SocketEvents.PassCheckedIn,
+      {
+        passId:
+          result.pass?.id,
 
-        pass:
-          purchase.passes[0],
+        purchaseId:
+          result.purchase.id,
 
-        event:
-          purchase.event,
+        attendeeId:
+          result.purchase.userId,
 
-        checkIn,
+        checkedIn:
+          true,
 
-        capacity: {
-          currentOccupancy:
-            updatedEvent.currentOccupancy,
+        checkedInAt:
+          result.checkIn.checkedInAt,
 
-          totalCheckIns:
-            updatedEvent.totalCheckIns,
+        checkedInBy:
+          input.staffId,
 
-          totalCheckOuts:
-            updatedEvent.totalCheckOuts,
+        station:
+          input.station,
 
-          occupancyPercentage:
-            updatedEvent.capacity ===
-            0
-              ? 0
-              : Number(
-                  (
-                    (updatedEvent.currentOccupancy /
-                      updatedEvent.capacity) *
-                    100
-                  ).toFixed(2),
-                ),
-        },
-      };
-    },
-  );
+        status:
+          "CHECKED_IN",
+      },
+    );
+
+  /*
+  |--------------------------------------------------------------------------
+  | Final Response
+  |--------------------------------------------------------------------------
+  */
+
+  return {
+    success:
+      result.success,
+
+    alreadyCheckedIn:
+      result.alreadyCheckedIn,
+
+    attendee:
+      result.attendee,
+
+    purchase:
+      result.purchase,
+
+    pass:
+      result.pass,
+
+    event:
+      result.event,
+
+    checkIn:
+      result.checkIn,
+
+    capacity:
+      result.capacity,
+  };
 }

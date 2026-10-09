@@ -30,20 +30,46 @@ async function getEventPass(purchaseId, userId) {
             },
         },
     });
+    /*
+    |--------------------------------------------------------------------------
+    | Purchase
+    |--------------------------------------------------------------------------
+    */
     if (!purchase) {
         throw new Error("Pass not found.");
     }
-    if (purchase.userId !== userId) {
+    /*
+    |--------------------------------------------------------------------------
+    | Ownership
+    |--------------------------------------------------------------------------
+    */
+    if (purchase.userId !==
+        userId) {
         throw new Error("Unauthorized.");
     }
+    /*
+    |--------------------------------------------------------------------------
+    | Payment
+    |--------------------------------------------------------------------------
+    */
     if (purchase.status !==
         "PAID") {
         throw new Error("Ticket has not been paid.");
     }
+    /*
+    |--------------------------------------------------------------------------
+    | Event Ended
+    |--------------------------------------------------------------------------
+    */
     if (purchase.event.endDate <
         new Date()) {
         throw new Error("Event has ended.");
     }
+    /*
+    |--------------------------------------------------------------------------
+    | Passes
+    |--------------------------------------------------------------------------
+    */
     if (purchase.passes.length ===
         0) {
         throw new Error("No event passes have been issued.");
@@ -55,9 +81,10 @@ async function getEventPass(purchaseId, userId) {
 | Generate Secure Pass
 |--------------------------------------------------------------------------
 |
-| Generates secure JWTs for every issued EventPass.
+| Generates a signed JWT for every issued EventPass.
 |
-| QR and NFC tokens remain the permanent credentials.
+| The JWT contains the permanent pass credentials required to
+| validate the pass during scanning.
 |
 */
 async function generateSecurePass(purchaseId, userId) {
@@ -95,22 +122,51 @@ async function generateSecurePass(purchaseId, userId) {
 | Verify Secure Pass
 |--------------------------------------------------------------------------
 |
-| Verifies an issued EventPass.
+| Verifies a signed EventPass JWT.
 |
-| Supports:
+| Validation includes:
 |
-| • QR Tokens
-| • NFC Tokens
-| • JWT Pass Tokens
+| • JWT signature
+| • Purchase ownership
+| • Pass ownership
+| • Event ownership
+| • User ownership
+| • Pass number
+| • QR credential
+| • NFC credential
+| • Payment status
+| • Active status
+| • Revocation status
+| • Pass expiration
+| • Event expiration
 |
-*/
-/*
-|--------------------------------------------------------------------------
-| Verify Secure Pass
-|--------------------------------------------------------------------------
 */
 async function verifySecurePass(token) {
+    /*
+    |--------------------------------------------------------------------------
+    | Verify JWT
+    |--------------------------------------------------------------------------
+    */
     const payload = (0, pass_jwt_1.verifyPassToken)(token);
+    /*
+    |--------------------------------------------------------------------------
+    | Validate JWT Payload
+    |--------------------------------------------------------------------------
+    */
+    if (!payload ||
+        !payload.purchaseId ||
+        !payload.passId ||
+        !payload.passNumber ||
+        !payload.qrToken ||
+        !payload.eventId ||
+        !payload.userId) {
+        throw new Error("Invalid pass token.");
+    }
+    /*
+    |--------------------------------------------------------------------------
+    | Get Pass
+    |--------------------------------------------------------------------------
+    */
     const pass = await prisma_1.prisma.eventPass.findUnique({
         where: {
             id: payload.passId,
@@ -139,12 +195,9 @@ async function verifySecurePass(token) {
             },
         },
     });
-    if (!pass) {
-        throw new Error("Pass not found.");
-    }
     /*
     |--------------------------------------------------------------------------
-    | Pass
+    | Pass Exists
     |--------------------------------------------------------------------------
     */
     if (!pass) {
@@ -152,12 +205,45 @@ async function verifySecurePass(token) {
     }
     /*
     |--------------------------------------------------------------------------
-    | Ownership Validation
+    | Purchase Ownership
     |--------------------------------------------------------------------------
     */
     if (pass.purchaseId !==
         payload.purchaseId) {
         throw new Error("Invalid pass.");
+    }
+    /*
+    |--------------------------------------------------------------------------
+    | Purchase
+    |--------------------------------------------------------------------------
+    */
+    const purchase = pass.purchase;
+    /*
+    |--------------------------------------------------------------------------
+    | Event Validation
+    |--------------------------------------------------------------------------
+    */
+    if (purchase.eventId !==
+        payload.eventId) {
+        throw new Error("Invalid event.");
+    }
+    /*
+    |--------------------------------------------------------------------------
+    | User Validation
+    |--------------------------------------------------------------------------
+    */
+    if (purchase.userId !==
+        payload.userId) {
+        throw new Error("Invalid pass owner.");
+    }
+    /*
+    |--------------------------------------------------------------------------
+    | Pass Number Validation
+    |--------------------------------------------------------------------------
+    */
+    if (pass.passNumber !==
+        payload.passNumber) {
+        throw new Error("Invalid pass number.");
     }
     /*
     |--------------------------------------------------------------------------
@@ -170,17 +256,30 @@ async function verifySecurePass(token) {
     }
     /*
     |--------------------------------------------------------------------------
-    | Purchase
+    | NFC Validation
+    |--------------------------------------------------------------------------
+    |
+    | Some older passes may not have an NFC credential.
+    | When one exists, the JWT must match it.
+    |
+    */
+    if (pass.nfcToken &&
+        payload.nfcToken !==
+            pass.nfcToken) {
+        throw new Error("NFC token is invalid.");
+    }
+    /*
+    |--------------------------------------------------------------------------
+    | Payment Validation
     |--------------------------------------------------------------------------
     */
-    const purchase = pass.purchase;
     if (purchase.status !==
         "PAID") {
         throw new Error("Ticket has not been paid.");
     }
     /*
     |--------------------------------------------------------------------------
-    | Active
+    | Active Validation
     |--------------------------------------------------------------------------
     */
     if (!pass.isActive) {
@@ -188,7 +287,7 @@ async function verifySecurePass(token) {
     }
     /*
     |--------------------------------------------------------------------------
-    | Revoked
+    | Revoked Validation
     |--------------------------------------------------------------------------
     */
     if (pass.isRevoked) {
@@ -196,7 +295,7 @@ async function verifySecurePass(token) {
     }
     /*
     |--------------------------------------------------------------------------
-    | Expired
+    | Expiration
     |--------------------------------------------------------------------------
     */
     if (pass.expiresAt &&
@@ -237,10 +336,14 @@ async function verifySecurePass(token) {
         alreadyCheckedIn: purchase.checkedIn,
         checkedInBy: purchase.checkIn
             ? {
-                id: purchase.checkIn.staff.id,
-                name: purchase.checkIn.staff.name,
-                station: purchase.checkIn.station,
-                checkedInAt: purchase.checkIn.checkedInAt,
+                id: purchase.checkIn
+                    .staff.id,
+                name: purchase.checkIn
+                    .staff.name,
+                station: purchase.checkIn
+                    .station,
+                checkedInAt: purchase.checkIn
+                    .checkedInAt,
             }
             : null,
     };

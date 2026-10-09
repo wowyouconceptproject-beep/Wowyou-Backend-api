@@ -6,10 +6,24 @@ import jwt from "jsonwebtoken";
 |--------------------------------------------------------------------------
 */
 
-const SECRET =
-  process.env.PASS_JWT_SECRET!;
+function getPassJwtSecret(): string {
+  const secret =
+    process.env.PASS_JWT_SECRET;
 
-const EXPIRES_IN = "60s";
+  if (!secret) {
+    throw new Error(
+      "PASS_JWT_SECRET is not configured.",
+    );
+  }
+
+  return secret;
+}
+
+const PASS_JWT_SECRET =
+  getPassJwtSecret();
+
+const EXPIRES_IN =
+  "60s" as const;
 
 /*
 |--------------------------------------------------------------------------
@@ -41,12 +55,13 @@ export interface PassTokenPayload {
 
 export function generatePassToken(
   data: PassTokenPayload,
-) {
+): string {
   return jwt.sign(
     data,
-    SECRET,
+    PASS_JWT_SECRET,
     {
-      expiresIn: EXPIRES_IN,
+      expiresIn:
+        EXPIRES_IN,
     },
   );
 }
@@ -60,8 +75,86 @@ export function generatePassToken(
 export function verifyPassToken(
   token: string,
 ): PassTokenPayload {
-  return jwt.verify(
-    token,
-    SECRET,
-  ) as PassTokenPayload;
+  const decoded =
+    jwt.verify(
+      token,
+      PASS_JWT_SECRET,
+    );
+
+  /*
+  |--------------------------------------------------------------------------
+  | Payload Must Be An Object
+  |--------------------------------------------------------------------------
+  */
+
+  if (
+    typeof decoded ===
+    "string"
+  ) {
+    throw new Error(
+      "Invalid pass token payload.",
+    );
+  }
+
+  /*
+  |--------------------------------------------------------------------------
+  | Validate Required Claims
+  |--------------------------------------------------------------------------
+  */
+
+  if (
+    typeof decoded.purchaseId !==
+    "string" ||
+
+    typeof decoded.passId !==
+    "string" ||
+
+    typeof decoded.passNumber !==
+    "string" ||
+
+    typeof decoded.qrToken !==
+    "string" ||
+
+    typeof decoded.nfcToken !==
+    "string" ||
+
+    typeof decoded.eventId !==
+    "string" ||
+
+    typeof decoded.userId !==
+    "string"
+  ) {
+    throw new Error(
+      "Invalid pass token payload.",
+    );
+  }
+
+  /*
+  |--------------------------------------------------------------------------
+  | Return Typed Payload
+  |--------------------------------------------------------------------------
+  */
+
+  return {
+    purchaseId:
+      decoded.purchaseId,
+
+    passId:
+      decoded.passId,
+
+    passNumber:
+      decoded.passNumber,
+
+    qrToken:
+      decoded.qrToken,
+
+    nfcToken:
+      decoded.nfcToken,
+
+    eventId:
+      decoded.eventId,
+
+    userId:
+      decoded.userId,
+  };
 }
