@@ -8,12 +8,164 @@ import {
 
 import {
   createPurchase,
+  getPurchaseQuote,
   getMyTickets,
   getMyEvents,
   getPurchasePaymentStatus,
   getMyEvent as getMyEventService,
   PurchaseCheckoutChannel,
 } from "./purchase.service";
+
+import {
+  recordManualSale,
+  ManualPaymentMethod,
+} from "./manual-sale.service";
+
+/*
+|--------------------------------------------------------------------------
+| Purchase Quote
+|--------------------------------------------------------------------------
+|
+| Returns the authoritative checkout breakdown before payment.
+|
+| This endpoint must not:
+| - Create a purchase.
+| - Reserve ticket inventory.
+| - Create a Stripe Checkout session.
+|
+| The purchase service validates the attendee, ticket, quantity,
+| availability, and fee calculation.
+|
+*/
+
+export async function quote(
+  req: AuthRequest,
+  res: Response,
+) {
+  try {
+    const userId =
+      req.user?.userId;
+
+    /*
+    |--------------------------------------------------------------------------
+    | Authentication
+    |--------------------------------------------------------------------------
+    */
+
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: "Authentication required.",
+      });
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Request Validation
+    |--------------------------------------------------------------------------
+    */
+
+    const ticketTypeId =
+      String(
+        req.body.ticketTypeId ?? "",
+      ).trim();
+
+    const quantity =
+      Number(
+        req.body.quantity,
+      );
+
+    if (!ticketTypeId) {
+      return res.status(400).json({
+        success: false,
+        message: "Ticket type is required.",
+      });
+    }
+
+    if (
+      !Number.isInteger(quantity) ||
+      quantity < 1
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Quantity must be at least 1.",
+      });
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Calculate Authoritative Quote
+    |--------------------------------------------------------------------------
+    |
+    | All monetary values are calculated by the backend.
+    | The client must never supply a trusted subtotal, fee, or total.
+    |
+    */
+
+    const purchaseQuote =
+      await getPurchaseQuote(
+        userId,
+        ticketTypeId,
+        quantity,
+      );
+
+    return res.status(200).json({
+      success: true,
+      quote: purchaseQuote,
+    });
+  } catch (error: any) {
+    console.error(
+      "PURCHASE QUOTE ERROR:",
+      error,
+    );
+
+    /*
+    |--------------------------------------------------------------------------
+    | Attendee Authorization
+    |--------------------------------------------------------------------------
+    */
+
+    if (
+      error?.code ===
+      "ATTENDEE_REQUIRED"
+    ) {
+      return res.status(403).json({
+        success: false,
+        message:
+          "Only attendee accounts can purchase event tickets.",
+      });
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Error Response
+    |--------------------------------------------------------------------------
+    */
+
+    const message =
+      error?.message ??
+      "Unable to calculate purchase quote.";
+
+    const notFoundMessages = [
+      "Attendee account not found.",
+      "Ticket not found.",
+    ];
+
+    if (
+      notFoundMessages.includes(message)
+    ) {
+      return res.status(404).json({
+        success: false,
+        message,
+      });
+    }
+
+    return res.status(400).json({
+      success: false,
+      message,
+    });
+  }
+}
 
 /*
 |--------------------------------------------------------------------------
@@ -44,20 +196,17 @@ export async function create(
     | Checkout Channel
     |--------------------------------------------------------------------------
     |
-    | MOBILE
+    | MOBILE:
     | Existing Flutter attendee application.
     |
-    | WEB
+    | WEB:
     | Public event page / attendee web checkout.
     |
-    | IMPORTANT:
-    |
-    | Mobile remains the default so existing app requests continue working
-    | exactly as they do today.
+    | Mobile remains the default to preserve existing app requests.
     |
     */
 
-    const channel =
+    const channel: PurchaseCheckoutChannel =
       req.body.channel === "web"
         ? "web"
         : "mobile";
@@ -71,9 +220,7 @@ export async function create(
     if (!userId) {
       return res.status(401).json({
         success: false,
-
-        message:
-          "Authentication required.",
+        message: "Authentication required.",
       });
     }
 
@@ -86,9 +233,7 @@ export async function create(
     if (!ticketTypeId) {
       return res.status(400).json({
         success: false,
-
-        message:
-          "Ticket type is required.",
+        message: "Ticket type is required.",
       });
     }
 
@@ -99,16 +244,12 @@ export async function create(
     */
 
     if (
-      !Number.isInteger(
-        quantity,
-      ) ||
+      !Number.isInteger(quantity) ||
       quantity < 1
     ) {
       return res.status(400).json({
         success: false,
-
-        message:
-          "Quantity must be at least 1.",
+        message: "Quantity must be at least 1.",
       });
     }
 
@@ -117,11 +258,9 @@ export async function create(
     | Create Purchase
     |--------------------------------------------------------------------------
     |
-    | The purchase service is the final authority for purchase eligibility.
-    |
-    | It verifies that the authenticated user is an ATTENDEE before any
-    | inventory reservation, purchase creation, or Stripe Checkout session
-    | can occur.
+    | The purchase service remains responsible for attendee authorization,
+    | ticket availability, authoritative fee calculation, purchase creation,
+    | and Stripe Checkout initialization.
     |
     */
 
@@ -130,24 +269,13 @@ export async function create(
         userId,
         ticketTypeId,
         quantity,
-        channel as PurchaseCheckoutChannel,
+        channel,
       );
 
     /*
     |--------------------------------------------------------------------------
     | Response
     |--------------------------------------------------------------------------
-    |
-    | Paid ticket:
-    |
-    | paymentRequired = true
-    | checkoutUrl      = Stripe Checkout URL
-    |
-    | Free ticket:
-    |
-    | paymentRequired = false
-    | checkoutUrl      = null
-    |
     */
 
     return res.status(201).json({
@@ -157,8 +285,7 @@ export async function create(
         result.paymentRequired,
 
       checkoutUrl:
-        result.checkoutUrl ??
-        null,
+        result.checkoutUrl ?? null,
 
       purchase:
         result.purchase,
@@ -173,10 +300,6 @@ export async function create(
     |--------------------------------------------------------------------------
     | Attendee Authorization
     |--------------------------------------------------------------------------
-    |
-    | A valid authenticated user can still be forbidden from purchasing if
-    | their account role is ORGANIZER or VENDOR.
-    |
     */
 
     if (
@@ -185,7 +308,6 @@ export async function create(
     ) {
       return res.status(403).json({
         success: false,
-
         message:
           "Only attendee accounts can purchase event tickets.",
       });
@@ -193,7 +315,6 @@ export async function create(
 
     return res.status(400).json({
       success: false,
-
       message:
         error?.message ??
         "Unable to create purchase.",
@@ -207,8 +328,7 @@ export async function create(
 |--------------------------------------------------------------------------
 |
 | Payment status is read from our database.
-|
-| The Stripe webhook updates the purchase after Stripe confirms payment.
+| The Stripe webhook remains authoritative for payment confirmation.
 |
 */
 
@@ -223,8 +343,7 @@ export async function paymentStatus(
     if (!userId) {
       return res.status(401).json({
         success: false,
-        message:
-          "Authentication required.",
+        message: "Authentication required.",
       });
     }
 
@@ -238,8 +357,7 @@ export async function paymentStatus(
     if (!purchaseId) {
       return res.status(400).json({
         success: false,
-        message:
-          "Purchase ID is required.",
+        message: "Purchase ID is required.",
       });
     }
 
@@ -265,8 +383,7 @@ export async function paymentStatus(
     ) {
       return res.status(404).json({
         success: false,
-        message:
-          "Purchase not found.",
+        message: "Purchase not found.",
       });
     }
 
@@ -296,20 +413,15 @@ export async function myTickets(
     if (!userId) {
       return res.status(401).json({
         success: false,
-
-        message:
-          "Authentication required.",
+        message: "Authentication required.",
       });
     }
 
     const tickets =
-      await getMyTickets(
-        userId,
-      );
+      await getMyTickets(userId);
 
     return res.status(200).json({
       success: true,
-
       tickets,
     });
   } catch (error: any) {
@@ -320,7 +432,6 @@ export async function myTickets(
 
     return res.status(400).json({
       success: false,
-
       message:
         error?.message ??
         "Unable to load tickets.",
@@ -345,20 +456,15 @@ export async function myEvents(
     if (!userId) {
       return res.status(401).json({
         success: false,
-
-        message:
-          "Authentication required.",
+        message: "Authentication required.",
       });
     }
 
     const events =
-      await getMyEvents(
-        userId,
-      );
+      await getMyEvents(userId);
 
     return res.status(200).json({
       success: true,
-
       events,
     });
   } catch (error: any) {
@@ -369,7 +475,6 @@ export async function myEvents(
 
     return res.status(400).json({
       success: false,
-
       message:
         error?.message ??
         "Unable to load events.",
@@ -394,9 +499,7 @@ export async function getMyEvent(
     if (!userId) {
       return res.status(401).json({
         success: false,
-
-        message:
-          "Authentication required.",
+        message: "Authentication required.",
       });
     }
 
@@ -410,9 +513,7 @@ export async function getMyEvent(
     if (!purchaseId) {
       return res.status(400).json({
         success: false,
-
-        message:
-          "Purchase ID is required.",
+        message: "Purchase ID is required.",
       });
     }
 
@@ -424,7 +525,6 @@ export async function getMyEvent(
 
     return res.status(200).json({
       success: true,
-
       event,
     });
   } catch (error: any) {
@@ -439,18 +539,85 @@ export async function getMyEvent(
     ) {
       return res.status(404).json({
         success: false,
-
-        message:
-          "Event not found.",
+        message: "Event not found.",
       });
     }
 
     return res.status(400).json({
       success: false,
-
       message:
         error?.message ??
         "Unable to load event.",
+    });
+  }
+}
+
+
+export async function manualSale(
+  req: AuthRequest,
+  res: Response,
+) {
+  try {
+    const organizerId = req.user?.userId;
+
+    if (!organizerId) {
+      return res.status(401).json({
+        success: false,
+        message: "Authentication required.",
+      });
+    }
+
+    const paymentMethod = String(
+      req.body?.paymentMethod ?? "",
+    ).trim().toUpperCase() as ManualPaymentMethod;
+
+    const result = await recordManualSale(organizerId, {
+      eventId: String(req.body?.eventId ?? "").trim(),
+      ticketTypeId: String(req.body?.ticketTypeId ?? "").trim(),
+      quantity: Number(req.body?.quantity),
+
+      firstName: String(req.body?.firstName ?? ""),
+      lastName: String(req.body?.lastName ?? ""),
+      email: String(req.body?.email ?? ""),
+      phone: String(req.body?.phone ?? ""),
+
+      paymentMethod,
+      paymentReference: String(
+        req.body?.paymentReference ?? "",
+      ),
+    });
+
+    return res.status(201).json({
+      success: true,
+      message: result.passesIssued
+        ? "Offline sale recorded and tickets issued."
+        : "Offline sale recorded, but pass issuance needs attention.",
+
+      purchase: result.purchase,
+      buyer: result.buyer,
+      accountCreated: result.accountCreated,
+      verificationEmailSent: result.verificationEmailSent,
+      passesIssued: result.passesIssued,
+      passCount: result.passCount,
+    });
+  } catch (error: any) {
+    console.error("MANUAL SALE ERROR:", error);
+
+    const message =
+      error?.message ?? "Unable to record offline ticket sale.";
+
+    const statusCode =
+      message.includes("not authorized")
+        ? 403
+        : message.includes("not belong")
+          ? 400
+          : message.includes("not found")
+            ? 404
+            : 400;
+
+    return res.status(statusCode).json({
+      success: false,
+      message,
     });
   }
 }

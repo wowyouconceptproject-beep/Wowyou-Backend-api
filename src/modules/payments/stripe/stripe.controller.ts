@@ -10,6 +10,7 @@ import {
 import Stripe, {
   Subscription,
 } from "stripe";
+
 type StripeSubscriptionStatus =
   Subscription["status"];
 
@@ -24,6 +25,10 @@ import {
 import {
   issuePurchase,
 } from "../../purchases/ticket-issuance.service";
+
+import {
+  ensurePurchaseSettlement,
+} from "../../settlements/settlement.service";
 
 /*
 |--------------------------------------------------------------------------
@@ -41,17 +46,10 @@ import {
 
 type StripeOrganizerSubscription =
   Subscription & {
-    current_period_start?:
-      number | null;
-
-    current_period_end?:
-      number | null;
-
-    canceled_at?:
-      number | null;
-
-    cancel_at_period_end?:
-      boolean;
+    current_period_start?: number | null;
+    current_period_end?: number | null;
+    canceled_at?: number | null;
+    cancel_at_period_end?: boolean;
   };
 
 /*
@@ -80,16 +78,14 @@ export async function webhook(
     |--------------------------------------------------------------------------
     */
 
-    const signature =
-      req.header(
-        "stripe-signature",
-      );
+    const signature = req.header(
+      "stripe-signature",
+    );
 
     if (!signature) {
       return res.status(400).json({
         success: false,
-        message:
-          "Missing Stripe signature.",
+        message: "Missing Stripe signature.",
       });
     }
 
@@ -99,21 +95,18 @@ export async function webhook(
     |--------------------------------------------------------------------------
     */
 
-    const rawBody =
-      Buffer.isBuffer(req.body)
-        ? req.body
-        : Buffer.from(
-            typeof req.body ===
-              "string"
-              ? req.body
-              : "",
-          );
+    const rawBody = Buffer.isBuffer(req.body)
+      ? req.body
+      : Buffer.from(
+          typeof req.body === "string"
+            ? req.body
+            : "",
+        );
 
     if (!rawBody.length) {
       return res.status(400).json({
         success: false,
-        message:
-          "Webhook body is unavailable.",
+        message: "Webhook body is unavailable.",
       });
     }
 
@@ -123,11 +116,10 @@ export async function webhook(
     |--------------------------------------------------------------------------
     */
 
-    const event =
-      constructStripeWebhookEvent(
-        rawBody,
-        signature,
-      );
+    const event = constructStripeWebhookEvent(
+      rawBody,
+      signature,
+    );
 
     console.log(
       "STRIPE WEBHOOK:",
@@ -207,9 +199,7 @@ export async function webhook(
       */
 
       case "customer.subscription.created": {
-        await handleSubscriptionEvent(
-          event,
-        );
+        await handleSubscriptionEvent(event);
 
         break;
       }
@@ -221,9 +211,7 @@ export async function webhook(
       */
 
       case "customer.subscription.updated": {
-        await handleSubscriptionEvent(
-          event,
-        );
+        await handleSubscriptionEvent(event);
 
         break;
       }
@@ -235,9 +223,7 @@ export async function webhook(
       */
 
       case "customer.subscription.deleted": {
-        await handleSubscriptionEvent(
-          event,
-        );
+        await handleSubscriptionEvent(event);
 
         break;
       }
@@ -301,17 +287,17 @@ export async function webhook(
 
     /*
     |--------------------------------------------------------------------------
-    | Return 400
+    | Return Error So Stripe Can Retry
     |--------------------------------------------------------------------------
     |
-    | Stripe can retry the webhook when processing fails.
+    | Do not return HTTP 200 when a required payment-processing operation
+    | fails. Stripe can retry the event.
     |
     */
 
     return res.status(400).json({
       success: false,
-      message:
-        "Unable to process Stripe webhook.",
+      message: "Unable to process Stripe webhook.",
     });
   }
 }
@@ -332,14 +318,10 @@ async function handleCheckoutCompleted(
   */
 
   if (
-    session.mode ===
-      "subscription" ||
-    session.metadata?.type ===
-      "organizer_subscription"
+    session.mode === "subscription" ||
+    session.metadata?.type === "organizer_subscription"
   ) {
-    await handleSubscriptionCheckout(
-      session,
-    );
+    await handleSubscriptionCheckout(session);
 
     return;
   }
@@ -350,16 +332,13 @@ async function handleCheckoutCompleted(
   |--------------------------------------------------------------------------
   */
 
-  const purchaseId =
-    session.metadata
-      ?.purchaseId;
+  const purchaseId = session.metadata?.purchaseId;
 
   if (!purchaseId) {
     console.warn(
       "STRIPE CHECKOUT WITHOUT PURCHASE ID:",
       {
-        sessionId:
-          session.id,
+        sessionId: session.id,
       },
     );
 
@@ -375,10 +354,9 @@ async function handleCheckoutCompleted(
   |
   */
 
-  const verifiedSession =
-    await getStripeCheckoutSession(
-      session.id,
-    );
+  const verifiedSession = await getStripeCheckoutSession(
+    session.id,
+  );
 
   /*
   |--------------------------------------------------------------------------
@@ -386,20 +364,13 @@ async function handleCheckoutCompleted(
   |--------------------------------------------------------------------------
   */
 
-  if (
-    verifiedSession.payment_status !==
-    "paid"
-  ) {
+  if (verifiedSession.payment_status !== "paid") {
     console.warn(
       "STRIPE CHECKOUT NOT PAID:",
       {
-        sessionId:
-          session.id,
-
+        sessionId: session.id,
         purchaseId,
-
-        paymentStatus:
-          verifiedSession.payment_status,
+        paymentStatus: verifiedSession.payment_status,
       },
     );
 
@@ -412,31 +383,28 @@ async function handleCheckoutCompleted(
   |--------------------------------------------------------------------------
   */
 
-  const purchase =
-    await prisma.ticketPurchase.findUnique({
-      where: {
-        id: purchaseId,
-      },
-
-      include: {
-        event: true,
-        ticket: true,
-      },
-    });
+  const purchase = await prisma.ticketPurchase.findUnique({
+    where: {
+      id: purchaseId,
+    },
+    include: {
+      event: true,
+      ticket: true,
+    },
+  });
 
   if (!purchase) {
     console.error(
       "STRIPE PURCHASE NOT FOUND:",
       {
         purchaseId,
-        sessionId:
-          session.id,
+        sessionId: session.id,
       },
     );
 
     /*
     |--------------------------------------------------------------------------
-    | Throw so Stripe retries the webhook.
+    | Throw So Stripe Retries the Webhook
     |--------------------------------------------------------------------------
     */
 
@@ -451,8 +419,7 @@ async function handleCheckoutCompleted(
   |--------------------------------------------------------------------------
   */
 
-  const metadata =
-    verifiedSession.metadata;
+  const metadata = verifiedSession.metadata;
 
   /*
   |--------------------------------------------------------------------------
@@ -460,21 +427,13 @@ async function handleCheckoutCompleted(
   |--------------------------------------------------------------------------
   */
 
-  if (
-    metadata?.purchaseId !==
-    purchase.id
-  ) {
+  if (metadata?.purchaseId !== purchase.id) {
     console.error(
       "STRIPE PURCHASE METADATA MISMATCH:",
       {
-        purchaseId:
-          purchase.id,
-
-        metadataPurchaseId:
-          metadata?.purchaseId,
-
-        sessionId:
-          verifiedSession.id,
+        purchaseId: purchase.id,
+        metadataPurchaseId: metadata?.purchaseId,
+        sessionId: verifiedSession.id,
       },
     );
 
@@ -489,20 +448,14 @@ async function handleCheckoutCompleted(
 
   if (
     metadata?.userId &&
-    metadata.userId !==
-      purchase.userId
+    metadata.userId !== purchase.userId
   ) {
     console.error(
       "STRIPE USER METADATA MISMATCH:",
       {
-        purchaseId:
-          purchase.id,
-
-        expected:
-          purchase.userId,
-
-        received:
-          metadata.userId,
+        purchaseId: purchase.id,
+        expected: purchase.userId,
+        received: metadata.userId,
       },
     );
 
@@ -517,20 +470,14 @@ async function handleCheckoutCompleted(
 
   if (
     metadata?.eventId &&
-    metadata.eventId !==
-      purchase.eventId
+    metadata.eventId !== purchase.eventId
   ) {
     console.error(
       "STRIPE EVENT METADATA MISMATCH:",
       {
-        purchaseId:
-          purchase.id,
-
-        expected:
-          purchase.eventId,
-
-        received:
-          metadata.eventId,
+        purchaseId: purchase.id,
+        expected: purchase.eventId,
+        received: metadata.eventId,
       },
     );
 
@@ -545,20 +492,14 @@ async function handleCheckoutCompleted(
 
   if (
     metadata?.ticketTypeId &&
-    metadata.ticketTypeId !==
-      purchase.ticketTypeId
+    metadata.ticketTypeId !== purchase.ticketTypeId
   ) {
     console.error(
       "STRIPE TICKET TYPE METADATA MISMATCH:",
       {
-        purchaseId:
-          purchase.id,
-
-        expected:
-          purchase.ticketTypeId,
-
-        received:
-          metadata.ticketTypeId,
+        purchaseId: purchase.id,
+        expected: purchase.ticketTypeId,
+        received: metadata.ticketTypeId,
       },
     );
 
@@ -571,18 +512,12 @@ async function handleCheckoutCompleted(
   |--------------------------------------------------------------------------
   */
 
-  if (
-    purchase.paymentProvider !==
-    "STRIPE"
-  ) {
+  if (purchase.paymentProvider !== "STRIPE") {
     console.error(
       "STRIPE PAYMENT PROVIDER MISMATCH:",
       {
-        purchaseId:
-          purchase.id,
-
-        provider:
-          purchase.paymentProvider,
+        purchaseId: purchase.id,
+        provider: purchase.paymentProvider,
       },
     );
 
@@ -603,20 +538,14 @@ async function handleCheckoutCompleted(
 
   if (
     purchase.paymentReference &&
-    purchase.paymentReference !==
-      verifiedSession.id
+    purchase.paymentReference !== verifiedSession.id
   ) {
     console.error(
       "STRIPE PAYMENT REFERENCE MISMATCH:",
       {
-        purchaseId:
-          purchase.id,
-
-        expected:
-          purchase.paymentReference,
-
-        received:
-          verifiedSession.id,
+        purchaseId: purchase.id,
+        expected: purchase.paymentReference,
+        received: verifiedSession.id,
       },
     );
 
@@ -630,29 +559,21 @@ async function handleCheckoutCompleted(
   */
 
   const stripeCurrency =
-    verifiedSession.currency
-      ?.toUpperCase();
+    verifiedSession.currency?.toUpperCase();
 
   const purchaseCurrency =
-    purchase.currency
-      .toUpperCase();
+    purchase.currency.toUpperCase();
 
   if (
     !stripeCurrency ||
-    stripeCurrency !==
-      purchaseCurrency
+    stripeCurrency !== purchaseCurrency
   ) {
     console.error(
       "STRIPE CURRENCY MISMATCH:",
       {
-        purchaseId:
-          purchase.id,
-
-        expected:
-          purchaseCurrency,
-
-        received:
-          stripeCurrency,
+        purchaseId: purchase.id,
+        expected: purchaseCurrency,
+        received: stripeCurrency,
       },
     );
 
@@ -666,70 +587,52 @@ async function handleCheckoutCompleted(
   |
   | Stripe Checkout uses the smallest currency unit.
   |
+  | purchase.amount must remain the TOTAL amount charged to the attendee,
+  | including the transaction fee.
+  |
   */
 
-  const normalizedCurrency =
-    purchaseCurrency;
+  const normalizedCurrency = purchaseCurrency;
 
-  const zeroDecimalCurrencies =
-    new Set([
-      "BIF",
-      "CLP",
-      "DJF",
-      "GNF",
-      "ISK",
-      "JPY",
-      "KMF",
-      "KRW",
-      "PYG",
-      "RWF",
-      "UGX",
-      "VND",
-      "VUV",
-      "XAF",
-      "XOF",
-      "XPF",
-    ]);
+  const zeroDecimalCurrencies = new Set([
+    "BIF",
+    "CLP",
+    "DJF",
+    "GNF",
+    "ISK",
+    "JPY",
+    "KMF",
+    "KRW",
+    "PYG",
+    "RWF",
+    "UGX",
+    "VND",
+    "VUV",
+    "XAF",
+    "XOF",
+    "XPF",
+  ]);
 
-  const expectedAmount =
-    zeroDecimalCurrencies.has(
-      normalizedCurrency,
-    )
-      ? Math.round(
-          Number(
-            purchase.amount,
-          ),
-        )
-      : Math.round(
-          Number(
-            purchase.amount,
-          ) * 100,
-        );
+  const expectedAmount = zeroDecimalCurrencies.has(
+    normalizedCurrency,
+  )
+    ? Math.round(Number(purchase.amount))
+    : Math.round(Number(purchase.amount) * 100);
 
-  const receivedAmount =
-    verifiedSession.amount_total;
+  const receivedAmount = verifiedSession.amount_total;
 
   if (
     receivedAmount === null ||
-    receivedAmount ===
-      undefined ||
-    receivedAmount !==
-      expectedAmount
+    receivedAmount === undefined ||
+    receivedAmount !== expectedAmount
   ) {
     console.error(
       "STRIPE AMOUNT MISMATCH:",
       {
-        purchaseId:
-          purchase.id,
-
-        expected:
-          expectedAmount,
-
-        received:
-          receivedAmount,
-
-        currency:
-          normalizedCurrency,
+        purchaseId: purchase.id,
+        expected: expectedAmount,
+        received: receivedAmount,
+        currency: normalizedCurrency,
       },
     );
 
@@ -747,20 +650,14 @@ async function handleCheckoutCompleted(
 
   if (
     verifiedSession.client_reference_id &&
-    verifiedSession.client_reference_id !==
-      purchase.id
+    verifiedSession.client_reference_id !== purchase.id
   ) {
     console.error(
       "STRIPE CLIENT REFERENCE MISMATCH:",
       {
-        purchaseId:
-          purchase.id,
-
-        expected:
-          purchase.id,
-
-        received:
-          verifiedSession.client_reference_id,
+        purchaseId: purchase.id,
+        expected: purchase.id,
+        received: verifiedSession.client_reference_id,
       },
     );
 
@@ -776,182 +673,147 @@ async function handleCheckoutCompleted(
   |
   */
 
-  let processed =
-    false;
+  let processed = false;
 
-  if (
-    purchase.status ===
-    "PENDING"
-  ) {
-    processed =
-      await prisma.$transaction(
-        async (tx) => {
-          /*
-          |--------------------------------------------------------------------------
-          | Lock Purchase Row
-          |--------------------------------------------------------------------------
-          */
+  if (purchase.status === "PENDING") {
+    processed = await prisma.$transaction(
+      async (tx) => {
+        /*
+        |--------------------------------------------------------------------------
+        | Lock Purchase Row
+        |--------------------------------------------------------------------------
+        */
 
-          await tx.$queryRaw`
-            SELECT id
-            FROM "TicketPurchase"
-            WHERE id = ${purchase.id}
-            FOR UPDATE
-          `;
+        await tx.$queryRaw`
+          SELECT id
+          FROM "TicketPurchase"
+          WHERE id = ${purchase.id}
+          FOR UPDATE
+        `;
 
-          /*
-          |--------------------------------------------------------------------------
-          | Re-fetch Locked Purchase
-          |--------------------------------------------------------------------------
-          */
+        /*
+        |--------------------------------------------------------------------------
+        | Re-fetch Locked Purchase
+        |--------------------------------------------------------------------------
+        */
 
-          const lockedPurchase =
-            await tx.ticketPurchase.findUnique({
-              where: {
-                id:
-                  purchase.id,
-              },
-
-              select: {
-                id: true,
-                status: true,
-                quantity: true,
-                ticketTypeId: true,
-              },
-            });
-
-          if (!lockedPurchase) {
-            throw new Error(
-              "Purchase not found during Stripe transaction.",
-            );
-          }
-
-          /*
-          |--------------------------------------------------------------------------
-          | Idempotency
-          |--------------------------------------------------------------------------
-          */
-
-          if (
-            lockedPurchase.status !==
-            "PENDING"
-          ) {
-            return false;
-          }
-
-          /*
-          |--------------------------------------------------------------------------
-          | Verify Ticket Type
-          |--------------------------------------------------------------------------
-          */
-
-          const ticketType =
-            await tx.ticketType.findUnique({
-              where: {
-                id:
-                  lockedPurchase.ticketTypeId,
-              },
-
-              select: {
-                id: true,
-                quantity: true,
-                sold: true,
-                isActive: true,
-              },
-            });
-
-          if (!ticketType) {
-            throw new Error(
-              "Ticket type not found for purchase.",
-            );
-          }
-
-          /*
-          |--------------------------------------------------------------------------
-          | Verify Inventory
-          |--------------------------------------------------------------------------
-          */
-
-          const remaining =
-            ticketType.quantity -
-            ticketType.sold;
-
-          if (
-            remaining <
-            lockedPurchase.quantity
-          ) {
-            throw new Error(
-              "Ticket inventory is no longer sufficient to complete this purchase.",
-            );
-          }
-
-          /*
-          |--------------------------------------------------------------------------
-          | Mark Purchase PAID
-          |--------------------------------------------------------------------------
-          */
-
-          const updated =
-            await tx.ticketPurchase.updateMany({
-              where: {
-                id:
-                  lockedPurchase.id,
-
-                status:
-                  "PENDING",
-              },
-
-              data: {
-                status:
-                  "PAID",
-
-                paymentReference:
-                  verifiedSession.id,
-
-                paymentCompletedAt:
-                  new Date(),
-
-                gatewayStatus:
-                  verifiedSession.payment_status,
-              },
-            });
-
-          /*
-          |--------------------------------------------------------------------------
-          | Concurrent Processing Protection
-          |--------------------------------------------------------------------------
-          */
-
-          if (
-            updated.count !==
-            1
-          ) {
-            return false;
-          }
-
-          /*
-          |--------------------------------------------------------------------------
-          | Update Ticket Inventory
-          |--------------------------------------------------------------------------
-          */
-
-          await tx.ticketType.update({
+        const lockedPurchase =
+          await tx.ticketPurchase.findUnique({
             where: {
-              id:
-                lockedPurchase.ticketTypeId,
+              id: purchase.id,
             },
-
-            data: {
-              sold: {
-                increment:
-                  lockedPurchase.quantity,
-              },
+            select: {
+              id: true,
+              status: true,
+              quantity: true,
+              ticketTypeId: true,
             },
           });
 
-          return true;
-        },
-      );
+        if (!lockedPurchase) {
+          throw new Error(
+            "Purchase not found during Stripe transaction.",
+          );
+        }
+
+        /*
+        |--------------------------------------------------------------------------
+        | Idempotency
+        |--------------------------------------------------------------------------
+        */
+
+        if (lockedPurchase.status !== "PENDING") {
+          return false;
+        }
+
+        /*
+        |--------------------------------------------------------------------------
+        | Verify Ticket Type
+        |--------------------------------------------------------------------------
+        */
+
+        const ticketType = await tx.ticketType.findUnique({
+          where: {
+            id: lockedPurchase.ticketTypeId,
+          },
+          select: {
+            id: true,
+            quantity: true,
+            sold: true,
+            isActive: true,
+          },
+        });
+
+        if (!ticketType) {
+          throw new Error(
+            "Ticket type not found for purchase.",
+          );
+        }
+
+        /*
+        |--------------------------------------------------------------------------
+        | Verify Inventory
+        |--------------------------------------------------------------------------
+        */
+
+        const remaining =
+          ticketType.quantity - ticketType.sold;
+
+        if (remaining < lockedPurchase.quantity) {
+          throw new Error(
+            "Ticket inventory is no longer sufficient to complete this purchase.",
+          );
+        }
+
+        /*
+        |--------------------------------------------------------------------------
+        | Mark Purchase PAID
+        |--------------------------------------------------------------------------
+        */
+
+        const updated = await tx.ticketPurchase.updateMany({
+          where: {
+            id: lockedPurchase.id,
+            status: "PENDING",
+          },
+          data: {
+            status: "PAID",
+            paymentReference: verifiedSession.id,
+            paymentCompletedAt: new Date(),
+            gatewayStatus: verifiedSession.payment_status,
+          },
+        });
+
+        /*
+        |--------------------------------------------------------------------------
+        | Concurrent Processing Protection
+        |--------------------------------------------------------------------------
+        */
+
+        if (updated.count !== 1) {
+          return false;
+        }
+
+        /*
+        |--------------------------------------------------------------------------
+        | Update Ticket Inventory
+        |--------------------------------------------------------------------------
+        */
+
+        await tx.ticketType.update({
+          where: {
+            id: lockedPurchase.ticketTypeId,
+          },
+          data: {
+            sold: {
+              increment: lockedPurchase.quantity,
+            },
+          },
+        });
+
+        return true;
+      },
+    );
   }
 
   /*
@@ -963,10 +825,8 @@ async function handleCheckoutCompleted(
   const finalPurchase =
     await prisma.ticketPurchase.findUnique({
       where: {
-        id:
-          purchase.id,
+        id: purchase.id,
       },
-
       select: {
         id: true,
         status: true,
@@ -985,16 +845,38 @@ async function handleCheckoutCompleted(
   | Issue Ticket / Passes
   |--------------------------------------------------------------------------
   |
-  | issuePurchase() must remain idempotent.
+  | Keep ticket issuance before settlement creation.
+  |
+  | If settlement creation fails, the error must propagate to the webhook
+  | handler. Stripe can then retry the event.
+  |
+  | On retry, issuePurchase() must remain idempotent so existing tickets
+  | are not duplicated.
   |
   */
 
-  if (
-    finalPurchase.status ===
-    "PAID"
-  ) {
-    await issuePurchase(
+  if (finalPurchase.status === "PAID") {
+    await issuePurchase(finalPurchase.id);
+
+    /*
+    |--------------------------------------------------------------------------
+    | Create / Reconcile Purchase Settlement
+    |--------------------------------------------------------------------------
+    |
+    | This must be idempotent by purchase ID.
+    |
+    | Do not swallow errors here. A swallowed error followed by HTTP 200
+    | would prevent Stripe from retrying and could leave a paid purchase
+    | without its settlement record.
+    |
+    | The settlement service must not transfer money during this webhook.
+    | Actual organizer transfers belong to the secured settlement job.
+    |
+    */
+
+    await ensurePurchaseSettlement(
       finalPurchase.id,
+      verifiedSession,
     );
   }
 
@@ -1007,19 +889,11 @@ async function handleCheckoutCompleted(
   console.log(
     "STRIPE TICKET PAYMENT PROCESSED:",
     {
-      purchaseId:
-        finalPurchase.id,
-
-      sessionId:
-        verifiedSession.id,
-
-      quantity:
-        finalPurchase.quantity,
-
+      purchaseId: finalPurchase.id,
+      sessionId: verifiedSession.id,
+      quantity: finalPurchase.quantity,
       processed,
-
-      status:
-        finalPurchase.status,
+      status: finalPurchase.status,
     },
   );
 }
@@ -1033,27 +907,20 @@ async function handleCheckoutCompleted(
 async function handleCheckoutPaymentFailed(
   session: Stripe.Checkout.Session,
 ) {
-  const purchaseId =
-    session.metadata
-      ?.purchaseId;
+  const purchaseId = session.metadata?.purchaseId;
 
   console.warn(
     "STRIPE CHECKOUT PAYMENT FAILED:",
     {
-      purchaseId:
-        purchaseId ?? null,
-
-      sessionId:
-        session.id,
-
-      paymentStatus:
-        session.payment_status,
+      purchaseId: purchaseId ?? null,
+      sessionId: session.id,
+      paymentStatus: session.payment_status,
     },
   );
 
   /*
   |--------------------------------------------------------------------------
-  | Only fail pending Stripe purchases.
+  | Only Fail Pending Stripe Purchases
   |--------------------------------------------------------------------------
   */
 
@@ -1063,25 +930,14 @@ async function handleCheckoutPaymentFailed(
 
   await prisma.ticketPurchase.updateMany({
     where: {
-      id:
-        purchaseId,
-
-      status:
-        "PENDING",
-
-      paymentProvider:
-        "STRIPE",
+      id: purchaseId,
+      status: "PENDING",
+      paymentProvider: "STRIPE",
     },
-
     data: {
-      status:
-        "FAILED",
-
-      gatewayStatus:
-        "PAYMENT_FAILED",
-
-      paymentFailedAt:
-        new Date(),
+      status: "FAILED",
+      gatewayStatus: "PAYMENT_FAILED",
+      paymentFailedAt: new Date(),
     },
   });
 }
@@ -1096,22 +952,15 @@ async function handlePaymentIntentFailed(
   paymentIntent: Stripe.PaymentIntent,
 ) {
   const purchaseId =
-    paymentIntent.metadata
-      ?.purchaseId;
+    paymentIntent.metadata?.purchaseId;
 
   console.warn(
     "STRIPE PAYMENT INTENT FAILED:",
     {
-      paymentIntentId:
-        paymentIntent.id,
-
-      purchaseId:
-        purchaseId ?? null,
-
+      paymentIntentId: paymentIntent.id,
+      purchaseId: purchaseId ?? null,
       reason:
-        paymentIntent
-          .last_payment_error
-          ?.message ?? null,
+        paymentIntent.last_payment_error?.message ?? null,
     },
   );
 
@@ -1121,25 +970,14 @@ async function handlePaymentIntentFailed(
 
   await prisma.ticketPurchase.updateMany({
     where: {
-      id:
-        purchaseId,
-
-      status:
-        "PENDING",
-
-      paymentProvider:
-        "STRIPE",
+      id: purchaseId,
+      status: "PENDING",
+      paymentProvider: "STRIPE",
     },
-
     data: {
-      status:
-        "FAILED",
-
-      gatewayStatus:
-        "PAYMENT_FAILED",
-
-      paymentFailedAt:
-        new Date(),
+      status: "FAILED",
+      gatewayStatus: "PAYMENT_FAILED",
+      paymentFailedAt: new Date(),
     },
   });
 }
@@ -1203,15 +1041,10 @@ function mapStripeSubscriptionStatus(
 */
 
 async function syncStripeOrganizerSubscription(
-  stripeSubscription:
-    StripeOrganizerSubscription,
-
-  organizationSubscriptionId?:
-    string,
+  stripeSubscription: StripeOrganizerSubscription,
+  organizationSubscriptionId?: string,
 ) {
-  const metadata =
-    stripeSubscription.metadata ??
-    {};
+  const metadata = stripeSubscription.metadata ?? {};
 
   /*
   |--------------------------------------------------------------------------
@@ -1227,8 +1060,7 @@ async function syncStripeOrganizerSubscription(
     console.warn(
       "STRIPE SUBSCRIPTION WITHOUT WOWYOU SUBSCRIPTION ID:",
       {
-        stripeSubscriptionId:
-          stripeSubscription.id,
+        stripeSubscriptionId: stripeSubscription.id,
       },
     );
 
@@ -1242,8 +1074,7 @@ async function syncStripeOrganizerSubscription(
   */
 
   const customerId =
-    typeof stripeSubscription.customer ===
-    "string"
+    typeof stripeSubscription.customer === "string"
       ? stripeSubscription.customer
       : stripeSubscription.customer?.id;
 
@@ -1253,13 +1084,9 @@ async function syncStripeOrganizerSubscription(
   |--------------------------------------------------------------------------
   */
 
-  const firstItem =
-    stripeSubscription.items
-      .data[0];
+  const firstItem = stripeSubscription.items.data[0];
 
-  const priceId =
-    firstItem?.price?.id ??
-    null;
+  const priceId = firstItem?.price?.id ?? null;
 
   /*
   |--------------------------------------------------------------------------
@@ -1267,10 +1094,9 @@ async function syncStripeOrganizerSubscription(
   |--------------------------------------------------------------------------
   */
 
-  const status =
-    mapStripeSubscriptionStatus(
-      stripeSubscription.status,
-    );
+  const status = mapStripeSubscriptionStatus(
+    stripeSubscription.status,
+  );
 
   /*
   |--------------------------------------------------------------------------
@@ -1279,22 +1105,16 @@ async function syncStripeOrganizerSubscription(
   */
 
   const currentPeriodStart =
-    stripeSubscription
-      .current_period_start
+    stripeSubscription.current_period_start
       ? new Date(
-          stripeSubscription
-            .current_period_start *
-            1000,
+          stripeSubscription.current_period_start * 1000,
         )
       : null;
 
   const currentPeriodEnd =
-    stripeSubscription
-      .current_period_end
+    stripeSubscription.current_period_end
       ? new Date(
-          stripeSubscription
-            .current_period_end *
-            1000,
+          stripeSubscription.current_period_end * 1000,
         )
       : null;
 
@@ -1304,14 +1124,11 @@ async function syncStripeOrganizerSubscription(
   |--------------------------------------------------------------------------
   */
 
-  const canceledAt =
-    stripeSubscription.canceled_at
-      ? new Date(
-          stripeSubscription
-            .canceled_at *
-            1000,
-        )
-      : null;
+  const canceledAt = stripeSubscription.canceled_at
+    ? new Date(
+        stripeSubscription.canceled_at * 1000,
+      )
+    : null;
 
   /*
   |--------------------------------------------------------------------------
@@ -1322,43 +1139,26 @@ async function syncStripeOrganizerSubscription(
   const updated =
     await prisma.organizationSubscription.update({
       where: {
-        id:
-          localSubscriptionId,
+        id: localSubscriptionId,
       },
-
       data: {
-        provider:
-          "STRIPE",
-
-        providerCustomerId:
-          customerId ?? null,
-
-        providerSubscriptionId:
-          stripeSubscription.id,
-
-        providerPriceId:
-          priceId,
+        provider: "STRIPE",
+        providerCustomerId: customerId ?? null,
+        providerSubscriptionId: stripeSubscription.id,
+        providerPriceId: priceId,
 
         /*
-        | Stripe is now the subscription provider.
-        | Revolut setup-order data is no longer used.
-        */
+         * Stripe is now the subscription provider.
+         * Revolut setup-order data is no longer used.
+         */
 
-        providerSetupOrderId:
-          null,
-
+        providerSetupOrderId: null,
         status,
-
         currentPeriodStart,
-
         currentPeriodEnd,
-
-        cancelAtPeriodEnd:
-          Boolean(
-            stripeSubscription
-              .cancel_at_period_end,
-          ),
-
+        cancelAtPeriodEnd: Boolean(
+          stripeSubscription.cancel_at_period_end,
+        ),
         canceledAt,
       },
     });
@@ -1372,29 +1172,14 @@ async function syncStripeOrganizerSubscription(
   console.log(
     "WOWYOU ORGANIZER SUBSCRIPTION SYNCED:",
     {
-      organizationSubscriptionId:
-        updated.id,
-
-      stripeSubscriptionId:
-        stripeSubscription.id,
-
-      status:
-        updated.status,
-
-      providerCustomerId:
-        updated.providerCustomerId,
-
-      providerPriceId:
-        updated.providerPriceId,
-
-      currentPeriodStart:
-        updated.currentPeriodStart,
-
-      currentPeriodEnd:
-        updated.currentPeriodEnd,
-
-      cancelAtPeriodEnd:
-        updated.cancelAtPeriodEnd,
+      organizationSubscriptionId: updated.id,
+      stripeSubscriptionId: stripeSubscription.id,
+      status: updated.status,
+      providerCustomerId: updated.providerCustomerId,
+      providerPriceId: updated.providerPriceId,
+      currentPeriodStart: updated.currentPeriodStart,
+      currentPeriodEnd: updated.currentPeriodEnd,
+      cancelAtPeriodEnd: updated.cancelAtPeriodEnd,
     },
   );
 
@@ -1411,8 +1196,7 @@ async function getStripeSubscriptionFromCheckout(
   session: Stripe.Checkout.Session,
 ) {
   const subscriptionId =
-    typeof session.subscription ===
-    "string"
+    typeof session.subscription === "string"
       ? session.subscription
       : session.subscription?.id;
 
@@ -1420,12 +1204,9 @@ async function getStripeSubscriptionFromCheckout(
     return null;
   }
 
-  const stripe =
-    getStripe();
+  const stripe = getStripe();
 
-  return stripe.subscriptions.retrieve(
-    subscriptionId,
-  );
+  return stripe.subscriptions.retrieve(subscriptionId);
 }
 
 /*
@@ -1438,8 +1219,7 @@ async function handleSubscriptionCheckout(
   session: Stripe.Checkout.Session,
 ) {
   const organizationSubscriptionId =
-    session.metadata
-      ?.organizationSubscriptionId;
+    session.metadata?.organizationSubscriptionId;
 
   /*
   |--------------------------------------------------------------------------
@@ -1448,26 +1228,16 @@ async function handleSubscriptionCheckout(
   */
 
   const stripeSubscription =
-    await getStripeSubscriptionFromCheckout(
-      session,
-    );
+    await getStripeSubscriptionFromCheckout(session);
 
   console.log(
     "STRIPE ORGANIZER SUBSCRIPTION CHECKOUT:",
     {
-      sessionId:
-        session.id,
-
-      stripeSubscriptionId:
-        stripeSubscription?.id ??
-        null,
-
+      sessionId: session.id,
+      stripeSubscriptionId: stripeSubscription?.id ?? null,
       organizationSubscriptionId:
-        organizationSubscriptionId ??
-        null,
-
-      paymentStatus:
-        session.payment_status,
+        organizationSubscriptionId ?? null,
+      paymentStatus: session.payment_status,
     },
   );
 
@@ -1481,12 +1251,9 @@ async function handleSubscriptionCheckout(
     console.warn(
       "STRIPE ORGANIZER CHECKOUT WITHOUT SUBSCRIPTION:",
       {
-        sessionId:
-          session.id,
-
+        sessionId: session.id,
         organizationSubscriptionId:
-          organizationSubscriptionId ??
-          null,
+          organizationSubscriptionId ?? null,
       },
     );
 
@@ -1521,35 +1288,22 @@ async function handleSubscriptionEvent(
   */
 
   const subscription =
-    event.data.object as
-      StripeOrganizerSubscription;
+    event.data.object as StripeOrganizerSubscription;
 
   const organizationSubscriptionId =
-    subscription.metadata
-      ?.organizationSubscriptionId;
+    subscription.metadata?.organizationSubscriptionId;
 
   console.log(
     "STRIPE SUBSCRIPTION EVENT:",
     {
-      eventId:
-        event.id,
-
-      type:
-        event.type,
-
-      subscriptionId:
-        subscription.id,
-
-      status:
-        subscription.status,
-
+      eventId: event.id,
+      type: event.type,
+      subscriptionId: subscription.id,
+      status: subscription.status,
       organizationSubscriptionId:
-        organizationSubscriptionId ??
-        null,
-
+        organizationSubscriptionId ?? null,
       customer:
-        typeof subscription.customer ===
-        "string"
+        typeof subscription.customer === "string"
           ? subscription.customer
           : subscription.customer?.id,
     },
@@ -1582,30 +1336,19 @@ function getInvoiceSubscriptionId(
   |--------------------------------------------------------------------------
   */
 
-  const rawInvoice =
-    invoice as Stripe.Invoice & {
-      subscription?:
-        | string
-        | Subscription
-        | null;
-    };
+  const rawInvoice = invoice as Stripe.Invoice & {
+    subscription?: string | Subscription | null;
+  };
 
-  if (
-    typeof rawInvoice.subscription ===
-    "string"
-  ) {
+  if (typeof rawInvoice.subscription === "string") {
     return rawInvoice.subscription;
   }
 
   if (
     rawInvoice.subscription &&
-    typeof rawInvoice.subscription ===
-      "object"
+    typeof rawInvoice.subscription === "object"
   ) {
-    return (
-      rawInvoice.subscription.id ??
-      null
-    );
+    return rawInvoice.subscription.id ?? null;
   }
 
   return null;
@@ -1620,23 +1363,15 @@ function getInvoiceSubscriptionId(
 async function handleInvoicePaid(
   invoice: Stripe.Invoice,
 ) {
-  const subscriptionId =
-    getInvoiceSubscriptionId(
-      invoice,
-    );
+  const subscriptionId = getInvoiceSubscriptionId(invoice);
 
   console.log(
     "STRIPE INVOICE PAID:",
     {
-      invoiceId:
-        invoice.id,
-
-      subscriptionId:
-        subscriptionId ?? null,
-
+      invoiceId: invoice.id,
+      subscriptionId: subscriptionId ?? null,
       customer:
-        typeof invoice.customer ===
-        "string"
+        typeof invoice.customer === "string"
           ? invoice.customer
           : invoice.customer?.id,
     },
@@ -1644,7 +1379,7 @@ async function handleInvoicePaid(
 
   /*
   |--------------------------------------------------------------------------
-  | Ticket payments are not subscriptions.
+  | Ticket Payments Are Not Subscriptions
   |--------------------------------------------------------------------------
   |
   | An invoice without a subscription is not relevant to organizer
@@ -1662,24 +1397,20 @@ async function handleInvoicePaid(
   |--------------------------------------------------------------------------
   */
 
-  const stripe =
-    getStripe();
+  const stripe = getStripe();
 
   const subscription =
-    await stripe.subscriptions.retrieve(
-      subscriptionId,
-    );
+    await stripe.subscriptions.retrieve(subscriptionId);
 
   /*
   |--------------------------------------------------------------------------
-  | Only sync the WowYou organizer subscription
+  | Only Sync the WowYou Organizer Subscription
   |--------------------------------------------------------------------------
   */
 
   await syncStripeOrganizerSubscription(
     subscription as StripeOrganizerSubscription,
-    subscription.metadata
-      ?.organizationSubscriptionId,
+    subscription.metadata?.organizationSubscriptionId,
   );
 }
 
@@ -1692,23 +1423,15 @@ async function handleInvoicePaid(
 async function handleInvoicePaymentFailed(
   invoice: Stripe.Invoice,
 ) {
-  const subscriptionId =
-    getInvoiceSubscriptionId(
-      invoice,
-    );
+  const subscriptionId = getInvoiceSubscriptionId(invoice);
 
   console.warn(
     "STRIPE INVOICE PAYMENT FAILED:",
     {
-      invoiceId:
-        invoice.id,
-
-      subscriptionId:
-        subscriptionId ?? null,
-
+      invoiceId: invoice.id,
+      subscriptionId: subscriptionId ?? null,
       customer:
-        typeof invoice.customer ===
-        "string"
+        typeof invoice.customer === "string"
           ? invoice.customer
           : invoice.customer?.id,
     },
@@ -1727,8 +1450,7 @@ async function handleInvoicePaymentFailed(
   |
   */
 
-  const stripe =
-    getStripe();
+  const stripe = getStripe();
 
   const subscription =
     await stripe.subscriptions.retrieve(
@@ -1743,8 +1465,7 @@ async function handleInvoicePaymentFailed(
 
   await syncStripeOrganizerSubscription(
     subscription,
-    subscription.metadata
-      ?.organizationSubscriptionId,
+    subscription.metadata?.organizationSubscriptionId,
   );
 
   /*
@@ -1758,21 +1479,15 @@ async function handleInvoicePaymentFailed(
   */
 
   if (
-    !subscription.metadata
-      ?.organizationSubscriptionId
+    !subscription.metadata?.organizationSubscriptionId
   ) {
     await prisma.organizationSubscription.updateMany({
       where: {
-        provider:
-          "STRIPE",
-
-        providerSubscriptionId:
-          subscriptionId,
+        provider: "STRIPE",
+        providerSubscriptionId: subscriptionId,
       },
-
       data: {
-        status:
-          SubscriptionStatus.PAST_DUE,
+        status: SubscriptionStatus.PAST_DUE,
       },
     });
   }

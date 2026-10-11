@@ -279,6 +279,8 @@ model Organization {
 
   eventPayouts EventPayout[]
 
+  purchaseSettlements PurchaseSettlement[]
+
   /**
    * |--------------------------------------------------------------------------
    * | Organization Details
@@ -410,6 +412,8 @@ model Event {
    */
 
   eventPayout EventPayout?
+
+  purchaseSettlements PurchaseSettlement[]
 
   /**
    * |--------------------------------------------------------------------------
@@ -628,6 +632,17 @@ model TicketPurchase {
 
   quantity Int
 
+  // Ticket subtotal before the transaction fee.
+  subtotal Float @default(0)
+
+  // Transaction fee charged to the attendee.
+  transactionFee Float @default(0)
+
+  // EUR-to-event-currency rate captured for the fixed €0.50 fee.
+  // EUR purchases do not require a conversion rate.
+  feeFxRate Float?
+
+  // Total payable. Keep this field for existing webhook verification.
   amount Float
 
   currency String @default("USD")
@@ -681,6 +696,9 @@ model TicketPurchase {
   activities EventActivity[]
 
   passes EventPass[]
+
+  // One settlement ledger entry per purchase.
+  settlement PurchaseSettlement?
 
   /**
    * |--------------------------------------------------------------------------
@@ -1353,15 +1371,63 @@ model EmailVerificationToken {
 }
 
 model LoginOtp {
-  id String @id @default(cuid())
-  userId String
-  codeHash String
+  id        String    @id @default(cuid())
+  userId    String
+  codeHash  String
   expiresAt DateTime
-  attempts Int @default(0)
-  usedAt DateTime?
-  createdAt DateTime @default(now())
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  attempts  Int       @default(0)
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@index([userId])
   @@index([userId, createdAt])
   @@index([expiresAt])
+}
+
+model PurchaseSettlement {
+  id             String @id @default(cuid())
+  purchaseId     String @unique
+  eventId        String
+  organizationId String
+
+  currency        String
+  ticketSubtotal  Decimal @db.Decimal(14, 2)
+  transactionFee  Decimal @db.Decimal(14, 2)
+  refundAmount    Decimal @default(0) @db.Decimal(14, 2)
+  organizerAmount Decimal @db.Decimal(14, 2)
+
+  // Actual Stripe processing fee, recorded only when the
+  // Stripe Balance Transaction is available.
+  stripeProcessingFee         Decimal?  @db.Decimal(14, 2)
+  stripeProcessingFeeCurrency String?
+  platformFeeShortfall        Decimal?  @db.Decimal(14, 2)
+  platformFeeSurplus          Decimal?  @db.Decimal(14, 2)
+  stripeFeeReconciledAt       DateTime?
+
+  releaseAt DateTime
+  status    EventPayoutStatus @default(PENDING)
+
+  stripePaymentIntentId      String? @unique
+  stripeChargeId             String? @unique
+  stripeBalanceTransactionId String? @unique
+  stripeTransferId           String? @unique
+
+  attempts            Int       @default(0)
+  nextAttemptAt       DateTime?
+  processingStartedAt DateTime?
+  transferredAt       DateTime?
+  failureReason       String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  purchase     TicketPurchase @relation(fields: [purchaseId], references: [id], onDelete: Restrict)
+  event        Event          @relation(fields: [eventId], references: [id], onDelete: Restrict)
+  organization Organization   @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+
+  @@index([status, releaseAt])
+  @@index([status, nextAttemptAt])
+  @@index([organizationId, createdAt])
+  @@index([eventId, createdAt])
 }

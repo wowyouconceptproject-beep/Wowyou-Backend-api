@@ -13,6 +13,8 @@ import stripeRoutes
 import intelligenceRoutes
   from "./modules/intelligence/intelligence.routes";
 
+  import settlementRoutes from "./modules/settlements/settlement.routes";
+
 const app = express();
 
 /*
@@ -108,6 +110,11 @@ app.use(
 app.use(
   "/search",
   searchRoutes,
+);
+
+app.use(
+  "/api/settlements",
+  settlementRoutes,
 );
 
 /*

@@ -43,6 +43,7 @@ const morgan_1 = __importDefault(require("morgan"));
 const search_1 = require("./modules/search");
 const stripe_routes_1 = __importDefault(require("./modules/payments/stripe/stripe.routes"));
 const intelligence_routes_1 = __importDefault(require("./modules/intelligence/intelligence.routes"));
+const settlement_routes_1 = __importDefault(require("./modules/settlements/settlement.routes"));
 const app = (0, express_1.default)();
 /*
 |--------------------------------------------------------------------------
@@ -105,6 +106,7 @@ app.use(express_1.default.json({
 |--------------------------------------------------------------------------
 */
 app.use("/search", search_1.searchRoutes);
+app.use("/api/settlements", settlement_routes_1.default);
 /*
 |--------------------------------------------------------------------------
 | Stripe Routes
