@@ -43,6 +43,7 @@ router.use("/purchase", purchaseRoutes);
 router.use("/stripe", stripeRoutes);
 
 
+router.use("/pass", passRoutes);
 router.use("/passes", passRoutes);
 router.use("/operations", operationsRoutes);
 router.use("/staff", staffRoutes);
