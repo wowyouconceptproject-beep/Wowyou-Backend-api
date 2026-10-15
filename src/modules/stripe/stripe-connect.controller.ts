@@ -66,31 +66,30 @@ export async function createAccount(
       });
     }
 
-    const account =
-      await createConnectedAccount({
-        organizationId,
-        email,
-        businessName:
-          String(
-            req.body.businessName ?? "",
-          ).trim() || organization.name,
-        country:
-          String(
-            req.body.country ?? "",
-          ).trim() || undefined,
-      });
+    const businessName = String(
+      req.body.businessName ?? "",
+    ).trim();
 
-    return res.status(201).json({
+    const country = String(
+      req.body.country ?? "",
+    ).trim();
+
+    const account = await createConnectedAccount({
+      organizationId,
+      email,
+      businessName: businessName || organization.name,
+      country: country || undefined,
+    });
+
+    return res.status(200).json({
       success: true,
+      message: "Stripe Connect account is ready.",
       account: {
         id: account.id,
         type: account.type,
-        chargesEnabled:
-          account.charges_enabled,
-        payoutsEnabled:
-          account.payouts_enabled,
-        detailsSubmitted:
-          account.details_submitted,
+        chargesEnabled: account.charges_enabled,
+        payoutsEnabled: account.payouts_enabled,
+        detailsSubmitted: account.details_submitted,
       },
     });
   } catch (error) {
@@ -99,12 +98,32 @@ export async function createAccount(
       error,
     );
 
+    const message =
+      error instanceof Error
+        ? error.message
+        : "Failed to create Stripe Connect account.";
+
+    if (message === "Organization not found.") {
+      return res.status(404).json({
+        success: false,
+        message,
+      });
+    }
+
+    if (
+      message.includes(
+        "A valid email address is required",
+      )
+    ) {
+      return res.status(400).json({
+        success: false,
+        message,
+      });
+    }
+
     return res.status(500).json({
       success: false,
-      message:
-        error instanceof Error
-          ? error.message
-          : "Failed to create Stripe Connect account.",
+      message,
     });
   }
 }
@@ -135,6 +154,13 @@ export async function onboarding(
         "",
     ).trim();
 
+    if (!organizationId) {
+      return res.status(400).json({
+        success: false,
+        message: "organizationId is required.",
+      });
+    }
+
     const organization =
       await prisma.organization.findFirst({
         where: {
@@ -146,16 +172,40 @@ export async function onboarding(
     if (!organization) {
       return res.status(404).json({
         success: false,
-        message: "Organization not found.",
+        message:
+          "Organization not found or you are not the owner.",
       });
     }
 
-    const result =
-      await createOnboardingLink(
-        organizationId,
-      );
+    /*
+     * Existing accounts are reused.
+     *
+     * If an account does not exist, the service creates and persists
+     * one before generating the Stripe onboarding link.
+     */
+    const email = String(
+      req.body.email ?? "",
+    ).trim();
 
-    return res.json({
+    const businessName = String(
+      req.body.businessName ?? "",
+    ).trim();
+
+    const country = String(
+      req.body.country ?? "",
+    ).trim();
+
+    const result = await createOnboardingLink(
+      organizationId,
+      {
+        email: email || undefined,
+        businessName:
+          businessName || organization.name,
+        country: country || undefined,
+      },
+    );
+
+    return res.status(200).json({
       success: true,
       ...result,
     });
@@ -165,12 +215,32 @@ export async function onboarding(
       error,
     );
 
+    const message =
+      error instanceof Error
+        ? error.message
+        : "Failed to create Stripe onboarding link.";
+
+    if (message === "Organization not found.") {
+      return res.status(404).json({
+        success: false,
+        message,
+      });
+    }
+
+    if (
+      message.includes(
+        "A valid email address is required",
+      )
+    ) {
+      return res.status(400).json({
+        success: false,
+        message,
+      });
+    }
+
     return res.status(500).json({
       success: false,
-      message:
-        error instanceof Error
-          ? error.message
-          : "Failed to create Stripe onboarding link.",
+      message,
     });
   }
 }
@@ -199,6 +269,13 @@ export async function status(
       req.params.organizationId ?? "",
     ).trim();
 
+    if (!organizationId) {
+      return res.status(400).json({
+        success: false,
+        message: "organizationId is required.",
+      });
+    }
+
     const organization =
       await prisma.organization.findFirst({
         where: {
@@ -210,7 +287,8 @@ export async function status(
     if (!organization) {
       return res.status(404).json({
         success: false,
-        message: "Organization not found.",
+        message:
+          "Organization not found or you are not the owner.",
       });
     }
 
@@ -219,7 +297,7 @@ export async function status(
         organizationId,
       );
 
-    return res.json({
+    return res.status(200).json({
       success: true,
       stripe: result,
     });
@@ -263,6 +341,13 @@ export async function dashboard(
       req.params.organizationId ?? "",
     ).trim();
 
+    if (!organizationId) {
+      return res.status(400).json({
+        success: false,
+        message: "organizationId is required.",
+      });
+    }
+
     const organization =
       await prisma.organization.findFirst({
         where: {
@@ -274,16 +359,16 @@ export async function dashboard(
     if (!organization) {
       return res.status(404).json({
         success: false,
-        message: "Organization not found.",
+        message:
+          "Organization not found or you are not the owner.",
       });
     }
 
-    const result =
-      await createLoginLink(
-        organizationId,
-      );
+    const result = await createLoginLink(
+      organizationId,
+    );
 
-    return res.json({
+    return res.status(200).json({
       success: true,
       ...result,
     });
@@ -293,12 +378,21 @@ export async function dashboard(
       error,
     );
 
+    const message =
+      error instanceof Error
+        ? error.message
+        : "Failed to create Stripe dashboard link.";
+
+    if (message === "Organization not found.") {
+      return res.status(404).json({
+        success: false,
+        message,
+      });
+    }
+
     return res.status(500).json({
       success: false,
-      message:
-        error instanceof Error
-          ? error.message
-          : "Failed to create Stripe dashboard link.",
+      message,
     });
   }
 }

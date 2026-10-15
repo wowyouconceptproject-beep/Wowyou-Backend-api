@@ -42,6 +42,12 @@ export interface StripeConnectStatus {
   disabledReason: string | null;
 }
 
+export interface CreateOnboardingLinkInput {
+  email?: string;
+  businessName?: string;
+  country?: string;
+}
+
 /*
 |--------------------------------------------------------------------------
 | Environment
@@ -60,9 +66,13 @@ function getConnectUrls() {
     );
   }
 
+  const normalizedFrontendUrl = frontendUrl.replace(/\/+$/, "");
+
   return {
-    refreshUrl: `${frontendUrl}/dashboard/settings/payments/stripe/refresh`,
-    returnUrl: `${frontendUrl}/dashboard/settings/payments/stripe/return`,
+    refreshUrl:
+      `${normalizedFrontendUrl}/dashboard/settings/payments/stripe/refresh`,
+    returnUrl:
+      `${normalizedFrontendUrl}/dashboard/settings/payments/stripe/return`,
   };
 }
 
@@ -74,7 +84,7 @@ function getConnectUrls() {
 
 export async function createConnectedAccount(
   input: CreateConnectedAccountInput,
-) {
+): Promise<Stripe.Account> {
   const stripe = getStripe();
 
   const organization = await prisma.organization.findUnique({
@@ -88,7 +98,7 @@ export async function createConnectedAccount(
   }
 
   /*
-   * Do not create another Stripe account if one already exists.
+   * Reuse an existing connected account.
    */
   if (organization.stripeAccountId) {
     const existingAccount = await stripe.accounts.retrieve(
@@ -98,17 +108,22 @@ export async function createConnectedAccount(
     return existingAccount;
   }
 
+  const email = input.email.trim();
+
+  if (!email) {
+    throw new Error(
+      "A valid email address is required to create a Stripe Connect account.",
+    );
+  }
+
   const accountParams: Stripe.AccountCreateParams = {
     type: "express",
-
-    email: input.email,
-
+    email,
     capabilities: {
       transfers: {
         requested: true,
       },
     },
-
     business_profile: {
       name:
         input.businessName?.trim() ||
@@ -118,9 +133,7 @@ export async function createConnectedAccount(
 
   /*
    * Country is optional.
-   *
-   * If supplied, Stripe uses it as the connected
-   * account's country during account creation.
+   * When supplied, Stripe uses it as the connected account's country.
    */
   if (input.country?.trim()) {
     accountParams.country = input.country.trim().toUpperCase();
@@ -128,6 +141,9 @@ export async function createConnectedAccount(
 
   const account = await stripe.accounts.create(accountParams);
 
+  /*
+   * Persist the account ID and initial account status.
+   */
   await prisma.organization.update({
     where: {
       id: organization.id,
@@ -155,7 +171,7 @@ export async function createConnectedAccount(
 
 export async function getConnectedAccount(
   organizationId: string,
-) {
+): Promise<Stripe.Account | null> {
   const stripe = getStripe();
 
   const organization = await prisma.organization.findUnique({
@@ -237,34 +253,26 @@ export async function refreshConnectedAccountStatus(
     account.details_submitted === true &&
     account.payouts_enabled === true;
 
+  const accountStatus =
+    disabledReason ??
+    (onboardingComplete ? "active" : "pending");
+
   await prisma.organization.update({
     where: {
       id: organization.id,
     },
     data: {
-      stripeAccountStatus:
-        account.requirements?.disabled_reason ??
-        (onboardingComplete ? "active" : "pending"),
-
-      stripeChargesEnabled:
-        account.charges_enabled,
-
-      stripePayoutsEnabled:
-        account.payouts_enabled,
-
-      stripeDetailsSubmitted:
-        account.details_submitted,
-
-      stripeOnboardingComplete:
-        onboardingComplete,
+      stripeAccountStatus: accountStatus,
+      stripeChargesEnabled: account.charges_enabled,
+      stripePayoutsEnabled: account.payouts_enabled,
+      stripeDetailsSubmitted: account.details_submitted,
+      stripeOnboardingComplete: onboardingComplete,
     },
   });
 
   return {
     stripeAccountId: account.id,
-    accountStatus:
-      account.requirements?.disabled_reason ??
-      (onboardingComplete ? "active" : "pending"),
+    accountStatus,
     chargesEnabled: account.charges_enabled,
     payoutsEnabled: account.payouts_enabled,
     detailsSubmitted: account.details_submitted,
@@ -279,10 +287,16 @@ export async function refreshConnectedAccountStatus(
 |--------------------------------------------------------------------------
 | Create Onboarding Link
 |--------------------------------------------------------------------------
+|
+| If the organization already has a Stripe account, reuse it.
+| If it does not, create and persist one before generating the link.
+|
+|--------------------------------------------------------------------------
 */
 
 export async function createOnboardingLink(
   organizationId: string,
+  input: CreateOnboardingLinkInput = {},
 ) {
   const stripe = getStripe();
 
@@ -292,6 +306,7 @@ export async function createOnboardingLink(
     },
     select: {
       id: true,
+      name: true,
       stripeAccountId: true,
     },
   });
@@ -300,28 +315,45 @@ export async function createOnboardingLink(
     throw new Error("Organization not found.");
   }
 
-  if (!organization.stripeAccountId) {
-    throw new Error(
-      "Stripe Connect account has not been created.",
-    );
-  }
+  let accountId = organization.stripeAccountId;
 
-  const { refreshUrl, returnUrl } =
-    getConnectUrls();
+  if (!accountId) {
+    const email = input.email?.trim();
 
-  const accountLink =
-    await stripe.accountLinks.create({
-      account: organization.stripeAccountId,
+    if (!email) {
+      throw new Error(
+        "A valid email address is required to create the Stripe Connect account.",
+      );
+    }
 
-      refresh_url: refreshUrl,
-
-      return_url: returnUrl,
-
-      type: "account_onboarding",
+    const account = await createConnectedAccount({
+      organizationId,
+      email,
+      businessName:
+        input.businessName?.trim() ||
+        organization.name,
+      country: input.country,
     });
 
+    accountId = account.id;
+  } else {
+    /*
+     * Verify the saved account before creating an onboarding link.
+     */
+    await stripe.accounts.retrieve(accountId);
+  }
+
+  const { refreshUrl, returnUrl } = getConnectUrls();
+
+  const accountLink = await stripe.accountLinks.create({
+    account: accountId,
+    refresh_url: refreshUrl,
+    return_url: returnUrl,
+    type: "account_onboarding",
+  });
+
   return {
-    accountId: organization.stripeAccountId,
+    accountId,
     url: accountLink.url,
     expiresAt: accountLink.expires_at,
   };
@@ -332,8 +364,8 @@ export async function createOnboardingLink(
 | Get Stripe Login Link
 |--------------------------------------------------------------------------
 |
-| Express connected accounts can access their Stripe
-| Express Dashboard through a login link.
+| Express connected accounts can access their Stripe Express Dashboard
+| through a login link.
 |
 |--------------------------------------------------------------------------
 */
@@ -363,10 +395,9 @@ export async function createLoginLink(
     );
   }
 
-  const loginLink =
-    await stripe.accounts.createLoginLink(
-      organization.stripeAccountId,
-    );
+  const loginLink = await stripe.accounts.createLoginLink(
+    organization.stripeAccountId,
+  );
 
   return {
     url: loginLink.url,
@@ -381,8 +412,6 @@ export async function createLoginLink(
 
 export async function getOrganizationStripeStatus(
   organizationId: string,
-) {
-  return refreshConnectedAccountStatus(
-    organizationId,
-  );
+): Promise<StripeConnectStatus> {
+  return refreshConnectedAccountStatus(organizationId);
 }
