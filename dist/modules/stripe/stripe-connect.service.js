@@ -34,9 +34,10 @@ function getConnectUrls() {
     if (!frontendUrl) {
         throw new Error("FRONTEND_URL, WEB_APP_URL, or NEXT_PUBLIC_WEB_URL must be configured.");
     }
+    const normalizedFrontendUrl = frontendUrl.replace(/\/+$/, "");
     return {
-        refreshUrl: `${frontendUrl}/dashboard/settings/payments/stripe/refresh`,
-        returnUrl: `${frontendUrl}/dashboard/settings/payments/stripe/return`,
+        refreshUrl: `${normalizedFrontendUrl}/dashboard/settings/payments/stripe/refresh`,
+        returnUrl: `${normalizedFrontendUrl}/dashboard/settings/payments/stripe/return`,
     };
 }
 /*
@@ -55,15 +56,19 @@ async function createConnectedAccount(input) {
         throw new Error("Organization not found.");
     }
     /*
-     * Do not create another Stripe account if one already exists.
+     * Reuse an existing connected account.
      */
     if (organization.stripeAccountId) {
         const existingAccount = await stripe.accounts.retrieve(organization.stripeAccountId);
         return existingAccount;
     }
+    const email = input.email.trim();
+    if (!email) {
+        throw new Error("A valid email address is required to create a Stripe Connect account.");
+    }
     const accountParams = {
         type: "express",
-        email: input.email,
+        email,
         capabilities: {
             transfers: {
                 requested: true,
@@ -76,14 +81,15 @@ async function createConnectedAccount(input) {
     };
     /*
      * Country is optional.
-     *
-     * If supplied, Stripe uses it as the connected
-     * account's country during account creation.
+     * When supplied, Stripe uses it as the connected account's country.
      */
     if (input.country?.trim()) {
         accountParams.country = input.country.trim().toUpperCase();
     }
     const account = await stripe.accounts.create(accountParams);
+    /*
+     * Persist the account ID and initial account status.
+     */
     await prisma_1.prisma.organization.update({
         where: {
             id: organization.id,
@@ -162,13 +168,14 @@ async function refreshConnectedAccountStatus(organizationId) {
     const disabledReason = account.requirements?.disabled_reason ?? null;
     const onboardingComplete = account.details_submitted === true &&
         account.payouts_enabled === true;
+    const accountStatus = disabledReason ??
+        (onboardingComplete ? "active" : "pending");
     await prisma_1.prisma.organization.update({
         where: {
             id: organization.id,
         },
         data: {
-            stripeAccountStatus: account.requirements?.disabled_reason ??
-                (onboardingComplete ? "active" : "pending"),
+            stripeAccountStatus: accountStatus,
             stripeChargesEnabled: account.charges_enabled,
             stripePayoutsEnabled: account.payouts_enabled,
             stripeDetailsSubmitted: account.details_submitted,
@@ -177,8 +184,7 @@ async function refreshConnectedAccountStatus(organizationId) {
     });
     return {
         stripeAccountId: account.id,
-        accountStatus: account.requirements?.disabled_reason ??
-            (onboardingComplete ? "active" : "pending"),
+        accountStatus,
         chargesEnabled: account.charges_enabled,
         payoutsEnabled: account.payouts_enabled,
         detailsSubmitted: account.details_submitted,
@@ -192,8 +198,13 @@ async function refreshConnectedAccountStatus(organizationId) {
 |--------------------------------------------------------------------------
 | Create Onboarding Link
 |--------------------------------------------------------------------------
+|
+| If the organization already has a Stripe account, reuse it.
+| If it does not, create and persist one before generating the link.
+|
+|--------------------------------------------------------------------------
 */
-async function createOnboardingLink(organizationId) {
+async function createOnboardingLink(organizationId, input = {}) {
     const stripe = getStripe();
     const organization = await prisma_1.prisma.organization.findUnique({
         where: {
@@ -201,24 +212,43 @@ async function createOnboardingLink(organizationId) {
         },
         select: {
             id: true,
+            name: true,
             stripeAccountId: true,
         },
     });
     if (!organization) {
         throw new Error("Organization not found.");
     }
-    if (!organization.stripeAccountId) {
-        throw new Error("Stripe Connect account has not been created.");
+    let accountId = organization.stripeAccountId;
+    if (!accountId) {
+        const email = input.email?.trim();
+        if (!email) {
+            throw new Error("A valid email address is required to create the Stripe Connect account.");
+        }
+        const account = await createConnectedAccount({
+            organizationId,
+            email,
+            businessName: input.businessName?.trim() ||
+                organization.name,
+            country: input.country,
+        });
+        accountId = account.id;
+    }
+    else {
+        /*
+         * Verify the saved account before creating an onboarding link.
+         */
+        await stripe.accounts.retrieve(accountId);
     }
     const { refreshUrl, returnUrl } = getConnectUrls();
     const accountLink = await stripe.accountLinks.create({
-        account: organization.stripeAccountId,
+        account: accountId,
         refresh_url: refreshUrl,
         return_url: returnUrl,
         type: "account_onboarding",
     });
     return {
-        accountId: organization.stripeAccountId,
+        accountId,
         url: accountLink.url,
         expiresAt: accountLink.expires_at,
     };
@@ -228,8 +258,8 @@ async function createOnboardingLink(organizationId) {
 | Get Stripe Login Link
 |--------------------------------------------------------------------------
 |
-| Express connected accounts can access their Stripe
-| Express Dashboard through a login link.
+| Express connected accounts can access their Stripe Express Dashboard
+| through a login link.
 |
 |--------------------------------------------------------------------------
 */

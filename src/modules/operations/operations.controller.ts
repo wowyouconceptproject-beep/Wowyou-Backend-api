@@ -246,3 +246,62 @@ export async function scan(
 
   }
 }
+
+/*
+|--------------------------------------------------------------------------
+| Event Reports
+|--------------------------------------------------------------------------
+*/
+
+export async function getReports(
+  req: OpsRequest,
+  res: Response,
+) {
+  try {
+    const eventId = req.staff?.eventId;
+
+    if (!eventId) {
+      return res.status(401).json({
+        success: false,
+        message: "Authenticated event session is required.",
+      });
+    }
+
+    const data = await dashboard(eventId);
+
+    const checkedIn = data.attendance.checkedIn;
+    const totalTickets = data.attendance.totalTickets;
+
+    const attendanceRate =
+      totalTickets > 0
+        ? Number(((checkedIn / totalTickets) * 100).toFixed(2))
+        : 0;
+
+    return res.json({
+      success: true,
+      report: {
+        event: data.event,
+        attendance: {
+          checkedIn,
+          totalTickets,
+          remaining: data.attendance.remaining,
+          capacity: data.attendance.capacity,
+          attendanceRate,
+        },
+        onlineStaff: data.onlineStaff,
+        recentActivity: data.recentActivity,
+        generatedAt: new Date().toISOString(),
+      },
+    });
+  } catch (error: unknown) {
+    const message =
+      error instanceof Error
+        ? error.message
+        : "Unable to generate event reports.";
+
+    return res.status(400).json({
+      success: false,
+      message,
+    });
+  }
+}
