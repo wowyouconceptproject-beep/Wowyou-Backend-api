@@ -19,6 +19,12 @@ import {
   resendLoginOtp,
 } from "./login-otp.service";
 
+import {
+  requestPasswordReset,
+  verifyPasswordResetCode,
+  resetPassword,
+} from "./password-reset.service";
+
 /*
 |--------------------------------------------------------------------------
 | Register
@@ -456,6 +462,142 @@ export async function me(
       message:
         error?.message ||
         "Server error",
+    });
+  }
+}
+
+/*
+|--------------------------------------------------------------------------
+| Forgot Password
+|--------------------------------------------------------------------------
+*/
+
+export async function forgotPassword(
+  req: Request,
+  res: Response,
+) {
+  try {
+    const email = String(req.body?.email ?? "")
+      .trim()
+      .toLowerCase();
+
+    if (!email) {
+      return res.status(400).json({
+        success: false,
+        message: "Email is required.",
+      });
+    }
+
+    const result = await requestPasswordReset(email);
+
+    return res.status(200).json(result);
+  } catch (error: unknown) {
+    console.error("FORGOT PASSWORD ERROR:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Unable to process the request. Please try again.",
+    });
+  }
+}
+
+/*
+|--------------------------------------------------------------------------
+| Verify Password Reset Code
+|--------------------------------------------------------------------------
+*/
+
+export async function verifyResetCode(
+  req: Request,
+  res: Response,
+) {
+  try {
+    const email = String(req.body?.email ?? "")
+      .trim()
+      .toLowerCase();
+
+    const code = String(req.body?.code ?? "").trim();
+
+    if (!email || !code) {
+      return res.status(400).json({
+        success: false,
+        message: "Email and reset code are required.",
+      });
+    }
+
+    const result = await verifyPasswordResetCode(email, code);
+
+    return res.status(200).json(result);
+  } catch (error: unknown) {
+    const message =
+      error instanceof Error
+        ? error.message
+        : "Code verification failed.";
+
+    const expectedError =
+      message.includes("required") ||
+      message.includes("valid email") ||
+      message.includes("Invalid or expired");
+
+    return res.status(expectedError ? 400 : 500).json({
+      success: false,
+      message: expectedError
+        ? message
+        : "Unable to verify the code. Please try again.",
+    });
+  }
+}
+
+/*
+|--------------------------------------------------------------------------
+| Reset Password
+|--------------------------------------------------------------------------
+*/
+
+export async function resetPasswordController(
+  req: Request,
+  res: Response,
+) {
+  try {
+    const email = String(req.body?.email ?? "")
+      .trim()
+      .toLowerCase();
+
+    const resetToken = String(req.body?.resetToken ?? "").trim();
+
+    const newPassword = req.body?.newPassword;
+
+    if (!email || !resetToken || typeof newPassword !== "string") {
+      return res.status(400).json({
+        success: false,
+        message: "Email, reset token and new password are required.",
+      });
+    }
+
+    const result = await resetPassword(
+      email,
+      resetToken,
+      newPassword,
+    );
+
+    return res.status(200).json(result);
+  } catch (error: unknown) {
+    const message =
+      error instanceof Error
+        ? error.message
+        : "Password reset failed.";
+
+    const expectedError =
+      message.includes("required") ||
+      message.includes("at least") ||
+      message.includes("must not exceed") ||
+      message.includes("Invalid or expired");
+
+    return res.status(expectedError ? 400 : 500).json({
+      success: false,
+      message: expectedError
+        ? message
+        : "Unable to reset your password. Please try again.",
     });
   }
 }

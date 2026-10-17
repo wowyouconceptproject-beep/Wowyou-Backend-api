@@ -149,6 +149,7 @@ enum EventPayoutStatus {
 enum EmailType {
   EMAIL_VERIFICATION
   LOGIN_OTP
+  PASSWORD_RESET
   TICKET_PURCHASE
   ORGANIZER_TICKET_SALE
   EVENT_REMINDER
@@ -189,6 +190,8 @@ model User {
   emailVerified Boolean @default(false)
 
   emailVerificationTokens EmailVerificationToken[]
+
+  passwordResetCodes PasswordResetCode[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1430,4 +1433,21 @@ model PurchaseSettlement {
   @@index([status, nextAttemptAt])
   @@index([organizationId, createdAt])
   @@index([eventId, createdAt])
+}
+
+model PasswordResetCode {
+  id             String    @id @default(cuid())
+  userId         String
+  codeHash       String
+  resetTokenHash String?
+  expiresAt      DateTime
+  attempts       Int       @default(0)
+  verifiedAt     DateTime?
+  usedAt         DateTime?
+  createdAt      DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([expiresAt])
 }

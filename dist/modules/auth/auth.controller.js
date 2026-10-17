@@ -7,10 +7,14 @@ exports.resendLoginCode = resendLoginCode;
 exports.verifyEmail = verifyEmail;
 exports.resendVerification = resendVerification;
 exports.me = me;
+exports.forgotPassword = forgotPassword;
+exports.verifyResetCode = verifyResetCode;
+exports.resetPasswordController = resetPasswordController;
 const prisma_1 = require("../../lib/prisma");
 const auth_service_1 = require("./auth.service");
 const email_verification_service_1 = require("./email-verification.service");
 const login_otp_service_1 = require("./login-otp.service");
+const password_reset_service_1 = require("./password-reset.service");
 /*
 |--------------------------------------------------------------------------
 | Register
@@ -263,6 +267,105 @@ async function me(req, res) {
             success: false,
             message: error?.message ||
                 "Server error",
+        });
+    }
+}
+/*
+|--------------------------------------------------------------------------
+| Forgot Password
+|--------------------------------------------------------------------------
+*/
+async function forgotPassword(req, res) {
+    try {
+        const email = String(req.body?.email ?? "")
+            .trim()
+            .toLowerCase();
+        if (!email) {
+            return res.status(400).json({
+                success: false,
+                message: "Email is required.",
+            });
+        }
+        const result = await (0, password_reset_service_1.requestPasswordReset)(email);
+        return res.status(200).json(result);
+    }
+    catch (error) {
+        console.error("FORGOT PASSWORD ERROR:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Unable to process the request. Please try again.",
+        });
+    }
+}
+/*
+|--------------------------------------------------------------------------
+| Verify Password Reset Code
+|--------------------------------------------------------------------------
+*/
+async function verifyResetCode(req, res) {
+    try {
+        const email = String(req.body?.email ?? "")
+            .trim()
+            .toLowerCase();
+        const code = String(req.body?.code ?? "").trim();
+        if (!email || !code) {
+            return res.status(400).json({
+                success: false,
+                message: "Email and reset code are required.",
+            });
+        }
+        const result = await (0, password_reset_service_1.verifyPasswordResetCode)(email, code);
+        return res.status(200).json(result);
+    }
+    catch (error) {
+        const message = error instanceof Error
+            ? error.message
+            : "Code verification failed.";
+        const expectedError = message.includes("required") ||
+            message.includes("valid email") ||
+            message.includes("Invalid or expired");
+        return res.status(expectedError ? 400 : 500).json({
+            success: false,
+            message: expectedError
+                ? message
+                : "Unable to verify the code. Please try again.",
+        });
+    }
+}
+/*
+|--------------------------------------------------------------------------
+| Reset Password
+|--------------------------------------------------------------------------
+*/
+async function resetPasswordController(req, res) {
+    try {
+        const email = String(req.body?.email ?? "")
+            .trim()
+            .toLowerCase();
+        const resetToken = String(req.body?.resetToken ?? "").trim();
+        const newPassword = req.body?.newPassword;
+        if (!email || !resetToken || typeof newPassword !== "string") {
+            return res.status(400).json({
+                success: false,
+                message: "Email, reset token and new password are required.",
+            });
+        }
+        const result = await (0, password_reset_service_1.resetPassword)(email, resetToken, newPassword);
+        return res.status(200).json(result);
+    }
+    catch (error) {
+        const message = error instanceof Error
+            ? error.message
+            : "Password reset failed.";
+        const expectedError = message.includes("required") ||
+            message.includes("at least") ||
+            message.includes("must not exceed") ||
+            message.includes("Invalid or expired");
+        return res.status(expectedError ? 400 : 500).json({
+            success: false,
+            message: expectedError
+                ? message
+                : "Unable to reset your password. Please try again.",
         });
     }
 }

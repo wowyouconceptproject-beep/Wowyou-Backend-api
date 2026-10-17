@@ -1,6 +1,7 @@
 export type EmailType =
   | "EMAIL_VERIFICATION"
   | "LOGIN_OTP"
+  | "PASSWORD_RESET"
   | "TICKET_PURCHASE"
   | "ORGANIZER_TICKET_SALE"
   | "EVENT_REMINDER"

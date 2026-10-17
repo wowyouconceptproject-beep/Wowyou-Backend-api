@@ -8,6 +8,9 @@ import {
   resendVerification,
   verifyLoginCode,
   resendLoginCode,
+  forgotPassword,
+  verifyResetCode,
+  resetPasswordController,
 } from "./auth.controller";
 
 import { auth } from "./auth.middleware";
@@ -22,15 +25,16 @@ router.get("/test", (_req, res) => {
 });
 
 router.post("/register", register);
-
 router.post("/login", login);
 
 router.post("/verify-login-otp", verifyLoginCode);
-
 router.post("/resend-login-otp", resendLoginCode);
 
-router.get("/verify-email", verifyEmail);
+router.post("/forgot-password", forgotPassword);
+router.post("/verify-reset-code", verifyResetCode);
+router.post("/reset-password", resetPasswordController);
 
+router.get("/verify-email", verifyEmail);
 router.post("/resend-verification", resendVerification);
 
 router.get("/me", auth, me);

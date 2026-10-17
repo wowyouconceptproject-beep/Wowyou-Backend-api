@@ -6,6 +6,7 @@ exports.ticketPurchaseEmailTemplate = ticketPurchaseEmailTemplate;
 exports.organizerTicketSaleEmailTemplate = organizerTicketSaleEmailTemplate;
 exports.eventReminderEmailTemplate = eventReminderEmailTemplate;
 exports.eventThankYouEmailTemplate = eventThankYouEmailTemplate;
+exports.passwordResetEmailTemplate = passwordResetEmailTemplate;
 const email_helpers_1 = require("./email.helpers");
 /*
 |--------------------------------------------------------------------------
@@ -972,6 +973,71 @@ Thanks for attending ${input.eventTitle}.
 We hope you had a great experience.
 
 Powered by Wowyou EventOS.
+    `.trim(),
+    };
+}
+function passwordResetEmailTemplate(input) {
+    const content = `
+    ${sectionLabel("Password reset")}
+
+    <h1 style="
+      margin:0 0 18px;
+      color:#ffffff;
+      font-size:30px;
+      line-height:1.18;
+    ">
+      Reset your password
+    </h1>
+
+    <p style="
+      margin:0;
+      color:#AAB1B6;
+      font-size:15px;
+      line-height:1.75;
+    ">
+      Hi ${(0, email_helpers_1.escapeHtml)(input.firstName)},
+      use the code below to reset your Wowyou EventOS password.
+    </p>
+
+    <div style="
+      margin:28px 0;
+      padding:22px;
+      background:#171C20;
+      border:1px solid #293136;
+      border-radius:14px;
+      text-align:center;
+    ">
+      <div style="
+        color:#ffffff;
+        font-size:36px;
+        font-weight:900;
+        letter-spacing:.28em;
+      ">
+        ${(0, email_helpers_1.escapeHtml)(input.otp)}
+      </div>
+    </div>
+
+    <p style="
+      margin:0;
+      color:#AAB1B6;
+      font-size:13px;
+      line-height:1.7;
+    ">
+      This code expires in 10 minutes. Never share it with anyone.
+      If you did not request a password reset, you can ignore this email.
+    </p>
+  `;
+    return {
+        subject: "Your Wowyou EventOS password reset code",
+        html: layout(content),
+        text: `
+Hi ${input.firstName},
+
+Your Wowyou EventOS password reset code is: ${input.otp}
+
+This code expires in 10 minutes.
+
+Never share this code with anyone. If you did not request a password reset, ignore this email.
     `.trim(),
     };
 }
