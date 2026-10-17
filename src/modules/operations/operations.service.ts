@@ -538,24 +538,67 @@ export async function checkIn(
     id: string;
     eventId: string;
     station?: string | null;
-  }
+  },
 ) {
-  const payload =
-    verifyPassToken(token) as {
-      purchaseId: string;
-      eventId: string;
-    };
+  if (typeof token !== "string" || !token.trim()) {
+    throw new Error("QR pass token is required.");
+  }
+
+  // Verify the signed JWT. Pass tokens no longer have a 60-second expiry.
+  const payload = verifyPassToken(token.trim());
 
   if (payload.eventId !== staff.eventId) {
-    throw new Error(
-      "This ticket belongs to another event."
-    );
+    throw new Error("This ticket belongs to another event.");
   }
 
-  return completeCheckIn(
-    payload.purchaseId,
-    staff
-  );
+  // Load the pass and its purchase from the database.
+  const pass = await prisma.eventPass.findUnique({
+    where: {
+      id: payload.passId,
+    },
+    include: {
+      purchase: true,
+    },
+  });
+
+  if (!pass) {
+    throw new Error("Pass not found.");
+  }
+
+  // Ensure the signed claims still match the current database record.
+  if (
+    pass.purchaseId !== payload.purchaseId ||
+    pass.passNumber !== payload.passNumber ||
+    pass.qrToken !== payload.qrToken ||
+    pass.nfcToken !== payload.nfcToken ||
+    pass.purchase.eventId !== payload.eventId ||
+    pass.purchase.userId !== payload.userId
+  ) {
+    throw new Error("Invalid pass credentials.");
+  }
+
+  if (pass.purchase.eventId !== staff.eventId) {
+    throw new Error("This ticket belongs to another event.");
+  }
+
+  if (pass.purchase.status !== "PAID") {
+    throw new Error("Ticket has not been paid.");
+  }
+
+  if (!pass.isActive) {
+    throw new Error("This pass is inactive.");
+  }
+
+  if (pass.isRevoked) {
+    throw new Error("This pass has been revoked.");
+  }
+
+  if (pass.expiresAt && pass.expiresAt < new Date()) {
+    throw new Error("This pass has expired.");
+  }
+
+  // Preserve the existing purchase-level check-in transaction and events.
+  return completeCheckIn(pass.purchaseId, staff);
 }
 
 /*

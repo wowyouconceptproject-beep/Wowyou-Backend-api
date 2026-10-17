@@ -1,4 +1,5 @@
-import jwt from "jsonwebtoken";
+
+import jwt, { JwtPayload } from "jsonwebtoken";
 
 /*
 |--------------------------------------------------------------------------
@@ -7,23 +8,14 @@ import jwt from "jsonwebtoken";
 */
 
 function getPassJwtSecret(): string {
-  const secret =
-    process.env.PASS_JWT_SECRET;
+  const secret = process.env.PASS_JWT_SECRET;
 
   if (!secret) {
-    throw new Error(
-      "PASS_JWT_SECRET is not configured.",
-    );
+    throw new Error("PASS_JWT_SECRET is not configured.");
   }
 
   return secret;
 }
-
-const PASS_JWT_SECRET =
-  getPassJwtSecret();
-
-const EXPIRES_IN =
-  "60s" as const;
 
 /*
 |--------------------------------------------------------------------------
@@ -33,17 +25,11 @@ const EXPIRES_IN =
 
 export interface PassTokenPayload {
   purchaseId: string;
-
   passId: string;
-
   passNumber: string;
-
   qrToken: string;
-
   nfcToken: string;
-
   eventId: string;
-
   userId: string;
 }
 
@@ -51,19 +37,16 @@ export interface PassTokenPayload {
 |--------------------------------------------------------------------------
 | Generate Pass Token
 |--------------------------------------------------------------------------
+|
+| Pass JWTs do not expire after 60 seconds.
+| The database remains authoritative for pass validity.
+|
 */
 
 export function generatePassToken(
   data: PassTokenPayload,
 ): string {
-  return jwt.sign(
-    data,
-    PASS_JWT_SECRET,
-    {
-      expiresIn:
-        EXPIRES_IN,
-    },
-  );
+  return jwt.sign(data, getPassJwtSecret());
 }
 
 /*
@@ -75,86 +58,45 @@ export function generatePassToken(
 export function verifyPassToken(
   token: string,
 ): PassTokenPayload {
-  const decoded =
-    jwt.verify(
-      token,
-      PASS_JWT_SECRET,
-    );
-
-  /*
-  |--------------------------------------------------------------------------
-  | Payload Must Be An Object
-  |--------------------------------------------------------------------------
-  */
-
-  if (
-    typeof decoded ===
-    "string"
-  ) {
-    throw new Error(
-      "Invalid pass token payload.",
-    );
+  if (typeof token !== "string" || !token.trim()) {
+    throw new Error("Pass token is required.");
   }
 
-  /*
-  |--------------------------------------------------------------------------
-  | Validate Required Claims
-  |--------------------------------------------------------------------------
-  */
+  const decoded = jwt.verify(
+    token.trim(),
+    getPassJwtSecret(),
+  );
 
   if (
-    typeof decoded.purchaseId !==
-    "string" ||
-
-    typeof decoded.passId !==
-    "string" ||
-
-    typeof decoded.passNumber !==
-    "string" ||
-
-    typeof decoded.qrToken !==
-    "string" ||
-
-    typeof decoded.nfcToken !==
-    "string" ||
-
-    typeof decoded.eventId !==
-    "string" ||
-
-    typeof decoded.userId !==
-    "string"
+    typeof decoded === "string" ||
+    !decoded ||
+    typeof decoded !== "object"
   ) {
-    throw new Error(
-      "Invalid pass token payload.",
-    );
+    throw new Error("Invalid pass token payload.");
   }
 
-  /*
-  |--------------------------------------------------------------------------
-  | Return Typed Payload
-  |--------------------------------------------------------------------------
-  */
+  const payload = decoded as JwtPayload &
+    Record<string, unknown>;
+
+  if (
+    typeof payload.purchaseId !== "string" ||
+    typeof payload.passId !== "string" ||
+    typeof payload.passNumber !== "string" ||
+    typeof payload.qrToken !== "string" ||
+    typeof payload.nfcToken !== "string" ||
+    typeof payload.eventId !== "string" ||
+    typeof payload.userId !== "string"
+  ) {
+    throw new Error("Invalid pass token payload.");
+  }
 
   return {
-    purchaseId:
-      decoded.purchaseId,
-
-    passId:
-      decoded.passId,
-
-    passNumber:
-      decoded.passNumber,
-
-    qrToken:
-      decoded.qrToken,
-
-    nfcToken:
-      decoded.nfcToken,
-
-    eventId:
-      decoded.eventId,
-
-    userId:
-      decoded.userId,
+    purchaseId: payload.purchaseId,
+    passId: payload.passId,
+    passNumber: payload.passNumber,
+    qrToken: payload.qrToken,
+    nfcToken: payload.nfcToken,
+    eventId: payload.eventId,
+    userId: payload.userId,
   };
 }
