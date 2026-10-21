@@ -18,17 +18,17 @@ function getPassJwtSecret() {
     }
     return secret;
 }
-const PASS_JWT_SECRET = getPassJwtSecret();
-const EXPIRES_IN = "60s";
 /*
 |--------------------------------------------------------------------------
 | Generate Pass Token
 |--------------------------------------------------------------------------
+|
+| Pass JWTs do not expire after 60 seconds.
+| The database remains authoritative for pass validity.
+|
 */
 function generatePassToken(data) {
-    return jsonwebtoken_1.default.sign(data, PASS_JWT_SECRET, {
-        expiresIn: EXPIRES_IN,
-    });
+    return jsonwebtoken_1.default.sign(data, getPassJwtSecret());
 }
 /*
 |--------------------------------------------------------------------------
@@ -36,49 +36,32 @@ function generatePassToken(data) {
 |--------------------------------------------------------------------------
 */
 function verifyPassToken(token) {
-    const decoded = jsonwebtoken_1.default.verify(token, PASS_JWT_SECRET);
-    /*
-    |--------------------------------------------------------------------------
-    | Payload Must Be An Object
-    |--------------------------------------------------------------------------
-    */
-    if (typeof decoded ===
-        "string") {
+    if (typeof token !== "string" || !token.trim()) {
+        throw new Error("Pass token is required.");
+    }
+    const decoded = jsonwebtoken_1.default.verify(token.trim(), getPassJwtSecret());
+    if (typeof decoded === "string" ||
+        !decoded ||
+        typeof decoded !== "object") {
         throw new Error("Invalid pass token payload.");
     }
-    /*
-    |--------------------------------------------------------------------------
-    | Validate Required Claims
-    |--------------------------------------------------------------------------
-    */
-    if (typeof decoded.purchaseId !==
-        "string" ||
-        typeof decoded.passId !==
-            "string" ||
-        typeof decoded.passNumber !==
-            "string" ||
-        typeof decoded.qrToken !==
-            "string" ||
-        typeof decoded.nfcToken !==
-            "string" ||
-        typeof decoded.eventId !==
-            "string" ||
-        typeof decoded.userId !==
-            "string") {
+    const payload = decoded;
+    if (typeof payload.purchaseId !== "string" ||
+        typeof payload.passId !== "string" ||
+        typeof payload.passNumber !== "string" ||
+        typeof payload.qrToken !== "string" ||
+        typeof payload.nfcToken !== "string" ||
+        typeof payload.eventId !== "string" ||
+        typeof payload.userId !== "string") {
         throw new Error("Invalid pass token payload.");
     }
-    /*
-    |--------------------------------------------------------------------------
-    | Return Typed Payload
-    |--------------------------------------------------------------------------
-    */
     return {
-        purchaseId: decoded.purchaseId,
-        passId: decoded.passId,
-        passNumber: decoded.passNumber,
-        qrToken: decoded.qrToken,
-        nfcToken: decoded.nfcToken,
-        eventId: decoded.eventId,
-        userId: decoded.userId,
+        purchaseId: payload.purchaseId,
+        passId: payload.passId,
+        passNumber: payload.passNumber,
+        qrToken: payload.qrToken,
+        nfcToken: payload.nfcToken,
+        eventId: payload.eventId,
+        userId: payload.userId,
     };
 }
