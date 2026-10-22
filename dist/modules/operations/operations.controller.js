@@ -135,24 +135,41 @@ async function getDashboard(req, res) {
 */
 async function scan(req, res) {
     try {
-        const { token } = req.body;
-        if (!token) {
+        const body = req.body;
+        const token = body.token;
+        const scanType = body.scanType ?? "QR";
+        if (typeof token !== "string" || !token.trim()) {
             return res.status(400).json({
                 success: false,
-                message: "QR token is required.",
+                message: "Pass token is required.",
+            });
+        }
+        if (scanType !== "QR" && scanType !== "NFC") {
+            return res.status(400).json({
+                success: false,
+                message: "Unsupported scan type.",
+            });
+        }
+        if (!req.staff?.id || !req.staff.eventId) {
+            return res.status(401).json({
+                success: false,
+                message: "Authenticated event session is required.",
             });
         }
         const result = await (0, operations_service_1.checkIn)(token, {
             id: req.staff.id,
             eventId: req.staff.eventId,
             station: req.staff.station,
-        });
+        }, scanType);
         return res.json(result);
     }
     catch (error) {
+        const message = error instanceof Error
+            ? error.message
+            : "Unable to check in this pass.";
         return res.status(400).json({
             success: false,
-            message: error.message,
+            message,
         });
     }
 }

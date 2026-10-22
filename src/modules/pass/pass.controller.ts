@@ -1,9 +1,10 @@
-import { Response } from "express";
+﻿import { Response } from "express";
 
 import { AuthRequest } from "../auth/auth.middleware";
 
 import {
   generateSecurePass,
+  generateRotatingQrTokens,
   getEventPass,
   verifySecurePass,
 } from "./pass.service";
@@ -151,3 +152,26 @@ export async function verifyPass(
     });
   }
 }
+
+export async function rotatingQr(
+  req: AuthRequest,
+  res: Response,
+) {
+  try {
+    const result = await generateRotatingQrTokens(
+      req.params.purchaseId as string,
+      req.user!.userId,
+    );
+
+    return res.json({
+      success: true,
+      ...result,
+    });
+  } catch (error: any) {
+    return res.status(400).json({
+      success: false,
+      message: error.message,
+    });
+  }
+}
+

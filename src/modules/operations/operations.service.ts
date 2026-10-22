@@ -1,6 +1,7 @@
-import {
-  verifyPassToken,
-} from "../pass/pass.jwt";
+﻿import {
+  verifyRotatingQrPass,
+  verifySecurePass,
+} from "../pass/pass.service";
 
 import { prisma } from "../../lib/prisma";
 
@@ -176,77 +177,23 @@ export async function access(
 |--------------------------------------------------------------------------
 */
 
+
 export async function verifyPass(
   token: string,
   eventId: string
 ) {
-  const payload =
-    verifyPassToken(token) as {
-      purchaseId: string;
-      eventId: string;
-      userId: string;
-    };
+  const verification = await verifyRotatingQrPass(token);
 
-  if (payload.eventId !== eventId) {
-    throw new Error(
-      "This pass belongs to another event."
-    );
-  }
-
-  const purchase =
-    await prisma.ticketPurchase.findUnique({
-      where: {
-        id: payload.purchaseId,
-      },
-      include: {
-        user: true,
-        ticket: true,
-        event: true,
-        checkIn: {
-          include: {
-            staff: true,
-          },
-        },
-      },
-    });
-
-  if (!purchase) {
-    throw new Error(
-      "Pass not found."
-    );
-  }
-
-  if (purchase.status !== "PAID") {
-    throw new Error(
-      "Ticket has not been paid."
-    );
+  if (verification.event.id !== eventId) {
+    throw new Error("This pass belongs to another event.");
   }
 
   return {
-    purchase,
-
-    alreadyCheckedIn:
-      purchase.checkedIn,
-
-    checkedInBy:
-      purchase.checkIn
-        ? {
-            id:
-              purchase.checkIn.staff.id,
-
-            name:
-              purchase.checkIn.staff.name,
-
-            station:
-              purchase.checkIn.station,
-
-            checkedInAt:
-              purchase.checkIn.checkedInAt,
-          }
-        : null,
+    purchase: verification.purchase,
+    alreadyCheckedIn: verification.alreadyCheckedIn,
+    checkedInBy: verification.checkedInBy,
   };
 }
-
 /*
 |--------------------------------------------------------------------------
 | Complete Check In (Private)
@@ -532,6 +479,7 @@ async function completeCheckIn(
 |--------------------------------------------------------------------------
 */
 
+
 export async function checkIn(
   token: string,
   staff: {
@@ -539,68 +487,35 @@ export async function checkIn(
     eventId: string;
     station?: string | null;
   },
+  scanType: "QR" | "NFC" = "QR",
 ) {
   if (typeof token !== "string" || !token.trim()) {
-    throw new Error("QR pass token is required.");
+    throw new Error("Pass token is required.");
   }
 
-  // Verify the signed JWT. Pass tokens no longer have a 60-second expiry.
-  const payload = verifyPassToken(token.trim());
+  const normalizedToken = token.trim();
 
-  if (payload.eventId !== staff.eventId) {
+  let verification;
+
+  switch (scanType) {
+    case "QR":
+      verification = await verifyRotatingQrPass(normalizedToken);
+      break;
+
+    case "NFC":
+      verification = await verifySecurePass(normalizedToken);
+      break;
+
+    default:
+      throw new Error("Unsupported scan type.");
+  }
+
+  if (verification.purchase.eventId !== staff.eventId) {
     throw new Error("This ticket belongs to another event.");
   }
 
-  // Load the pass and its purchase from the database.
-  const pass = await prisma.eventPass.findUnique({
-    where: {
-      id: payload.passId,
-    },
-    include: {
-      purchase: true,
-    },
-  });
-
-  if (!pass) {
-    throw new Error("Pass not found.");
-  }
-
-  // Ensure the signed claims still match the current database record.
-  if (
-    pass.purchaseId !== payload.purchaseId ||
-    pass.passNumber !== payload.passNumber ||
-    pass.qrToken !== payload.qrToken ||
-    pass.nfcToken !== payload.nfcToken ||
-    pass.purchase.eventId !== payload.eventId ||
-    pass.purchase.userId !== payload.userId
-  ) {
-    throw new Error("Invalid pass credentials.");
-  }
-
-  if (pass.purchase.eventId !== staff.eventId) {
-    throw new Error("This ticket belongs to another event.");
-  }
-
-  if (pass.purchase.status !== "PAID") {
-    throw new Error("Ticket has not been paid.");
-  }
-
-  if (!pass.isActive) {
-    throw new Error("This pass is inactive.");
-  }
-
-  if (pass.isRevoked) {
-    throw new Error("This pass has been revoked.");
-  }
-
-  if (pass.expiresAt && pass.expiresAt < new Date()) {
-    throw new Error("This pass has expired.");
-  }
-
-  // Preserve the existing purchase-level check-in transaction and events.
-  return completeCheckIn(pass.purchaseId, staff);
+  return completeCheckIn(verification.purchase.id, staff);
 }
-
 /*
 |--------------------------------------------------------------------------
 | Manual Check In
@@ -868,3 +783,4 @@ export async function searchAttendee(
     take: 20,
   });
 }
+

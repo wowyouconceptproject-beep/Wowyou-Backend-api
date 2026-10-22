@@ -17,7 +17,9 @@ async function performCheckIn(input) {
     | Verify Pass
     |--------------------------------------------------------------------------
     */
-    const verification = await (0, pass_service_1.verifySecurePass)(input.token);
+    const verification = input.scanType === "NFC"
+        ? await (0, pass_service_1.verifySecurePass)(input.token)
+        : await (0, pass_service_1.verifyRotatingQrPass)(input.token);
     const purchase = verification.purchase;
     /*
     |--------------------------------------------------------------------------

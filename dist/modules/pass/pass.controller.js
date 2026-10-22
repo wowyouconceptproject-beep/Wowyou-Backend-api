@@ -3,6 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.getPass = getPass;
 exports.securePass = securePass;
 exports.verifyPass = verifyPass;
+exports.rotatingQr = rotatingQr;
 const pass_service_1 = require("./pass.service");
 /*
 |--------------------------------------------------------------------------
@@ -72,6 +73,21 @@ async function verifyPass(req, res) {
             },
             alreadyCheckedIn: result.alreadyCheckedIn,
             checkedInBy: result.checkedInBy,
+        });
+    }
+    catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error.message,
+        });
+    }
+}
+async function rotatingQr(req, res) {
+    try {
+        const result = await (0, pass_service_1.generateRotatingQrTokens)(req.params.purchaseId, req.user.userId);
+        return res.json({
+            success: true,
+            ...result,
         });
     }
     catch (error) {

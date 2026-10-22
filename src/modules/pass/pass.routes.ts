@@ -1,4 +1,4 @@
-import { Router } from "express";
+﻿import { Router } from "express";
 
 import { auth } from "../auth/auth.middleware";
 
@@ -6,6 +6,7 @@ import {
   getPass,
   securePass,
   verifyPass,
+  rotatingQr,
 } from "./pass.controller";
 
 const router = Router();
@@ -32,6 +33,12 @@ router.post(
   "/verify",
   auth,
   verifyPass
+);
+
+router.post(
+  "/:purchaseId/rotating-qr",
+  auth,
+  rotatingQr,
 );
 
 export default router;

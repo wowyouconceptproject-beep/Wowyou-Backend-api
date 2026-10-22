@@ -3,6 +3,8 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.getEventPass = getEventPass;
 exports.generateSecurePass = generateSecurePass;
 exports.verifySecurePass = verifySecurePass;
+exports.generateRotatingQrTokens = generateRotatingQrTokens;
+exports.verifyRotatingQrPass = verifyRotatingQrPass;
 const prisma_1 = require("../../lib/prisma");
 const pass_jwt_1 = require("./pass.jwt");
 /*
@@ -344,6 +346,127 @@ async function verifySecurePass(token) {
                     .station,
                 checkedInAt: purchase.checkIn
                     .checkedInAt,
+            }
+            : null,
+    };
+}
+const pass_jwt_2 = require("./pass.jwt");
+/**
+ * Issue fresh, short-lived QR credentials for the authenticated
+ * owner of a paid purchase.
+ */
+async function generateRotatingQrTokens(purchaseId, userId) {
+    const purchase = await getEventPass(purchaseId, userId);
+    const now = new Date();
+    const passes = purchase.passes.map((pass) => {
+        if (!pass.isActive || pass.isRevoked) {
+            throw new Error("An inactive or revoked pass cannot generate a QR code.");
+        }
+        if (pass.expiresAt && pass.expiresAt < now) {
+            throw new Error("This pass has expired.");
+        }
+        const token = (0, pass_jwt_2.generateRotatingQrToken)({
+            tokenType: "ROTATING_QR",
+            purchaseId: purchase.id,
+            passId: pass.id,
+            passNumber: pass.passNumber,
+            eventId: purchase.eventId,
+            userId: purchase.userId,
+        });
+        return {
+            passId: pass.id,
+            passNumber: pass.passNumber,
+            token,
+            expiresAt: new Date(now.getTime() + 60_000).toISOString(),
+        };
+    });
+    return {
+        purchaseId: purchase.id,
+        passes,
+    };
+}
+/**
+ * Validate a rotating QR against the current database record.
+ * This intentionally does not accept permanent pass JWTs.
+ */
+async function verifyRotatingQrPass(token) {
+    const payload = (0, pass_jwt_2.verifyRotatingQrToken)(token);
+    const pass = await prisma_1.prisma.eventPass.findUnique({
+        where: {
+            id: payload.passId,
+        },
+        include: {
+            purchase: {
+                include: {
+                    user: true,
+                    event: true,
+                    ticket: true,
+                    passes: {
+                        where: {
+                            isActive: true,
+                            isRevoked: false,
+                        },
+                        orderBy: {
+                            createdAt: "asc",
+                        },
+                    },
+                    checkIn: {
+                        include: {
+                            staff: true,
+                        },
+                    },
+                },
+            },
+        },
+    });
+    if (!pass) {
+        throw new Error("Pass not found.");
+    }
+    const purchase = pass.purchase;
+    if (pass.purchaseId !== payload.purchaseId ||
+        pass.passNumber !== payload.passNumber ||
+        purchase.eventId !== payload.eventId ||
+        purchase.userId !== payload.userId) {
+        throw new Error("QR credentials do not match this ticket.");
+    }
+    if (purchase.status !== "PAID") {
+        throw new Error("Ticket has not been paid.");
+    }
+    if (!pass.isActive) {
+        throw new Error("This pass is inactive.");
+    }
+    if (pass.isRevoked) {
+        throw new Error("This pass has been revoked.");
+    }
+    if (pass.expiresAt && pass.expiresAt < new Date()) {
+        throw new Error("This pass has expired.");
+    }
+    if (purchase.event.endDate < new Date()) {
+        throw new Error("Event has ended.");
+    }
+    return {
+        pass,
+        purchase,
+        attendee: {
+            id: purchase.user.id,
+            name: `${purchase.user.firstName} ${purchase.user.lastName}`,
+            email: purchase.user.email,
+        },
+        ticket: {
+            id: purchase.ticket.id,
+            name: purchase.ticket.name,
+        },
+        event: {
+            id: purchase.event.id,
+            title: purchase.event.title,
+        },
+        alreadyCheckedIn: purchase.checkedIn,
+        checkedInBy: purchase.checkIn
+            ? {
+                id: purchase.checkIn.staff.id,
+                name: purchase.checkIn.staff.name,
+                station: purchase.checkIn.station,
+                checkedInAt: purchase.checkIn.checkedInAt,
             }
             : null,
     };

@@ -6,6 +6,140 @@ exports.pinAnnouncement = pinAnnouncement;
 exports.deleteAnnouncement = deleteAnnouncement;
 const prisma_1 = require("../../lib/prisma");
 const realtime_1 = require("../../realtime");
+const firebase_admin_1 = require("../notifications/firebase-admin");
+/**
+ * Get the user IDs eligible to receive this announcement.
+ *
+ * ATTENDEES: registered event attendees.
+ * ALL: registered event attendees.
+ *
+ * EventStaff currently has no userId relation in the Prisma
+ * schema, so STAFF and ORGANIZERS require a separate recipient
+ * mapping before they can receive targeted push notifications.
+ */
+async function getAnnouncementRecipientIds(eventId, audience) {
+    if (audience !== "ALL" && audience !== "ATTENDEES") {
+        console.warn(`[Announcements] Push recipient mapping is not configured for audience "${audience}".`);
+        return [];
+    }
+    const attendees = await prisma_1.prisma.attendee.findMany({
+        where: {
+            eventId,
+            status: {
+                not: "CANCELLED",
+            },
+        },
+        select: {
+            userId: true,
+        },
+    });
+    const registrations = await prisma_1.prisma.registration.findMany({
+        where: {
+            eventId,
+        },
+        select: {
+            userId: true,
+        },
+    });
+    return [
+        ...new Set([
+            ...attendees.map((attendee) => attendee.userId),
+            ...registrations.map((registration) => registration.userId),
+        ]),
+    ];
+}
+/**
+ * Persist in-app notifications and deliver FCM push notifications.
+ *
+ * Notification delivery must not undo an announcement that has
+ * already been saved successfully.
+ */
+async function deliverAnnouncementNotifications(input) {
+    try {
+        const userIds = await getAnnouncementRecipientIds(input.eventId, input.audience);
+        if (userIds.length === 0) {
+            console.info(`[Announcements] No mapped recipients for announcement ${input.announcementId}.`);
+            return;
+        }
+        // Respect each user's push-notification preference.
+        const eligibleUsers = await prisma_1.prisma.user.findMany({
+            where: {
+                id: {
+                    in: userIds,
+                },
+                settings: {
+                    is: {
+                        pushNotifications: true,
+                    },
+                },
+            },
+            select: {
+                id: true,
+            },
+        });
+        const eligibleUserIds = eligibleUsers.map((user) => user.id);
+        if (eligibleUserIds.length === 0) {
+            console.info(`[Announcements] No recipients have push notifications enabled for ${input.announcementId}.`);
+            return;
+        }
+        // Save notifications for the user's in-app notification centre.
+        await prisma_1.prisma.notification.createMany({
+            data: eligibleUserIds.map((userId) => ({
+                userId,
+                title: input.title,
+                body: input.message,
+            })),
+        });
+        // Fetch registered device tokens belonging to eligible users.
+        const devices = await prisma_1.prisma.deviceToken.findMany({
+            where: {
+                userId: {
+                    in: eligibleUserIds,
+                },
+            },
+            select: {
+                id: true,
+                token: true,
+            },
+        });
+        if (devices.length === 0) {
+            console.info(`[Announcements] No device tokens registered for ${input.announcementId}. In-app notifications were saved.`);
+            return;
+        }
+        const result = await (0, firebase_admin_1.sendPushNotification)({
+            tokens: devices.map((device) => device.token),
+            title: input.title,
+            body: input.message,
+            data: {
+                type: "ANNOUNCEMENT",
+                eventId: input.eventId,
+                announcementId: input.announcementId,
+            },
+        });
+        // Remove expired or invalid FCM registration tokens.
+        if (result.invalidTokens.length > 0) {
+            await prisma_1.prisma.deviceToken.deleteMany({
+                where: {
+                    token: {
+                        in: result.invalidTokens,
+                    },
+                },
+            });
+        }
+        console.info("[Announcements] Push delivery completed.", {
+            announcementId: input.announcementId,
+            recipients: eligibleUserIds.length,
+            devices: devices.length,
+            delivered: result.successCount,
+            failed: result.failureCount,
+            invalidTokensRemoved: result.invalidTokens.length,
+        });
+    }
+    catch (error) {
+        // Do not fail announcement creation because push delivery failed.
+        console.error(`[Announcements] Notification delivery failed for ${input.announcementId}:`, error);
+    }
+}
 /*
 |--------------------------------------------------------------------------
 | List Announcements
@@ -52,7 +186,7 @@ async function createAnnouncement(eventId, staff, data) {
             priority: data.priority,
             audience: data.audience,
             isPinned: data.isPinned ?? false,
-            expiresAt: data.expiresAt,
+            expiresAt: data.expiresAt ?? null,
         },
         include: {
             author: {
@@ -63,6 +197,7 @@ async function createAnnouncement(eventId, staff, data) {
             },
         },
     });
+    // Keep existing realtime behaviour for connected clients.
     (0, realtime_1.announcementCreated)({
         id: announcement.id,
         eventId: announcement.eventId,
@@ -75,6 +210,15 @@ async function createAnnouncement(eventId, staff, data) {
         authorId: announcement.authorId,
         authorName: announcement.author.name,
         createdAt: announcement.createdAt.toISOString(),
+    });
+    // Deliver push and in-app notifications without blocking success
+    // if Firebase is temporarily unavailable.
+    void deliverAnnouncementNotifications({
+        eventId: announcement.eventId,
+        announcementId: announcement.id,
+        title: announcement.title,
+        message: announcement.message,
+        audience: announcement.audience,
     });
     return announcement;
 }
@@ -92,8 +236,7 @@ async function pinAnnouncement(eventId, id, pinned) {
     if (!announcement) {
         throw new Error("Announcement not found.");
     }
-    if (announcement.eventId !==
-        eventId) {
+    if (announcement.eventId !== eventId) {
         throw new Error("Invalid event.");
     }
     const updated = await prisma_1.prisma.announcement.update({
@@ -141,8 +284,7 @@ async function deleteAnnouncement(eventId, id) {
     if (!announcement) {
         throw new Error("Announcement not found.");
     }
-    if (announcement.eventId !==
-        eventId) {
+    if (announcement.eventId !== eventId) {
         throw new Error("Invalid event.");
     }
     await prisma_1.prisma.announcement.delete({

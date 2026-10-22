@@ -1,4 +1,4 @@
-import { prisma } from "../../lib/prisma";
+﻿import { prisma } from "../../lib/prisma";
 
 import {
   getIO,
@@ -15,6 +15,7 @@ import {
 
 import {
   verifySecurePass,
+  verifyRotatingQrPass,
 } from "../pass/pass.service";
 
 import {
@@ -37,9 +38,9 @@ export async function performCheckIn(
   */
 
   const verification =
-    await verifySecurePass(
-      input.token,
-    );
+    input.scanType === "NFC"
+      ? await verifySecurePass(input.token)
+      : await verifyRotatingQrPass(input.token);
 
   const purchase =
     verification.purchase;
