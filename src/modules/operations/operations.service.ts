@@ -178,11 +178,108 @@ export async function access(
 */
 
 
+/**
+ * Verify either the legacy permanent QR hash or the current rotating QR token.
+ * NFC verification intentionally remains separate and uses verifySecurePass().
+ */
+async function verifyQrPassToken(token: string) {
+  const normalizedToken = token.trim();
+
+  // Legacy permanent QR codes are 64-character hexadecimal hashes.
+  if (/^[a-fA-F0-9]{64}$/.test(normalizedToken)) {
+    const pass = await prisma.eventPass.findUnique({
+      where: {
+        qrToken: normalizedToken,
+      },
+      include: {
+        purchase: {
+          include: {
+            user: true,
+            event: true,
+            ticket: true,
+            passes: {
+              where: {
+                isActive: true,
+                isRevoked: false,
+              },
+              orderBy: {
+                createdAt: "asc",
+              },
+            },
+            checkIn: {
+              include: {
+                staff: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!pass) {
+      throw new Error("Pass not found.");
+    }
+
+    const purchase = pass.purchase;
+
+    if (purchase.status !== "PAID") {
+      throw new Error("Ticket has not been paid.");
+    }
+
+    if (!pass.isActive) {
+      throw new Error("This pass is inactive.");
+    }
+
+    if (pass.isRevoked) {
+      throw new Error("This pass has been revoked.");
+    }
+
+    if (pass.expiresAt && pass.expiresAt < new Date()) {
+      throw new Error("This pass has expired.");
+    }
+
+    if (purchase.event.endDate < new Date()) {
+      throw new Error("Event has ended.");
+    }
+
+    return {
+      pass,
+      purchase,
+      attendee: {
+        id: purchase.user.id,
+        name: `${purchase.user.firstName} ${purchase.user.lastName}`,
+        email: purchase.user.email,
+      },
+      ticket: {
+        id: purchase.ticket.id,
+        name: purchase.ticket.name,
+      },
+      event: {
+        id: purchase.event.id,
+        title: purchase.event.title,
+      },
+      alreadyCheckedIn: purchase.checkedIn,
+      checkedInBy: purchase.checkIn
+        ? {
+            id: purchase.checkIn.staff.id,
+            name: purchase.checkIn.staff.name,
+            station: purchase.checkIn.station,
+            checkedInAt: purchase.checkIn.checkedInAt,
+          }
+        : null,
+    };
+  }
+
+  // New rotating QR codes are signed tokens and are verified by the existing
+  // rotating-token verifier.
+  return verifyRotatingQrPass(normalizedToken);
+}
+
 export async function verifyPass(
   token: string,
   eventId: string
 ) {
-  const verification = await verifyRotatingQrPass(token);
+  const verification = await verifyQrPassToken(token);
 
   if (verification.event.id !== eventId) {
     throw new Error("This pass belongs to another event.");
@@ -499,7 +596,7 @@ export async function checkIn(
 
   switch (scanType) {
     case "QR":
-      verification = await verifyRotatingQrPass(normalizedToken);
+      verification = await verifyQrPassToken(normalizedToken);
       break;
 
     case "NFC":
