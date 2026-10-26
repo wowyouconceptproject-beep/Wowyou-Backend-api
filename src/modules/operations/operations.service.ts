@@ -242,11 +242,24 @@ async function verifyQrPassToken(token: string) {
       throw new Error("Event has ended.");
     }
 
+    // Attendee.id is distinct from User.id.
+    const attendeeRecord = await prisma.attendee.findUnique({
+      where: {
+        eventId_userId: {
+          eventId: purchase.eventId,
+          userId: purchase.userId,
+        },
+      },
+      select: {
+        id: true,
+      },
+    });
+
     return {
       pass,
       purchase,
       attendee: {
-        id: purchase.user.id,
+        id: attendeeRecord?.id ?? null,
         name: `${purchase.user.firstName} ${purchase.user.lastName}`,
         email: purchase.user.email,
       },
@@ -338,25 +351,36 @@ async function completeCheckIn(
     throw new Error("Attendee has already checked in.");
   }
 
-  // Resolve the actual Attendee record.
-  // User IDs and Attendee IDs are different identifiers.
-  const attendee = await prisma.attendee.findUnique({
+  /*
+  |--------------------------------------------------------------------------
+  | Resolve Or Repair Attendee Record
+  |--------------------------------------------------------------------------
+  |
+  | Older paid purchases may not have an Attendee row. Create it safely
+  | from this verified purchase, using the event/user unique constraint.
+  | Preserve any existing attendee's purchase association.
+  |
+  */
+
+  const attendee = await prisma.attendee.upsert({
     where: {
       eventId_userId: {
         eventId: purchase.eventId,
         userId: purchase.userId,
       },
     },
+    create: {
+      eventId: purchase.eventId,
+      userId: purchase.userId,
+      purchaseId: purchase.id,
+      ticketTypeId: purchase.ticketTypeId,
+      status: "REGISTERED",
+    },
+    update: {},
     select: {
       id: true,
     },
   });
-
-  if (!attendee) {
-    throw new Error(
-      "Attendee registration not found for this event. Check-in was not completed."
-    );
-  }
 
   const now = new Date();
 
@@ -607,25 +631,35 @@ export async function undoCheckIn(
     throw new Error("Attendee has not checked in.");
   }
 
-  // Resolve the actual Attendee record.
-  // EventActivity.attendeeId references Attendee.id, not User.id.
-  const attendee = await prisma.attendee.findUnique({
+  /*
+  |--------------------------------------------------------------------------
+  | Resolve Or Repair Attendee Record
+  |--------------------------------------------------------------------------
+  |
+  | Use the actual Attendee.id for EventActivity.attendeeId. This also
+  | repairs older records that predate attendee creation during issuance.
+  |
+  */
+
+  const attendee = await prisma.attendee.upsert({
     where: {
       eventId_userId: {
         eventId: purchase.eventId,
         userId: purchase.userId,
       },
     },
+    create: {
+      eventId: purchase.eventId,
+      userId: purchase.userId,
+      purchaseId: purchase.id,
+      ticketTypeId: purchase.ticketTypeId,
+      status: "REGISTERED",
+    },
+    update: {},
     select: {
       id: true,
     },
   });
-
-  if (!attendee) {
-    throw new Error(
-      "Attendee registration not found for this event. Check-in reversal was not completed."
-    );
-  }
 
   await prisma.$transaction([
     prisma.ticketPurchase.update({
