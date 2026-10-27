@@ -228,6 +228,8 @@ model User {
 
   deviceTokens DeviceToken[]
 
+  authSessions AuthSession[]
+
   notifications Notification[]
 }
 
@@ -1450,4 +1452,20 @@ model PasswordResetCode {
 
   @@index([userId, createdAt])
   @@index([expiresAt])
+}
+
+model AuthSession {
+  id             String    @id @default(cuid())
+  userId         String
+  tokenHash      String    @unique
+  lastActivityAt DateTime  @default(now())
+  expiresAt      DateTime
+  revokedAt      DateTime?
+  createdAt      DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@index([revokedAt])
 }

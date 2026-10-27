@@ -1,3 +1,4 @@
+
 import { Router } from "express";
 
 import {
@@ -11,6 +12,7 @@ import {
   forgotPassword,
   verifyResetCode,
   resetPasswordController,
+  logout,
 } from "./auth.controller";
 
 import { auth } from "./auth.middleware";
@@ -26,9 +28,10 @@ router.get("/test", (_req, res) => {
 
 router.post("/register", register);
 router.post("/login", login);
-
 router.post("/verify-login-otp", verifyLoginCode);
 router.post("/resend-login-otp", resendLoginCode);
+
+router.post("/logout", logout);
 
 router.post("/forgot-password", forgotPassword);
 router.post("/verify-reset-code", verifyResetCode);
