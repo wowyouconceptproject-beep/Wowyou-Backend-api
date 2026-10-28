@@ -1,11 +1,21 @@
 
 import type { NextFunction, Request, Response } from "express";
 import { createHash } from "node:crypto";
+
 import { prisma } from "../../lib/prisma";
 import { verifyToken } from "./jwt";
 
 const SESSION_COOKIE_NAME = "wowyou_session";
 const INACTIVITY_LIMIT_MS = 60 * 60 * 1000;
+
+const isProduction = process.env.NODE_ENV === "production";
+
+const sessionCookieOptions = {
+  httpOnly: true,
+  secure: isProduction,
+  sameSite: isProduction ? ("none" as const) : ("lax" as const),
+  path: "/",
+};
 
 export interface AuthRequest extends Request {
   user?: {
@@ -15,14 +25,23 @@ export interface AuthRequest extends Request {
 
 function readCookie(req: Request, name: string): string | null {
   const cookieHeader = req.headers.cookie;
-  if (!cookieHeader) return null;
+
+  if (!cookieHeader) {
+    return null;
+  }
 
   for (const part of cookieHeader.split(";")) {
     const separator = part.indexOf("=");
-    if (separator === -1) continue;
+
+    if (separator === -1) {
+      continue;
+    }
 
     const key = part.slice(0, separator).trim();
-    if (key !== name) continue;
+
+    if (key !== name) {
+      continue;
+    }
 
     try {
       return decodeURIComponent(part.slice(separator + 1).trim());
@@ -46,7 +65,10 @@ export async function auth(
   try {
     const sessionToken = readCookie(req, SESSION_COOKIE_NAME);
 
-    // Browser authentication: HttpOnly session cookie.
+    /*
+     * Browser authentication:
+     * Validate the server-side session stored in the database.
+     */
     if (sessionToken) {
       const tokenHash = hashSessionToken(sessionToken);
 
@@ -63,13 +85,14 @@ export async function auth(
 
       const now = new Date();
 
-      if (
+      const sessionExpired =
         !session ||
-        session.revokedAt ||
+        session.revokedAt !== null ||
         session.expiresAt <= now ||
         now.getTime() - session.lastActivityAt.getTime() >=
-          INACTIVITY_LIMIT_MS
-      ) {
+          INACTIVITY_LIMIT_MS;
+
+      if (sessionExpired) {
         if (session && !session.revokedAt) {
           await prisma.authSession.update({
             where: { id: session.id },
@@ -77,34 +100,39 @@ export async function auth(
           });
         }
 
-        res.clearCookie(SESSION_COOKIE_NAME, {
-          httpOnly: true,
-          secure: process.env.NODE_ENV === "production",
-          sameSite: "lax",
-          path: "/",
-        });
+        res.clearCookie(SESSION_COOKIE_NAME, sessionCookieOptions);
 
         res.status(401).json({
           success: false,
           message: "Your session has expired. Please log in again.",
           code: "SESSION_EXPIRED",
         });
+
         return;
       }
 
-      // Refresh activity only after the session has passed validation.
+      /*
+       * Refresh the activity timestamp only after the session
+       * has passed validation.
+       */
       await prisma.authSession.update({
         where: { id: session.id },
         data: { lastActivityAt: now },
       });
 
       req.user = { userId: session.userId };
+
       next();
       return;
     }
 
-    // Mobile authentication: retain existing Bearer JWT support.
+    /*
+     * Mobile authentication:
+     * Preserve existing Bearer JWT support for Flutter and
+     * other clients that do not use browser session cookies.
+     */
     const authorization = req.headers.authorization;
+
     const bearerToken = authorization?.startsWith("Bearer ")
       ? authorization.slice(7).trim()
       : null;
@@ -114,6 +142,7 @@ export async function auth(
         success: false,
         message: "Authentication required.",
       });
+
       return;
     }
 
@@ -124,10 +153,12 @@ export async function auth(
         success: false,
         message: "Invalid authentication token.",
       });
+
       return;
     }
 
     req.user = { userId: payload.userId };
+
     next();
   } catch (error) {
     console.error("Authentication middleware error:", error);

@@ -31,10 +31,24 @@ import {
 
 const SESSION_DURATION_MS = 60 * 60 * 1000;
 
+const isProduction = process.env.NODE_ENV === "production";
+
+/**
+ * Keep cookie attributes consistent when setting and clearing
+ * the browser session cookie.
+ *
+ * Production:
+ * - HttpOnly prevents JavaScript from reading the session token.
+ * - Secure requires HTTPS.
+ * - SameSite=None permits cross-site credentialed requests.
+ *
+ * Development:
+ * - SameSite=Lax supports ordinary local development.
+ */
 const sessionCookieOptions = {
   httpOnly: true,
-  secure: process.env.NODE_ENV === "production",
-  sameSite: "lax" as const,
+  secure: isProduction,
+  sameSite: isProduction ? ("none" as const) : ("lax" as const),
   path: "/",
 };
 
@@ -98,7 +112,7 @@ export async function register(req: Request, res: Response) {
     }
 
     // Registration does not create an authenticated browser session.
-    // Keep the existing response for compatibility.
+    // Preserve the existing response for compatibility.
     if (isBrowserClient(req)) {
       const { token: _token, ...browserResult } = result;
 
