@@ -1,57 +1,105 @@
+
 import { prisma } from "../../lib/prisma";
-
 import { verifyPassToken } from "../pass/pass.jwt";
-
 import { eventBus } from "../../core/events/event-bus";
 import { Events } from "../../core/events/event.types";
 
-export async function verifyPass(
-  token: string,
-  eventId: string
-) {
-  const payload =
-    verifyPassToken(token) as {
-      purchaseId: string;
-      eventId: string;
-      userId: string;
-    };
+async function resolveScannedPass(token: string, eventId: string) {
+  const scannedToken = token.trim();
 
-  if (payload.eventId !== eventId) {
-    throw new Error(
-      "This ticket belongs to another event."
-    );
+  if (!scannedToken) {
+    throw new Error("Invalid ticket QR code.");
   }
 
-  const purchase =
-    await prisma.ticketPurchase.findUnique({
-      where: {
-        id: payload.purchaseId,
-      },
+  // Legacy QR: the original 64-character hexadecimal EventPass.qrToken.
+  if (/^[a-fA-F0-9]{64}$/.test(scannedToken)) {
+    const pass = await prisma.eventPass.findUnique({
+      where: { qrToken: scannedToken },
       include: {
-        user: true,
-        ticket: true,
-        event: true,
+        purchase: {
+          include: {
+            user: true,
+            ticket: true,
+            event: true,
+          },
+        },
       },
     });
 
-  if (!purchase) {
-    throw new Error(
-      "Pass not found."
-    );
+    if (!pass) {
+      throw new Error("Pass not found.");
+    }
+
+    const purchase = pass.purchase;
+
+    if (purchase.eventId !== eventId) {
+      throw new Error("This ticket belongs to another event.");
+    }
+
+    if (purchase.status !== "PAID") {
+      throw new Error("Ticket has not been paid.");
+    }
+
+    if (!pass.isActive || pass.isRevoked) {
+      throw new Error("This pass is inactive or revoked.");
+    }
+
+    if (pass.expiresAt && pass.expiresAt <= new Date()) {
+      throw new Error("This pass has expired.");
+    }
+
+    return { purchase, pass };
   }
 
-  if (
-    purchase.status !== "PAID"
-  ) {
-    throw new Error(
-      "Ticket has not been paid."
-    );
+  // Existing signed JWT format.
+  const payload = verifyPassToken(scannedToken) as {
+    purchaseId: string;
+    eventId: string;
+    userId: string;
+  };
+
+  if (payload.eventId !== eventId) {
+    throw new Error("This ticket belongs to another event.");
   }
+
+  const purchase = await prisma.ticketPurchase.findUnique({
+    where: { id: payload.purchaseId },
+    include: {
+      user: true,
+      ticket: true,
+      event: true,
+      passes: true,
+    },
+  });
+
+  if (!purchase) {
+    throw new Error("Pass not found.");
+  }
+
+  if (purchase.status !== "PAID") {
+    throw new Error("Ticket has not been paid.");
+  }
+
+  const pass = purchase.passes.find(
+    (item) =>
+      item.isActive &&
+      !item.isRevoked &&
+      (!item.expiresAt || item.expiresAt > new Date()),
+  );
+
+  if (!pass) {
+    throw new Error("No active pass was found for this ticket.");
+  }
+
+  return { purchase, pass };
+}
+
+export async function verifyPass(token: string, eventId: string) {
+  const { purchase } = await resolveScannedPass(token, eventId);
 
   return {
     purchase,
-    alreadyCheckedIn:
-      purchase.checkedIn,
+    alreadyCheckedIn: purchase.checkedIn,
   };
 }
 
@@ -61,451 +109,83 @@ export async function checkIn(
     id: string;
     eventId: string;
     station?: string | null;
-  }
+  },
 ) {
-  const payload =
-    verifyPassToken(token) as {
-      purchaseId: string;
-      eventId: string;
-      userId: string;
-    };
+  const { purchase } = await resolveScannedPass(token, staff.eventId);
 
-  if (
-    payload.eventId !==
-    staff.eventId
-  ) {
-    throw new Error(
-      "This ticket belongs to another event."
-    );
+  if (purchase.checkedIn) {
+    throw new Error("Attendee has already checked in.");
   }
 
-  const purchase =
-    await prisma.ticketPurchase.findUnique({
-      where: {
-        id: payload.purchaseId,
-      },
-      include: {
-        event: true,
-        user: true,
-        ticket: true,
-      },
+  await prisma.$transaction(async (tx) => {
+    // Recheck inside the transaction to reduce duplicate check-in races.
+    const current = await tx.ticketPurchase.findUnique({
+      where: { id: purchase.id },
+      select: { checkedIn: true, status: true },
     });
 
-  if (!purchase) {
-    throw new Error(
-      "Pass not found."
-    );
-  }
+    if (!current || current.status !== "PAID") {
+      throw new Error("Ticket has not been paid.");
+    }
 
-  if (
-    purchase.status !==
-    "PAID"
-  ) {
-    throw new Error(
-      "Ticket has not been paid."
-    );
-  }
+    if (current.checkedIn) {
+      throw new Error("Attendee has already checked in.");
+    }
 
-  if (
-    purchase.checkedIn
-  ) {
-    throw new Error(
-      "Attendee has already checked in."
-    );
-  }
-
-  await prisma.$transaction([
-    prisma.ticketPurchase.update({
-      where: {
-        id: purchase.id,
-      },
+    await tx.ticketPurchase.update({
+      where: { id: purchase.id },
       data: {
         checkedIn: true,
         checkedInAt: new Date(),
       },
-    }),
+    });
 
-    prisma.ticketCheckIn.create({
+    await tx.ticketCheckIn.create({
       data: {
         purchaseId: purchase.id,
         checkedInBy: staff.id,
         station: staff.station,
       },
-    }),
-  ]);
-
-  const attendance =
-    await prisma.ticketPurchase.count({
-      where: {
-        eventId: purchase.eventId,
-        checkedIn: true,
-      },
     });
+  });
 
-  eventBus.emit(
-    Events.ATTENDEE_CHECKED_IN,
-    {
-      eventId:
-        purchase.eventId,
+  const attendance = await prisma.ticketPurchase.count({
+    where: {
+      eventId: purchase.eventId,
+      checkedIn: true,
+    },
+  });
 
-      purchaseId:
-        purchase.id,
+  const checkedInAt = new Date();
 
-      attendeeId:
-        purchase.userId,
-
-      ticketTypeId:
-        purchase.ticketTypeId,
-
-      staffId:
-        staff.id,
-
-      station:
-        staff.station,
-
-      attendance,
-
-      checkedInAt:
-        new Date(),
-    }
-  );
+  eventBus.emit(Events.ATTENDEE_CHECKED_IN, {
+    eventId: purchase.eventId,
+    purchaseId: purchase.id,
+    attendeeId: purchase.userId,
+    ticketTypeId: purchase.ticketTypeId,
+    staffId: staff.id,
+    station: staff.station,
+    attendance,
+    checkedInAt,
+  });
 
   return {
     success: true,
-
     attendance,
-
     attendee: {
       id: purchase.user.id,
-      firstName:
-        purchase.user.firstName,
-      lastName:
-        purchase.user.lastName,
-      email:
-        purchase.user.email,
+      firstName: purchase.user.firstName,
+      lastName: purchase.user.lastName,
+      email: purchase.user.email,
     },
-
     ticket: {
       id: purchase.ticket.id,
-      name:
-        purchase.ticket.name,
-      price:
-        purchase.ticket.price,
+      name: purchase.ticket.name,
+      price: purchase.ticket.price,
     },
-
     event: {
       id: purchase.event.id,
-      title:
-        purchase.event.title,
+      title: purchase.event.title,
     },
-  };
-}
-
-export async function undoCheckIn(
-  purchaseId: string,
-  staff: {
-    id: string;
-    eventId: string;
-  }
-) {
-  const purchase =
-    await prisma.ticketPurchase.findUnique({
-      where: {
-        id: purchaseId,
-      },
-    });
-
-  if (!purchase) {
-    throw new Error(
-      "Purchase not found."
-    );
-  }
-
-  if (
-    purchase.eventId !==
-    staff.eventId
-  ) {
-    throw new Error(
-      "Invalid event."
-    );
-  }
-
-  if (
-    !purchase.checkedIn
-  ) {
-    throw new Error(
-      "Attendee has not checked in."
-    );
-  }
-
-  await prisma.$transaction([
-    prisma.ticketPurchase.update({
-      where: {
-        id: purchase.id,
-      },
-      data: {
-        checkedIn: false,
-        checkedInAt: null,
-      },
-    }),
-
-    prisma.ticketCheckIn.delete({
-      where: {
-        purchaseId:
-          purchase.id,
-      },
-    }),
-  ]);
-
-  eventBus.emit(
-    Events.ATTENDEE_UNCHECKED,
-    {
-      purchaseId:
-        purchase.id,
-
-      eventId:
-        purchase.eventId,
-
-      staffId:
-        staff.id,
-    }
-  );
-
-  return {
-    success: true,
-  };
-}
-
-export async function manualCheckIn(
-  purchaseId: string,
-  staff: {
-    id: string;
-    eventId: string;
-    station?: string | null;
-  }
-) {
-  const purchase =
-    await prisma.ticketPurchase.findUnique({
-      where: {
-        id: purchaseId,
-      },
-      include: {
-        user: true,
-        ticket: true,
-        event: true,
-      },
-    });
-
-  if (!purchase) {
-    throw new Error(
-      "Purchase not found."
-    );
-  }
-
-  if (
-    purchase.eventId !==
-    staff.eventId
-  ) {
-    throw new Error(
-      "Invalid event."
-    );
-  }
-
-  if (
-    purchase.checkedIn
-  ) {
-    throw new Error(
-      "Attendee has already checked in."
-    );
-  }
-
-  await prisma.$transaction([
-    prisma.ticketPurchase.update({
-      where: {
-        id: purchase.id,
-      },
-      data: {
-        checkedIn: true,
-        checkedInAt: new Date(),
-      },
-    }),
-
-    prisma.ticketCheckIn.create({
-      data: {
-        purchaseId:
-          purchase.id,
-        checkedInBy:
-          staff.id,
-        station:
-          staff.station,
-      },
-    }),
-  ]);
-
-  const attendance =
-    await prisma.ticketPurchase.count({
-      where: {
-        eventId:
-          purchase.eventId,
-        checkedIn: true,
-      },
-    });
-
-  eventBus.emit(
-    Events.ATTENDEE_CHECKED_IN,
-    {
-      eventId:
-        purchase.eventId,
-
-      purchaseId:
-        purchase.id,
-
-      attendeeId:
-        purchase.userId,
-
-      ticketTypeId:
-        purchase.ticketTypeId,
-
-      staffId:
-        staff.id,
-
-      station:
-        staff.station,
-
-      attendance,
-
-      checkedInAt:
-        new Date(),
-    }
-  );
-
-  return {
-    success: true,
-    attendance,
-  };
-}
-
-export async function searchAttendee(
-  eventId: string,
-  query: string
-) {
-  return prisma.ticketPurchase.findMany({
-    where: {
-      eventId,
-
-      status: "PAID",
-
-      OR: [
-        {
-          user: {
-            firstName: {
-              contains: query,
-              mode: "insensitive",
-            },
-          },
-        },
-        {
-          user: {
-            lastName: {
-              contains: query,
-              mode: "insensitive",
-            },
-          },
-        },
-        {
-          user: {
-            email: {
-              contains: query,
-              mode: "insensitive",
-            },
-          },
-        },
-      ],
-    },
-
-    include: {
-      user: true,
-      ticket: true,
-    },
-
-    take: 20,
-  });
-}
-
-async function completeCheckIn(
-  purchase: any,
-  staff: {
-    id: string;
-    eventId: string;
-    station?: string | null;
-  }
-) {
-  if (purchase.checkedIn) {
-    throw new Error(
-      "Attendee has already checked in."
-    );
-  }
-
-  await prisma.$transaction([
-    prisma.ticketPurchase.update({
-      where: {
-        id: purchase.id,
-      },
-      data: {
-        checkedIn: true,
-        checkedInAt: new Date(),
-      },
-    }),
-
-    prisma.ticketCheckIn.create({
-      data: {
-        purchaseId: purchase.id,
-        checkedInBy: staff.id,
-        station: staff.station,
-      },
-    }),
-  ]);
-
-  const attendance =
-    await prisma.ticketPurchase.count({
-      where: {
-        eventId: purchase.eventId,
-        checkedIn: true,
-      },
-    });
-
-  eventBus.emit(
-    Events.ATTENDEE_CHECKED_IN,
-    {
-      purchaseId: purchase.id,
-
-      attendeeId: purchase.userId,
-
-      eventId: purchase.eventId,
-
-      ticketTypeId:
-        purchase.ticketTypeId,
-
-      staffId: staff.id,
-
-      station: staff.station,
-
-      attendance,
-
-      checkedInAt:
-        new Date(),
-    }
-  );
-
-  return {
-    success: true,
-
-    attendance,
-
-    attendee: purchase.user,
-
-    ticket: purchase.ticket,
-
-    event: purchase.event,
   };
 }

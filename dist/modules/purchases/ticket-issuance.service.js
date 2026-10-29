@@ -452,6 +452,32 @@ async function issuePurchase(purchaseId) {
         0) {
         /*
         |--------------------------------------------------------------------------
+        | Ensure Attendee Record Exists
+        |--------------------------------------------------------------------------
+        |
+        | Older purchases may already have passes without an Attendee row.
+        | Keep one attendee per event/user and preserve any existing purchase
+        | association. This also runs on the fast idempotent path.
+        |
+        */
+        await prisma_1.prisma.attendee.upsert({
+            where: {
+                eventId_userId: {
+                    eventId: purchase.eventId,
+                    userId: purchase.userId,
+                },
+            },
+            create: {
+                eventId: purchase.eventId,
+                userId: purchase.userId,
+                purchaseId: purchase.id,
+                ticketTypeId: purchase.ticketTypeId,
+                status: "REGISTERED",
+            },
+            update: {},
+        });
+        /*
+        |--------------------------------------------------------------------------
         | Attendee Email
         |--------------------------------------------------------------------------
         */
@@ -518,6 +544,32 @@ async function issuePurchase(purchaseId) {
             "PAID") {
             throw new Error("Purchase has not been paid.");
         }
+        /*
+        |--------------------------------------------------------------------------
+        | Ensure Attendee Record Exists
+        |--------------------------------------------------------------------------
+        |
+        | One attendee per event/user. Multiple passes in one purchase do not
+        | create multiple Attendee records. The upsert also repairs older
+        | paid purchases that reach this transaction without an attendee row.
+        |
+        */
+        await tx.attendee.upsert({
+            where: {
+                eventId_userId: {
+                    eventId: lockedPurchase.eventId,
+                    userId: lockedPurchase.userId,
+                },
+            },
+            create: {
+                eventId: lockedPurchase.eventId,
+                userId: lockedPurchase.userId,
+                purchaseId: lockedPurchase.id,
+                ticketTypeId: lockedPurchase.ticketTypeId,
+                status: "REGISTERED",
+            },
+            update: {},
+        });
         /*
         |--------------------------------------------------------------------------
         | Idempotency After Lock

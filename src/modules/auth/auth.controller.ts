@@ -40,16 +40,20 @@ const isProduction = process.env.NODE_ENV === "production";
  * Production:
  * - HttpOnly prevents JavaScript from reading the session token.
  * - Secure requires HTTPS.
- * - SameSite=None permits cross-site credentialed requests.
+ * - SameSite=None allows cross-origin credentialed requests.
+ * - Domain=.wowyouevent.com shares the cookie across the frontend
+ *   and API subdomains.
  *
  * Development:
  * - SameSite=Lax supports ordinary local development.
+ * - No domain is set for localhost.
  */
 const sessionCookieOptions = {
   httpOnly: true,
   secure: isProduction,
   sameSite: isProduction ? ("none" as const) : ("lax" as const),
   path: "/",
+  ...(isProduction ? { domain: ".wowyouevent.com" } : {}),
 };
 
 function isBrowserClient(req: Request): boolean {

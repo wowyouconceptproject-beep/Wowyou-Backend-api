@@ -15,6 +15,7 @@ const sessionCookieOptions = {
   secure: isProduction,
   sameSite: isProduction ? ("none" as const) : ("lax" as const),
   path: "/",
+  ...(isProduction ? { domain: ".wowyouevent.com" } : {}),
 };
 
 export interface AuthRequest extends Request {

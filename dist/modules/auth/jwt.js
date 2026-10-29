@@ -4,10 +4,26 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.generateToken = generateToken;
+exports.verifyToken = verifyToken;
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
-const JWT_SECRET = process.env.JWT_SECRET;
+const JWT_SECRET = (() => {
+    const secret = process.env.JWT_SECRET;
+    if (!secret) {
+        throw new Error("JWT_SECRET is not configured.");
+    }
+    return secret;
+})();
 function generateToken(userId) {
     return jsonwebtoken_1.default.sign({ userId }, JWT_SECRET, {
         expiresIn: "7d",
     });
+}
+function verifyToken(token) {
+    const decoded = jsonwebtoken_1.default.verify(token, JWT_SECRET);
+    if (typeof decoded === "string" ||
+        typeof decoded.userId !== "string" ||
+        !decoded.userId) {
+        throw new Error("Invalid authentication token.");
+    }
+    return decoded;
 }

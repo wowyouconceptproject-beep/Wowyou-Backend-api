@@ -11,9 +11,6 @@ const pass_service_1 = require("../pass/pass.service");
 const prisma_1 = require("../../lib/prisma");
 const ops_jwt_1 = require("./ops.jwt");
 const realtime_1 = require("../../realtime");
-const realtime_2 = require("../../realtime");
-const event_bus_1 = require("../../core/events/event-bus");
-const event_types_1 = require("../../core/events/event.types");
 async function access(accessCode, device) {
     const staff = await prisma_1.prisma.eventStaff.findUnique({
         where: {
@@ -110,8 +107,106 @@ async function access(accessCode, device) {
 | Verify Pass
 |--------------------------------------------------------------------------
 */
+/**
+ * Verify either the legacy permanent QR hash or the current rotating QR token.
+ * NFC verification intentionally remains separate and uses verifySecurePass().
+ */
+async function verifyQrPassToken(token) {
+    const normalizedToken = token.trim();
+    // Legacy permanent QR codes are 64-character hexadecimal hashes.
+    if (/^[a-fA-F0-9]{64}$/.test(normalizedToken)) {
+        const pass = await prisma_1.prisma.eventPass.findUnique({
+            where: {
+                qrToken: normalizedToken,
+            },
+            include: {
+                purchase: {
+                    include: {
+                        user: true,
+                        event: true,
+                        ticket: true,
+                        passes: {
+                            where: {
+                                isActive: true,
+                                isRevoked: false,
+                            },
+                            orderBy: {
+                                createdAt: "asc",
+                            },
+                        },
+                        checkIn: {
+                            include: {
+                                staff: true,
+                            },
+                        },
+                    },
+                },
+            },
+        });
+        if (!pass) {
+            throw new Error("Pass not found.");
+        }
+        const purchase = pass.purchase;
+        if (purchase.status !== "PAID") {
+            throw new Error("Ticket has not been paid.");
+        }
+        if (!pass.isActive) {
+            throw new Error("This pass is inactive.");
+        }
+        if (pass.isRevoked) {
+            throw new Error("This pass has been revoked.");
+        }
+        if (pass.expiresAt && pass.expiresAt < new Date()) {
+            throw new Error("This pass has expired.");
+        }
+        if (purchase.event.endDate < new Date()) {
+            throw new Error("Event has ended.");
+        }
+        // Attendee.id is distinct from User.id.
+        const attendeeRecord = await prisma_1.prisma.attendee.findUnique({
+            where: {
+                eventId_userId: {
+                    eventId: purchase.eventId,
+                    userId: purchase.userId,
+                },
+            },
+            select: {
+                id: true,
+            },
+        });
+        return {
+            pass,
+            purchase,
+            attendee: {
+                id: attendeeRecord?.id ?? null,
+                name: `${purchase.user.firstName} ${purchase.user.lastName}`,
+                email: purchase.user.email,
+            },
+            ticket: {
+                id: purchase.ticket.id,
+                name: purchase.ticket.name,
+            },
+            event: {
+                id: purchase.event.id,
+                title: purchase.event.title,
+            },
+            alreadyCheckedIn: purchase.checkedIn,
+            checkedInBy: purchase.checkIn
+                ? {
+                    id: purchase.checkIn.staff.id,
+                    name: purchase.checkIn.staff.name,
+                    station: purchase.checkIn.station,
+                    checkedInAt: purchase.checkIn.checkedInAt,
+                }
+                : null,
+        };
+    }
+    // New rotating QR codes are signed tokens and are verified by the existing
+    // rotating-token verifier.
+    return (0, pass_service_1.verifyRotatingQrPass)(normalizedToken);
+}
 async function verifyPass(token, eventId) {
-    const verification = await (0, pass_service_1.verifyRotatingQrPass)(token);
+    const verification = await verifyQrPassToken(token);
     if (verification.event.id !== eventId) {
         throw new Error("This pass belongs to another event.");
     }
@@ -121,6 +216,11 @@ async function verifyPass(token, eventId) {
         checkedInBy: verification.checkedInBy,
     };
 }
+/*
+|--------------------------------------------------------------------------
+| Complete Check In (Private)
+|--------------------------------------------------------------------------
+*/
 /*
 |--------------------------------------------------------------------------
 | Complete Check In (Private)
@@ -149,6 +249,35 @@ async function completeCheckIn(purchaseId, staff) {
     if (purchase.checkedIn) {
         throw new Error("Attendee has already checked in.");
     }
+    /*
+    |--------------------------------------------------------------------------
+    | Resolve Or Repair Attendee Record
+    |--------------------------------------------------------------------------
+    |
+    | Older paid purchases may not have an Attendee row. Create it safely
+    | from this verified purchase, using the event/user unique constraint.
+    | Preserve any existing attendee's purchase association.
+    |
+    */
+    const attendee = await prisma_1.prisma.attendee.upsert({
+        where: {
+            eventId_userId: {
+                eventId: purchase.eventId,
+                userId: purchase.userId,
+            },
+        },
+        create: {
+            eventId: purchase.eventId,
+            userId: purchase.userId,
+            purchaseId: purchase.id,
+            ticketTypeId: purchase.ticketTypeId,
+            status: "REGISTERED",
+        },
+        update: {},
+        select: {
+            id: true,
+        },
+    });
     const now = new Date();
     await prisma_1.prisma.$transaction([
         prisma_1.prisma.ticketPurchase.update({
@@ -171,7 +300,8 @@ async function completeCheckIn(purchaseId, staff) {
             data: {
                 eventId: purchase.eventId,
                 actorId: staff.id,
-                attendeeId: purchase.userId,
+                // Correct foreign key: Attendee.id, not User.id.
+                attendeeId: attendee.id,
                 purchaseId: purchase.id,
                 ticketTypeId: purchase.ticketTypeId,
                 station: staff.station,
@@ -181,79 +311,11 @@ async function completeCheckIn(purchaseId, staff) {
             },
         }),
     ]);
-    const checkedIn = await prisma_1.prisma.ticketPurchase.count({
-        where: {
-            eventId: purchase.eventId,
-            checkedIn: true,
-        },
-    });
-    const totalTickets = await prisma_1.prisma.ticketPurchase.count({
-        where: {
-            eventId: purchase.eventId,
-            status: "PAID",
-        },
-    });
-    (0, realtime_2.attendanceUpdated)({
-        eventId: purchase.eventId,
-        checkedIn,
-        totalTickets,
-        remaining: totalTickets -
-            checkedIn,
-        purchaseId: purchase.id,
-        attendeeId: purchase.userId,
-        ticketTypeId: purchase.ticketTypeId,
-        staffId: staff.id,
-        checkedInAt: now.toISOString(),
-    });
-    (0, realtime_2.activityCreated)({
-        type: realtime_2.ActivityType.CHECK_IN,
-        eventId: purchase.eventId,
-        title: "Attendee Checked In",
-        description: `${purchase.user.firstName} ${purchase.user.lastName} checked in.`,
-        staffId: staff.id,
-        attendeeId: purchase.userId,
-        timestamp: now.toISOString(),
-    });
-    (0, realtime_2.notifyAttendee)(purchase.userId, {
-        type: "CHECK_IN_SUCCESS",
-        title: "Welcome!",
-        message: "You have successfully checked in.",
-        eventId: purchase.eventId,
-        purchaseId: purchase.id,
-        checkedInAt: now.toISOString(),
-    });
-    event_bus_1.eventBus.emit(event_types_1.Events.ATTENDEE_CHECKED_IN, {
-        eventId: purchase.eventId,
-        purchaseId: purchase.id,
-        attendeeId: purchase.userId,
-        ticketTypeId: purchase.ticketTypeId,
-        staffId: staff.id,
-        station: staff.station,
-        attendance: checkedIn,
-        checkedInAt: now,
-    });
     return {
         success: true,
-        attendance: checkedIn,
-        totalTickets,
-        remaining: totalTickets -
-            checkedIn,
-        attendee: {
-            id: purchase.user.id,
-            firstName: purchase.user.firstName,
-            lastName: purchase.user.lastName,
-            email: purchase.user.email,
-        },
-        ticket: {
-            id: purchase.ticket.id,
-            name: purchase.ticket.name,
-            price: purchase.ticket.price,
-        },
-        event: {
-            id: purchase.event.id,
-            title: purchase.event.title,
-            currency: purchase.event.currency,
-        },
+        purchaseId: purchase.id,
+        attendeeId: attendee.id,
+        checkedInAt: now,
     };
 }
 /*
@@ -269,7 +331,7 @@ async function checkIn(token, staff, scanType = "QR") {
     let verification;
     switch (scanType) {
         case "QR":
-            verification = await (0, pass_service_1.verifyRotatingQrPass)(normalizedToken);
+            verification = await verifyQrPassToken(normalizedToken);
             break;
         case "NFC":
             verification = await (0, pass_service_1.verifySecurePass)(normalizedToken);
@@ -364,6 +426,11 @@ async function dashboard(eventId) {
 | Undo Check In
 |--------------------------------------------------------------------------
 */
+/*
+|--------------------------------------------------------------------------
+| Undo Check In
+|--------------------------------------------------------------------------
+*/
 async function undoCheckIn(purchaseId, staff) {
     const purchase = await prisma_1.prisma.ticketPurchase.findUnique({
         where: {
@@ -373,13 +440,40 @@ async function undoCheckIn(purchaseId, staff) {
     if (!purchase) {
         throw new Error("Purchase not found.");
     }
-    if (purchase.eventId !==
-        staff.eventId) {
+    if (purchase.eventId !== staff.eventId) {
         throw new Error("Invalid event.");
     }
     if (!purchase.checkedIn) {
         throw new Error("Attendee has not checked in.");
     }
+    /*
+    |--------------------------------------------------------------------------
+    | Resolve Or Repair Attendee Record
+    |--------------------------------------------------------------------------
+    |
+    | Use the actual Attendee.id for EventActivity.attendeeId. This also
+    | repairs older records that predate attendee creation during issuance.
+    |
+    */
+    const attendee = await prisma_1.prisma.attendee.upsert({
+        where: {
+            eventId_userId: {
+                eventId: purchase.eventId,
+                userId: purchase.userId,
+            },
+        },
+        create: {
+            eventId: purchase.eventId,
+            userId: purchase.userId,
+            purchaseId: purchase.id,
+            ticketTypeId: purchase.ticketTypeId,
+            status: "REGISTERED",
+        },
+        update: {},
+        select: {
+            id: true,
+        },
+    });
     await prisma_1.prisma.$transaction([
         prisma_1.prisma.ticketPurchase.update({
             where: {
@@ -399,7 +493,7 @@ async function undoCheckIn(purchaseId, staff) {
             data: {
                 eventId: purchase.eventId,
                 actorId: staff.id,
-                attendeeId: purchase.userId,
+                attendeeId: attendee.id,
                 purchaseId: purchase.id,
                 ticketTypeId: purchase.ticketTypeId,
                 type: "UNDO_CHECK_IN",
