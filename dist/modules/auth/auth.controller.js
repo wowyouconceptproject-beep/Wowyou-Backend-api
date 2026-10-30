@@ -11,56 +11,12 @@ exports.me = me;
 exports.forgotPassword = forgotPassword;
 exports.verifyResetCode = verifyResetCode;
 exports.resetPasswordController = resetPasswordController;
-const node_crypto_1 = require("node:crypto");
 const prisma_1 = require("../../lib/prisma");
 const auth_service_1 = require("./auth.service");
 const email_verification_service_1 = require("./email-verification.service");
 const login_otp_service_1 = require("./login-otp.service");
 const password_reset_service_1 = require("./password-reset.service");
-const auth_middleware_1 = require("./auth.middleware");
-const SESSION_DURATION_MS = 60 * 60 * 1000;
-const isProduction = process.env.NODE_ENV === "production";
-/**
- * Keep cookie attributes consistent when setting and clearing
- * the browser session cookie.
- *
- * Production:
- * - HttpOnly prevents JavaScript from reading the session token.
- * - Secure requires HTTPS.
- * - SameSite=None allows cross-origin credentialed requests.
- * - Domain=.wowyouevent.com shares the cookie across the frontend
- *   and API subdomains.
- *
- * Development:
- * - SameSite=Lax supports ordinary local development.
- * - No domain is set for localhost.
- */
-const sessionCookieOptions = {
-    httpOnly: true,
-    secure: isProduction,
-    sameSite: isProduction ? "none" : "lax",
-    path: "/",
-    ...(isProduction ? { domain: ".wowyouevent.com" } : {}),
-};
-function isBrowserClient(req) {
-    return req.get("X-Auth-Mode") === "cookie";
-}
-async function createBrowserSession(userId, res) {
-    const sessionToken = (0, node_crypto_1.randomBytes)(32).toString("hex");
-    const now = new Date();
-    await prisma_1.prisma.authSession.create({
-        data: {
-            userId,
-            tokenHash: (0, auth_middleware_1.hashSessionToken)(sessionToken),
-            lastActivityAt: now,
-            expiresAt: new Date(now.getTime() + SESSION_DURATION_MS),
-        },
-    });
-    res.cookie(auth_middleware_1.SESSION_COOKIE_NAME, sessionToken, {
-        ...sessionCookieOptions,
-        maxAge: SESSION_DURATION_MS,
-    });
-}
+const isBrowserClient = (req) => req.get("X-Auth-Mode") === "cookie";
 /*
 |--------------------------------------------------------------------------
 | Register
@@ -68,26 +24,14 @@ async function createBrowserSession(userId, res) {
 */
 async function register(req, res) {
     try {
-        console.log("REGISTER BODY:", JSON.stringify(req.body, null, 2));
-        console.log("DATABASE_URL EXISTS:", Boolean(process.env.DATABASE_URL));
-        console.log("JWT_SECRET EXISTS:", Boolean(process.env.JWT_SECRET));
         const result = await (0, auth_service_1.registerUser)(req.body);
-        console.log("REGISTER SUCCESS:", result.user?.email);
         try {
             await (0, email_verification_service_1.sendVerificationEmail)(result.user.id);
         }
         catch (emailError) {
             console.error("VERIFICATION EMAIL ERROR:", emailError);
         }
-        // Registration does not create an authenticated browser session.
-        // Preserve the existing response for compatibility.
-        if (isBrowserClient(req)) {
-            const { token: _token, ...browserResult } = result;
-            return res.status(201).json({
-                success: true,
-                ...browserResult,
-            });
-        }
+        // Preserve JWT registration compatibility.
         return res.status(201).json({
             success: true,
             ...result,
@@ -97,10 +41,9 @@ async function register(req, res) {
         console.error("REGISTER ERROR:", error);
         return res.status(400).json({
             success: false,
-            message: error?.message || "Registration failed",
-            stack: process.env.NODE_ENV !== "production"
-                ? error?.stack
-                : undefined,
+            message: error instanceof Error
+                ? error.message
+                : "Registration failed",
         });
     }
 }
@@ -111,10 +54,8 @@ async function register(req, res) {
 */
 async function login(req, res) {
     try {
-        console.log("LOGIN ATTEMPT:", req.body?.email);
         const { email, password } = req.body;
         const result = await (0, auth_service_1.loginUser)(email, password);
-        console.log("LOGIN OTP REQUESTED:", email);
         return res.status(200).json({
             success: true,
             ...result,
@@ -124,7 +65,7 @@ async function login(req, res) {
         console.error("LOGIN ERROR:", error);
         return res.status(400).json({
             success: false,
-            message: error?.message || "Login failed",
+            message: error instanceof Error ? error.message : "Login failed",
         });
     }
 }
@@ -147,24 +88,18 @@ async function verifyLoginCode(req, res) {
         }
         const result = await (0, auth_service_1.completeLogin)(email, otp);
         console.log("LOGIN OTP VERIFIED:", email);
-        if (isBrowserClient(req)) {
-            await createBrowserSession(result.user.id, res);
-            return res.status(200).json({
-                success: true,
-                user: result.user,
-            });
-        }
-        // Preserve JWT authentication for Flutter and other existing clients.
+        // Return the seven-day JWT to browser and mobile clients.
         return res.status(200).json({
             success: true,
-            ...result,
+            token: result.token,
+            user: result.user,
         });
     }
     catch (error) {
         console.error("VERIFY LOGIN OTP ERROR:", error);
         return res.status(400).json({
             success: false,
-            message: error?.message || "Verification failed",
+            message: error instanceof Error ? error.message : "Verification failed",
         });
     }
 }
@@ -185,7 +120,6 @@ async function resendLoginCode(req, res) {
             });
         }
         await (0, login_otp_service_1.resendLoginOtp)(email);
-        console.log("LOGIN OTP RESENT:", email);
         return res.status(200).json({
             success: true,
             message: "Login code sent",
@@ -195,7 +129,9 @@ async function resendLoginCode(req, res) {
         console.error("RESEND LOGIN OTP ERROR:", error);
         return res.status(400).json({
             success: false,
-            message: error?.message || "Failed to resend login code",
+            message: error instanceof Error
+                ? error.message
+                : "Failed to resend login code",
         });
     }
 }
@@ -205,47 +141,12 @@ async function resendLoginCode(req, res) {
 |--------------------------------------------------------------------------
 */
 async function logout(req, res) {
-    try {
-        const cookieHeader = req.headers.cookie ?? "";
-        const cookie = cookieHeader
-            .split(";")
-            .map((part) => part.trim())
-            .find((part) => part.startsWith(`${auth_middleware_1.SESSION_COOKIE_NAME}=`));
-        if (cookie) {
-            const encodedToken = cookie.slice(auth_middleware_1.SESSION_COOKIE_NAME.length + 1);
-            let sessionToken = null;
-            try {
-                sessionToken = decodeURIComponent(encodedToken);
-            }
-            catch {
-                sessionToken = null;
-            }
-            if (sessionToken) {
-                await prisma_1.prisma.authSession.updateMany({
-                    where: {
-                        tokenHash: (0, auth_middleware_1.hashSessionToken)(sessionToken),
-                        revokedAt: null,
-                    },
-                    data: {
-                        revokedAt: new Date(),
-                    },
-                });
-            }
-        }
-        res.clearCookie(auth_middleware_1.SESSION_COOKIE_NAME, sessionCookieOptions);
-        return res.status(200).json({
-            success: true,
-            message: "Logged out successfully.",
-        });
-    }
-    catch (error) {
-        console.error("LOGOUT ERROR:", error);
-        res.clearCookie(auth_middleware_1.SESSION_COOKIE_NAME, sessionCookieOptions);
-        return res.status(500).json({
-            success: false,
-            message: "Unable to complete logout.",
-        });
-    }
+    // JWT logout is handled client-side by clearing the stored token.
+    // No server-side session cookie is required.
+    return res.status(200).json({
+        success: true,
+        message: "Logged out successfully.",
+    });
 }
 /*
 |--------------------------------------------------------------------------
@@ -272,7 +173,9 @@ async function verifyEmail(req, res) {
         console.error("VERIFY EMAIL ERROR:", error);
         return res.status(400).json({
             success: false,
-            message: error?.message || "Email verification failed",
+            message: error instanceof Error
+                ? error.message
+                : "Email verification failed",
         });
     }
 }
@@ -317,7 +220,9 @@ async function resendVerification(req, res) {
         console.error("RESEND VERIFICATION ERROR:", error);
         return res.status(400).json({
             success: false,
-            message: error?.message || "Failed to resend verification email",
+            message: error instanceof Error
+                ? error.message
+                : "Failed to resend verification email",
         });
     }
 }
