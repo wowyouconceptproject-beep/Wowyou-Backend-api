@@ -50,7 +50,11 @@ router.use("/staff", staffRoutes);
 router.use("/vendors", vendorRoutes);
 router.use("/settings", settingsRoutes);
 router.use("/media", mediaRoutes);
+
+router.use("/networking", networkingRoutes);
+
 router.use("/operations/capacity", capacityRoutes);
-router.use("/stripe", stripeConnectRoutes,);
+
+router.use("/stripe", stripeConnectRoutes);
 
 export default router;

@@ -1,3 +1,4 @@
+
 export interface MatchReason {
   code: string;
   message: string;
@@ -10,18 +11,18 @@ export interface NetworkingProfile {
   firstName: string;
   lastName: string;
 
-  profession?: string;
-  industry?: string;
-  company?: string;
-  jobTitle?: string;
+  profession?: string | null;
+  industry?: string | null;
+  company?: string | null;
+  jobTitle?: string | null;
 
-  bio?: string;
+  bio?: string | null;
 
   skills: string[];
   goals: string[];
 
-  linkedin?: string;
-  avatar?: string;
+  linkedin?: string | null;
+  avatar?: string | null;
 }
 
 export interface MatchEvaluation {
@@ -35,11 +36,11 @@ export interface MatchCard {
   firstName: string;
   lastName: string;
 
-  profession?: string;
-  company?: string;
-  jobTitle?: string;
+  profession?: string | null;
+  company?: string | null;
+  jobTitle?: string | null;
 
-  avatar?: string;
+  avatar?: string | null;
 
   score: number;
 
@@ -62,4 +63,45 @@ export interface MatchBreakdown {
   industry: number;
   company: number;
   profession: number;
+}
+
+// ============================================
+// NETWORKING REQUEST TYPES
+// ============================================
+
+export type NetworkingRequestStatus =
+  | "PENDING"
+  | "ACCEPTED"
+  | "REJECTED"
+  | "CANCELLED";
+
+export interface SendNetworkingRequestInput {
+  receiverId: string;
+  eventId: string;
+  message?: string;
+}
+
+export interface NetworkingRequest {
+  id: string;
+  requesterId: string;
+  receiverId: string;
+  eventId: string;
+  message?: string | null;
+  status: NetworkingRequestStatus;
+  accepted: boolean;
+  createdAt: Date;
+  acceptedAt?: Date | null;
+  rejectedAt?: Date | null;
+  cancelledAt?: Date | null;
+}
+
+export interface NetworkingConnection {
+  id: string;
+  requesterId: string;
+  receiverId: string;
+  eventId: string;
+  accepted: boolean;
+  status: NetworkingRequestStatus;
+  acceptedAt?: Date | null;
+  createdAt: Date;
 }

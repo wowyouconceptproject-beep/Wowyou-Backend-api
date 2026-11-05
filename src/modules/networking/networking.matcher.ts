@@ -1,3 +1,4 @@
+
 import {
   MatchBreakdown,
   MatchEvaluation,
@@ -28,27 +29,24 @@ export class NetworkingMatcher {
     attendee: NetworkingProfile,
     candidate: NetworkingProfile,
   ): MatchEvaluation {
-    const breakdown =
-      this.calculateBreakdown(
-        attendee,
-        candidate,
-      );
+    const breakdown = this.calculateBreakdown(
+      attendee,
+      candidate,
+    );
 
     const score = clamp(
       Math.round(
         breakdown.skills +
-            breakdown.goals +
-            breakdown.profession +
-            breakdown.industry +
-            breakdown.company,
+          breakdown.goals +
+          breakdown.profession +
+          breakdown.industry +
+          breakdown.company,
       ),
     );
 
     return {
       score,
-      reasons: this.buildReasons(
-        breakdown,
-      ),
+      reasons: this.buildReasons(breakdown),
     };
   }
 
@@ -60,51 +58,34 @@ export class NetworkingMatcher {
       overlapPercentage(
         attendee.skills,
         candidate.skills,
-      ) *
-      this.weights.skills;
+      ) * this.weights.skills;
 
     const goals =
       overlapPercentage(
         attendee.goals,
         candidate.goals,
-      ) *
-      this.weights.goals;
+      ) * this.weights.goals;
 
-    const profession =
-      attendee.profession &&
-      candidate.profession &&
-      attendee.profession
-          .trim()
-          .toLowerCase() ===
-          candidate.profession
-              .trim()
-              .toLowerCase()
-          ? this.weights.profession
-          : 0;
+    const profession = this.sameValue(
+      attendee.profession,
+      candidate.profession,
+    )
+      ? this.weights.profession
+      : 0;
 
-    const industry =
-      attendee.industry &&
-      candidate.industry &&
-      attendee.industry
-          .trim()
-          .toLowerCase() ===
-          candidate.industry
-              .trim()
-              .toLowerCase()
-          ? this.weights.industry
-          : 0;
+    const industry = this.sameValue(
+      attendee.industry,
+      candidate.industry,
+    )
+      ? this.weights.industry
+      : 0;
 
-    const company =
-      attendee.company &&
-      candidate.company &&
-      attendee.company
-          .trim()
-          .toLowerCase() ===
-          candidate.company
-              .trim()
-              .toLowerCase()
-          ? this.weights.company
-          : 0;
+    const company = this.sameValue(
+      attendee.company,
+      candidate.company,
+    )
+      ? this.weights.company
+      : 0;
 
     return {
       skills,
@@ -115,6 +96,18 @@ export class NetworkingMatcher {
     };
   }
 
+  private sameValue(
+    a?: string | null,
+    b?: string | null,
+  ): boolean {
+    if (!a || !b) return false;
+
+    return (
+      a.trim().toLowerCase() ===
+      b.trim().toLowerCase()
+    );
+  }
+
   private buildReasons(
     breakdown: MatchBreakdown,
   ): MatchReason[] {
@@ -123,55 +116,40 @@ export class NetworkingMatcher {
     if (breakdown.skills > 0) {
       reasons.push({
         code: "SKILLS",
-        message:
-          "You share complementary professional skills.",
-        weight: Math.round(
-          breakdown.skills,
-        ),
+        message: "You share professional skills.",
+        weight: Math.round(breakdown.skills),
       });
     }
 
     if (breakdown.goals > 0) {
       reasons.push({
         code: "GOALS",
-        message:
-          "You have similar networking goals.",
-        weight: Math.round(
-          breakdown.goals,
-        ),
+        message: "You have similar networking goals.",
+        weight: Math.round(breakdown.goals),
       });
     }
 
     if (breakdown.profession > 0) {
       reasons.push({
         code: "PROFESSION",
-        message:
-          "You have the same profession.",
-        weight: Math.round(
-          breakdown.profession,
-        ),
+        message: "You have the same profession.",
+        weight: Math.round(breakdown.profession),
       });
     }
 
     if (breakdown.industry > 0) {
       reasons.push({
         code: "INDUSTRY",
-        message:
-          "You work in the same industry.",
-        weight: Math.round(
-          breakdown.industry,
-        ),
+        message: "You work in the same industry.",
+        weight: Math.round(breakdown.industry),
       });
     }
 
     if (breakdown.company > 0) {
       reasons.push({
         code: "COMPANY",
-        message:
-          "You work at the same company.",
-        weight: Math.round(
-          breakdown.company,
-        ),
+        message: "You work at the same company.",
+        weight: Math.round(breakdown.company),
       });
     }
 
