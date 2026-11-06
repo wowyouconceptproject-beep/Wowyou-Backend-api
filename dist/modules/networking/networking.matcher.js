@@ -27,38 +27,15 @@ class NetworkingMatcher {
         };
     }
     calculateBreakdown(attendee, candidate) {
-        const skills = (0, networking_utils_1.overlapPercentage)(attendee.skills, candidate.skills) *
-            this.weights.skills;
-        const goals = (0, networking_utils_1.overlapPercentage)(attendee.goals, candidate.goals) *
-            this.weights.goals;
-        const profession = attendee.profession &&
-            candidate.profession &&
-            attendee.profession
-                .trim()
-                .toLowerCase() ===
-                candidate.profession
-                    .trim()
-                    .toLowerCase()
+        const skills = (0, networking_utils_1.overlapPercentage)(attendee.skills, candidate.skills) * this.weights.skills;
+        const goals = (0, networking_utils_1.overlapPercentage)(attendee.goals, candidate.goals) * this.weights.goals;
+        const profession = this.sameValue(attendee.profession, candidate.profession)
             ? this.weights.profession
             : 0;
-        const industry = attendee.industry &&
-            candidate.industry &&
-            attendee.industry
-                .trim()
-                .toLowerCase() ===
-                candidate.industry
-                    .trim()
-                    .toLowerCase()
+        const industry = this.sameValue(attendee.industry, candidate.industry)
             ? this.weights.industry
             : 0;
-        const company = attendee.company &&
-            candidate.company &&
-            attendee.company
-                .trim()
-                .toLowerCase() ===
-                candidate.company
-                    .trim()
-                    .toLowerCase()
+        const company = this.sameValue(attendee.company, candidate.company)
             ? this.weights.company
             : 0;
         return {
@@ -69,12 +46,18 @@ class NetworkingMatcher {
             company,
         };
     }
+    sameValue(a, b) {
+        if (!a || !b)
+            return false;
+        return (a.trim().toLowerCase() ===
+            b.trim().toLowerCase());
+    }
     buildReasons(breakdown) {
         const reasons = [];
         if (breakdown.skills > 0) {
             reasons.push({
                 code: "SKILLS",
-                message: "You share complementary professional skills.",
+                message: "You share professional skills.",
                 weight: Math.round(breakdown.skills),
             });
         }

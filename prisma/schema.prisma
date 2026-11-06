@@ -162,6 +162,13 @@ enum EmailDeliveryStatus {
   FAILED
 }
 
+enum NetworkingRequestStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  CANCELLED
+}
+
 model User {
   id String @id @default(cuid())
 
@@ -219,6 +226,10 @@ model User {
   purchases TicketPurchase[]
 
   ticketCheckIns TicketCheckIn[]
+
+  networkingRequestsSent Connection[] @relation("NetworkingRequester")
+
+  networkingRequestsReceived Connection[] @relation("NetworkingReceiver")
 
   /**
    * |--------------------------------------------------------------------------
@@ -419,6 +430,8 @@ model Event {
   eventPayout EventPayout?
 
   purchaseSettlements PurchaseSettlement[]
+
+  networkingConnections Connection[]
 
   /**
    * |--------------------------------------------------------------------------
@@ -899,6 +912,10 @@ model Notification {
 
   body String
 
+  type String @default("GENERAL")
+
+  data Json?
+
   read Boolean @default(false)
 
   createdAt DateTime @default(now())
@@ -968,17 +985,32 @@ model Session {
   event Event @relation(fields: [eventId], references: [id])
 }
 
+
 model Connection {
-  id String @id @default(cuid())
+  id          String                   @id @default(cuid())
+  requesterId  String
+  receiverId   String
+  eventId      String?
+  message       String?
+  accepted      Boolean                @default(false)
+  status        NetworkingRequestStatus @default(PENDING)
 
-  requesterId String
+  acceptedAt    DateTime?
+  rejectedAt    DateTime?
+  cancelledAt   DateTime?
 
-  receiverId String
+  createdAt     DateTime               @default(now())
+  updatedAt     DateTime               @updatedAt
 
-  accepted Boolean @default(false)
+  requester User @relation("NetworkingRequester", fields: [requesterId], references: [id], onDelete: Cascade)
+  receiver  User @relation("NetworkingReceiver", fields: [receiverId], references: [id], onDelete: Cascade)
+  event     Event? @relation(fields: [eventId], references: [id], onDelete: SetNull)
 
-  createdAt DateTime @default(now())
+  @@index([requesterId, status])
+  @@index([receiverId, status])
+  @@index([eventId])
 }
+
 
 model EventActivity {
   id String @id @default(cuid())

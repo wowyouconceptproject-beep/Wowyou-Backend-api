@@ -5,15 +5,16 @@ exports.unique = unique;
 exports.overlap = overlap;
 exports.overlapPercentage = overlapPercentage;
 exports.clamp = clamp;
-function normalize(values) {
+function normalize(values = []) {
     return values
+        .filter((v) => typeof v === "string")
         .map((v) => v.trim().toLowerCase())
         .filter(Boolean);
 }
-function unique(values) {
+function unique(values = []) {
     return [...new Set(normalize(values))];
 }
-function overlap(a, b) {
+function overlap(a = [], b = []) {
     const left = new Set(unique(a));
     const right = new Set(unique(b));
     let count = 0;
@@ -24,12 +25,14 @@ function overlap(a, b) {
     }
     return count;
 }
-function overlapPercentage(a, b) {
-    const total = Math.max(unique(a).length, unique(b).length);
+function overlapPercentage(a = [], b = []) {
+    const left = unique(a);
+    const right = unique(b);
+    const total = Math.max(left.length, right.length);
     if (total === 0) {
         return 0;
     }
-    return overlap(a, b) / total;
+    return (overlap(left, right) / total) * 100;
 }
 function clamp(value, min = 0, max = 100) {
     return Math.min(Math.max(value, min), max);
