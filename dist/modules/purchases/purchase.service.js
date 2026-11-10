@@ -10,9 +10,13 @@ const prisma_1 = require("../../lib/prisma");
 const stripe_service_1 = require("../payments/stripe/stripe.service");
 const ticket_issuance_service_1 = require("./ticket-issuance.service");
 /*
+
 |--------------------------------------------------------------------------
+
 | Currency Minor Units
+
 |--------------------------------------------------------------------------
+
 */
 function toMinorUnits(amount, currency) {
     const normalized = currency.trim().toUpperCase();
@@ -40,9 +44,13 @@ function toMinorUnits(amount, currency) {
     return Math.round(amount * 100);
 }
 /*
+
 |--------------------------------------------------------------------------
+
 | Currency Minor Units To Major Units
+
 |--------------------------------------------------------------------------
+
 */
 function fromMinorUnits(amount, currency) {
     const normalized = currency.trim().toUpperCase();
@@ -69,25 +77,42 @@ function fromMinorUnits(amount, currency) {
         : amount / 100;
 }
 /*
+
 |--------------------------------------------------------------------------
+
 | Transaction Fee Configuration
+
 |--------------------------------------------------------------------------
+
 */
 const TRANSACTION_FEE_PERCENT = 0.03;
 const FIXED_TRANSACTION_FEE_EUR = 0.5;
 /*
+
 |--------------------------------------------------------------------------
+
 | EUR To Event Currency Exchange Rate
+
 |--------------------------------------------------------------------------
+
 |
+
 | The fixed fee is €0.50 per order.
+
 |
+
 | EUR purchases do not require an exchange-rate lookup.
+
 |
+
 | Non-EUR purchases use a live reference rate.
+
 | If the rate is unavailable, checkout fails rather than
+
 | using an invented exchange rate.
+
 |
+
 */
 async function getFixedFeeExchangeRate(currency) {
     const normalized = currency.trim().toUpperCase();
@@ -117,22 +142,39 @@ async function getFixedFeeExchangeRate(currency) {
     return rate;
 }
 /*
+
 |--------------------------------------------------------------------------
+
 | Calculate Checkout Amounts
+
 |--------------------------------------------------------------------------
+
 |
+
 | Transaction fee:
+
 |
+
 | 3% of ticket subtotal + €0.50 per order.
+
 |
+
 | The percentage and fixed fee are rounded to the currency's
+
 | smallest unit before calculating the total.
+
 |
+
 | amount = subtotal + transactionFee
+
 |
+
 | The stored amount remains the total payable for compatibility
+
 | with the existing Stripe webhook amount verification.
+
 |
+
 */
 async function calculateCheckoutAmounts(subtotal, currency) {
     const normalized = currency.trim().toUpperCase();
@@ -171,19 +213,31 @@ async function calculateCheckoutAmounts(subtotal, currency) {
     };
 }
 /*
+
 |--------------------------------------------------------------------------
+
 | Purchase Quote
+
 |--------------------------------------------------------------------------
+
 |
+
 | Calculates the checkout breakdown without creating a purchase,
+
 | reserving inventory, or creating a Stripe Checkout session.
+
 |
+
 */
 async function getPurchaseQuote(userId, ticketTypeId, quantity) {
     /*
+  
     |--------------------------------------------------------------------------
+  
     | Validation
+  
     |--------------------------------------------------------------------------
+  
     */
     if (!userId) {
         throw new Error("User ID is required.");
@@ -196,9 +250,13 @@ async function getPurchaseQuote(userId, ticketTypeId, quantity) {
         throw new Error("Quantity must be at least 1.");
     }
     /*
+  
     |--------------------------------------------------------------------------
+  
     | Attendee Authorization
+  
     |--------------------------------------------------------------------------
+  
     */
     const attendee = await prisma_1.prisma.user.findUnique({
         where: {
@@ -218,9 +276,13 @@ async function getPurchaseQuote(userId, ticketTypeId, quantity) {
         throw error;
     }
     /*
+  
     |--------------------------------------------------------------------------
+  
     | Load Ticket And Event
+  
     |--------------------------------------------------------------------------
+  
     */
     const ticket = await prisma_1.prisma.ticketType.findUnique({
         where: {
@@ -234,9 +296,13 @@ async function getPurchaseQuote(userId, ticketTypeId, quantity) {
         throw new Error("Ticket not found.");
     }
     /*
+  
     |--------------------------------------------------------------------------
+  
     | Availability Validation
+  
     |--------------------------------------------------------------------------
+  
     */
     if (!ticket.isActive) {
         throw new Error("Ticket unavailable.");
@@ -248,9 +314,13 @@ async function getPurchaseQuote(userId, ticketTypeId, quantity) {
         throw new Error("This event has already ended.");
     }
     /*
+  
     |--------------------------------------------------------------------------
+  
     | Inventory Validation
+  
     |--------------------------------------------------------------------------
+  
     */
     const remaining = ticket.quantity - ticket.sold;
     if (remaining <= 0) {
@@ -260,9 +330,13 @@ async function getPurchaseQuote(userId, ticketTypeId, quantity) {
         throw new Error(`Only ${remaining} ticket${remaining === 1 ? "" : "s"} remaining.`);
     }
     /*
+  
     |--------------------------------------------------------------------------
+  
     | Calculate Subtotal
+  
     |--------------------------------------------------------------------------
+  
     */
     const currency = ticket.event.currency
         .trim()
@@ -278,20 +352,33 @@ async function getPurchaseQuote(userId, ticketTypeId, quantity) {
         throw new Error("Invalid purchase subtotal.");
     }
     /*
+  
     |--------------------------------------------------------------------------
+  
     | Calculate Authoritative Checkout Amounts
+  
     |--------------------------------------------------------------------------
+  
     |
+  
     | Reuses the existing fee calculator:
+  
     |
+  
     | 3% of subtotal + €0.50 per order.
+  
     |
+  
     */
     const amounts = await calculateCheckoutAmounts(subtotal, currency);
     /*
+  
     |--------------------------------------------------------------------------
+  
     | Return Quote
+  
     |--------------------------------------------------------------------------
+  
     */
     return {
         ticketTypeId: ticket.id,
@@ -308,15 +395,23 @@ async function getPurchaseQuote(userId, ticketTypeId, quantity) {
     };
 }
 /*
+
 |--------------------------------------------------------------------------
+
 | Payment Return URL
+
 |--------------------------------------------------------------------------
+
 */
 function getPaymentReturnUrl(purchaseId, channel) {
     /*
+  
     |--------------------------------------------------------------------------
+  
     | Web Attendee Checkout
+  
     |--------------------------------------------------------------------------
+  
     */
     if (channel === "web") {
         const webUrl = (process.env.ATTENDEE_WEB_URL ??
@@ -329,9 +424,13 @@ function getPaymentReturnUrl(purchaseId, channel) {
         return `${webUrl}/attendee/dashboard?purchase=${encodeURIComponent(purchaseId)}`;
     }
     /*
+  
     |--------------------------------------------------------------------------
+  
     | Mobile Attendee Checkout
+  
     |--------------------------------------------------------------------------
+  
     */
     const mobileReturnUrl = process.env.PAYMENT_RETURN_URL ??
         process.env.FRONTEND_URL;
@@ -341,15 +440,23 @@ function getPaymentReturnUrl(purchaseId, channel) {
     return `${mobileReturnUrl}?purchase=${encodeURIComponent(purchaseId)}`;
 }
 /*
+
 |--------------------------------------------------------------------------
+
 | Create Purchase
+
 |--------------------------------------------------------------------------
+
 */
 async function createPurchase(userId, ticketTypeId, quantity, channel = "mobile") {
     /*
+  
     |--------------------------------------------------------------------------
+  
     | Validation
+  
     |--------------------------------------------------------------------------
+  
     */
     if (!userId) {
         throw new Error("User ID is required.");
@@ -366,13 +473,21 @@ async function createPurchase(userId, ticketTypeId, quantity, channel = "mobile"
         throw new Error("Invalid checkout channel.");
     }
     /*
+  
     |--------------------------------------------------------------------------
+  
     | Authenticated User / Attendee Authorization
+  
     |--------------------------------------------------------------------------
+  
     |
+  
     | The authenticated user's database record is authoritative.
+  
     | Only attendee accounts can purchase tickets.
+  
     |
+  
     */
     const attendee = await prisma_1.prisma.user.findUnique({
         where: {
@@ -393,9 +508,13 @@ async function createPurchase(userId, ticketTypeId, quantity, channel = "mobile"
         throw error;
     }
     /*
+  
     |--------------------------------------------------------------------------
+  
     | Attendee Email
+  
     |--------------------------------------------------------------------------
+  
     */
     if (!attendee.email) {
         throw new Error("Attendee email address not found.");
@@ -407,9 +526,13 @@ async function createPurchase(userId, ticketTypeId, quantity, channel = "mobile"
         throw new Error("Attendee email address not found.");
     }
     /*
+  
     |--------------------------------------------------------------------------
+  
     | Load Ticket
+  
     |--------------------------------------------------------------------------
+  
     */
     const ticket = await prisma_1.prisma.ticketType.findUnique({
         where: {
@@ -423,9 +546,13 @@ async function createPurchase(userId, ticketTypeId, quantity, channel = "mobile"
         throw new Error("Ticket not found.");
     }
     /*
+  
     |--------------------------------------------------------------------------
+  
     | Ticket Availability
+  
     |--------------------------------------------------------------------------
+  
     */
     if (!ticket.isActive) {
         throw new Error("Ticket unavailable.");
@@ -438,9 +565,13 @@ async function createPurchase(userId, ticketTypeId, quantity, channel = "mobile"
         throw new Error("This event has already ended.");
     }
     /*
+  
     |--------------------------------------------------------------------------
+  
     | Inventory
+  
     |--------------------------------------------------------------------------
+  
     */
     const remaining = ticket.quantity - ticket.sold;
     if (remaining <= 0) {
@@ -450,9 +581,13 @@ async function createPurchase(userId, ticketTypeId, quantity, channel = "mobile"
         throw new Error(`Only ${remaining} ticket${remaining === 1 ? "" : "s"} remaining.`);
     }
     /*
+  
     |--------------------------------------------------------------------------
+  
     | Ticket Price And Currency
+  
     |--------------------------------------------------------------------------
+  
     */
     const currency = ticket.event.currency
         .trim()
@@ -468,36 +603,61 @@ async function createPurchase(userId, ticketTypeId, quantity, channel = "mobile"
         throw new Error("Invalid purchase subtotal.");
     }
     /*
+  
     |--------------------------------------------------------------------------
+  
     | Calculate Authoritative Checkout Amounts
+  
     |--------------------------------------------------------------------------
+  
     |
+  
     | Never trust amounts submitted by the frontend.
+  
     |
+  
     | The backend calculates:
+  
     |
+  
     | subtotal
+  
     | transactionFee
+  
     | amount = subtotal + transactionFee
+  
     |
+  
     */
     const checkoutAmounts = await calculateCheckoutAmounts(subtotal, currency);
     const { subtotal: subtotalAmount, transactionFee: transactionFeeAmount, amount, feeFxRate, } = checkoutAmounts;
     /*
+  
     |--------------------------------------------------------------------------
+  
     | Free Ticket
+  
     |--------------------------------------------------------------------------
+  
     |
+  
     | Free tickets do not incur transaction fees.
+  
     | Inventory reservation and purchase creation remain transactional.
+  
     |
+  
     */
     if (subtotal === 0) {
         const purchase = await prisma_1.prisma.$transaction(async (tx) => {
             /*
+    
             |--------------------------------------------------------------------------
+    
             | Reload Ticket
+    
             |--------------------------------------------------------------------------
+    
             */
             const currentTicket = await tx.ticketType.findUnique({
                 where: {
@@ -511,9 +671,13 @@ async function createPurchase(userId, ticketTypeId, quantity, channel = "mobile"
                 throw new Error("Ticket unavailable.");
             }
             /*
+    
             |--------------------------------------------------------------------------
+    
             | Inventory Check
+    
             |--------------------------------------------------------------------------
+    
             */
             const currentRemaining = currentTicket.quantity -
                 currentTicket.sold;
@@ -525,9 +689,13 @@ async function createPurchase(userId, ticketTypeId, quantity, channel = "mobile"
                         : "s"} remaining.`);
             }
             /*
+    
             |--------------------------------------------------------------------------
+    
             | Reserve Inventory
+    
             |--------------------------------------------------------------------------
+    
             */
             const inventory = await tx.ticketType.updateMany({
                 where: {
@@ -548,10 +716,27 @@ async function createPurchase(userId, ticketTypeId, quantity, channel = "mobile"
                 throw new Error("Ticket inventory changed. Please try again.");
             }
             /*
+    
             |--------------------------------------------------------------------------
+    
             | Create Free Purchase
+    
             |--------------------------------------------------------------------------
+    
             */
+            await tx.registration.upsert({
+                where: {
+                    userId_eventId: {
+                        userId,
+                        eventId: ticket.eventId,
+                    },
+                },
+                create: {
+                    userId,
+                    eventId: ticket.eventId,
+                },
+                update: {},
+            });
             return tx.ticketPurchase.create({
                 data: {
                     userId,
@@ -573,9 +758,13 @@ async function createPurchase(userId, ticketTypeId, quantity, channel = "mobile"
             });
         });
         /*
+    
         |--------------------------------------------------------------------------
+    
         | Issue Event Passes
+    
         |--------------------------------------------------------------------------
+    
         */
         const passes = await (0, ticket_issuance_service_1.issuePurchase)(purchase.id);
         return {
@@ -586,16 +775,27 @@ async function createPurchase(userId, ticketTypeId, quantity, channel = "mobile"
         };
     }
     /*
+  
     |--------------------------------------------------------------------------
+  
     | Paid Ticket
+  
     |--------------------------------------------------------------------------
+  
     |
+  
     | Create a pending purchase.
+  
     |
+  
     | Inventory is not reserved here.
+  
     | The existing Stripe webhook remains authoritative for payment
+  
     | verification, inventory validation, and ticket issuance.
+  
     |
+  
     */
     const purchase = await prisma_1.prisma.ticketPurchase.create({
         data: {
@@ -617,12 +817,19 @@ async function createPurchase(userId, ticketTypeId, quantity, channel = "mobile"
         },
     });
     /*
+  
     |--------------------------------------------------------------------------
+  
     | Stripe Amount
+  
     |--------------------------------------------------------------------------
+  
     |
+  
     | Stripe receives the total payable in minor units.
+  
     |
+  
     */
     const stripeAmount = toMinorUnits(amount, currency);
     if (!Number.isInteger(stripeAmount) ||
@@ -635,9 +842,13 @@ async function createPurchase(userId, ticketTypeId, quantity, channel = "mobile"
         throw new Error("Payment amount is invalid.");
     }
     /*
+  
     |--------------------------------------------------------------------------
+  
     | Payment Return URL
+  
     |--------------------------------------------------------------------------
+  
     */
     let paymentReturnUrl;
     try {
@@ -652,9 +863,13 @@ async function createPurchase(userId, ticketTypeId, quantity, channel = "mobile"
         throw error;
     }
     /*
+  
     |--------------------------------------------------------------------------
+  
     | Stripe Checkout
+  
     |--------------------------------------------------------------------------
+  
     */
     try {
         const session = await (0, stripe_service_1.createStripeCheckoutSession)({
@@ -672,9 +887,13 @@ async function createPurchase(userId, ticketTypeId, quantity, channel = "mobile"
             cancelUrl: paymentReturnUrl,
         });
         /*
+    
         |--------------------------------------------------------------------------
+    
         | Validate Stripe Response
+    
         |--------------------------------------------------------------------------
+    
         */
         if (!session.sessionId) {
             throw new Error("Stripe did not return a Checkout Session ID.");
@@ -683,9 +902,13 @@ async function createPurchase(userId, ticketTypeId, quantity, channel = "mobile"
             throw new Error("Stripe did not return a Checkout URL.");
         }
         /*
+    
         |--------------------------------------------------------------------------
+    
         | Store Stripe Session
+    
         |--------------------------------------------------------------------------
+    
         */
         const updatedPurchase = await prisma_1.prisma.ticketPurchase.update({
             where: {
@@ -697,9 +920,13 @@ async function createPurchase(userId, ticketTypeId, quantity, channel = "mobile"
             },
         });
         /*
+    
         |--------------------------------------------------------------------------
+    
         | Return Checkout
+    
         |--------------------------------------------------------------------------
+    
         */
         return {
             purchase: updatedPurchase,
@@ -711,9 +938,13 @@ async function createPurchase(userId, ticketTypeId, quantity, channel = "mobile"
     catch (error) {
         console.error("STRIPE PURCHASE ERROR:", error);
         /*
+    
         |--------------------------------------------------------------------------
+    
         | Cleanup Pending Purchase
+    
         |--------------------------------------------------------------------------
+    
         */
         try {
             await prisma_1.prisma.ticketPurchase.delete({
@@ -732,9 +963,13 @@ async function createPurchase(userId, ticketTypeId, quantity, channel = "mobile"
     }
 }
 /*
+
 |--------------------------------------------------------------------------
+
 | My Tickets
+
 |--------------------------------------------------------------------------
+
 */
 async function getMyTickets(userId) {
     return prisma_1.prisma.ticketPurchase.findMany({
@@ -796,9 +1031,13 @@ async function getMyTickets(userId) {
     });
 }
 /*
+
 |--------------------------------------------------------------------------
+
 | Purchase Payment Status
+
 |--------------------------------------------------------------------------
+
 */
 async function getPurchasePaymentStatus(userId, purchaseId) {
     const purchase = await prisma_1.prisma.ticketPurchase.findFirst({
@@ -865,9 +1104,13 @@ async function getPurchasePaymentStatus(userId, purchaseId) {
     };
 }
 /*
+
 |--------------------------------------------------------------------------
+
 | My Events
+
 |--------------------------------------------------------------------------
+
 */
 async function getMyEvents(userId) {
     return prisma_1.prisma.ticketPurchase.findMany({
@@ -920,9 +1163,13 @@ async function getMyEvents(userId) {
     });
 }
 /*
+
 |--------------------------------------------------------------------------
+
 | Event Hub
+
 |--------------------------------------------------------------------------
+
 */
 async function getMyEvent(userId, purchaseId) {
     const purchase = await prisma_1.prisma.ticketPurchase.findFirst({
@@ -933,16 +1180,24 @@ async function getMyEvent(userId, purchaseId) {
         },
         include: {
             /*
+    
             |--------------------------------------------------------------------------
+    
             | Event
+    
             |--------------------------------------------------------------------------
+    
             */
             event: {
                 include: {
                     /*
+        
                     |--------------------------------------------------------------------------
+        
                     | Announcements
+        
                     |--------------------------------------------------------------------------
+        
                     */
                     announcements: {
                         where: {
@@ -967,9 +1222,13 @@ async function getMyEvent(userId, purchaseId) {
                         ],
                     },
                     /*
+        
                     |--------------------------------------------------------------------------
+        
                     | Sessions
+        
                     |--------------------------------------------------------------------------
+        
                     */
                     sessions: {
                         orderBy: {
@@ -979,15 +1238,23 @@ async function getMyEvent(userId, purchaseId) {
                 },
             },
             /*
+    
             |--------------------------------------------------------------------------
+    
             | Purchased Ticket
+    
             |--------------------------------------------------------------------------
+    
             */
             ticket: true,
             /*
+    
             |--------------------------------------------------------------------------
+    
             | Active Passes
+    
             |--------------------------------------------------------------------------
+    
             */
             passes: {
                 where: {
@@ -996,9 +1263,13 @@ async function getMyEvent(userId, purchaseId) {
                 },
             },
             /*
+    
             |--------------------------------------------------------------------------
+    
             | Check-In
+    
             |--------------------------------------------------------------------------
+    
             */
             checkIn: {
                 include: {
@@ -1006,9 +1277,13 @@ async function getMyEvent(userId, purchaseId) {
                 },
             },
             /*
+    
             |--------------------------------------------------------------------------
+    
             | Attendee Activities
+    
             |--------------------------------------------------------------------------
+    
             */
             activities: {
                 orderBy: {
@@ -1016,9 +1291,13 @@ async function getMyEvent(userId, purchaseId) {
                 },
             },
             /*
+    
             |--------------------------------------------------------------------------
+    
             | Attendee
+    
             |--------------------------------------------------------------------------
+    
             */
             user: {
                 include: {

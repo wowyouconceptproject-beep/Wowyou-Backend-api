@@ -465,6 +465,8 @@ async function handleCheckoutCompleted(session) {
                     status: true,
                     quantity: true,
                     ticketTypeId: true,
+                    userId: true,
+                    eventId: true,
                 },
             });
             if (!lockedPurchase) {
@@ -545,6 +547,19 @@ async function handleCheckoutCompleted(session) {
                         increment: lockedPurchase.quantity,
                     },
                 },
+            });
+            await tx.registration.upsert({
+                where: {
+                    userId_eventId: {
+                        userId: lockedPurchase.userId,
+                        eventId: lockedPurchase.eventId,
+                    },
+                },
+                create: {
+                    userId: lockedPurchase.userId,
+                    eventId: lockedPurchase.eventId,
+                },
+                update: {},
             });
             return true;
         });

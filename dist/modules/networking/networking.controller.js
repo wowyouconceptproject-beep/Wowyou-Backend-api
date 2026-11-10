@@ -25,10 +25,13 @@ class NetworkingController {
         });
     }
     handleError(res, error, message) {
-        console.error(error);
+        console.error(`[NETWORKING ERROR] ${message}`, error);
         res.status(500).json({
             success: false,
             message,
+            error: error instanceof Error
+                ? error.message
+                : String(error),
         });
     }
     // ============================================
