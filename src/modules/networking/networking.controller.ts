@@ -35,18 +35,21 @@ export class NetworkingController {
   }
 
   private handleError(
-    res: Response,
-    error: unknown,
-    message: string,
-  ): void {
-    console.error(error);
+  res: Response,
+  error: unknown,
+  message: string,
+): void {
+  console.error(`[NETWORKING ERROR] ${message}`, error);
 
-    res.status(500).json({
-      success: false,
-      message,
-    });
-  }
-
+  res.status(500).json({
+    success: false,
+    message,
+    error:
+      error instanceof Error
+        ? error.message
+        : String(error),
+  });
+}
   // ============================================
   // GET MATCHES
   // ============================================
