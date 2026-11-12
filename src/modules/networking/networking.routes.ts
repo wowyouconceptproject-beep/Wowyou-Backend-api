@@ -16,63 +16,63 @@ router.get(
 
 // Profile
 router.get(
-  "/networking/profile",
+  "/profile",
   auth,
   controller.getProfile.bind(controller),
 );
 
 router.patch(
-  "/networking/profile",
+  "/profile",
   auth,
   controller.updateProfile.bind(controller),
 );
 
 // Connection requests
 router.post(
-  "/networking/requests",
+  "/requests",
   auth,
   controller.sendRequest.bind(controller),
 );
 
 router.get(
-  "/networking/requests/incoming",
+  "/requests/incoming",
   auth,
   controller.getIncomingRequests.bind(controller),
 );
 
 router.get(
-  "/networking/requests/outgoing",
+  "/requests/outgoing",
   auth,
   controller.getOutgoingRequests.bind(controller),
 );
 
 router.post(
-  "/networking/requests/:requestId/accept",
+  "/requests/:requestId/accept",
   auth,
   controller.acceptRequest.bind(controller),
 );
 
 router.post(
-  "/networking/requests/:requestId/reject",
+  "/requests/:requestId/reject",
   auth,
   controller.rejectRequest.bind(controller),
 );
 
 router.post(
-  "/networking/requests/:requestId/cancel",
+  "/requests/:requestId/cancel",
   auth,
   controller.cancelRequest.bind(controller),
 );
 
 // Connections
 router.get(
-  "/networking/connections",
+  "/connections",
   auth,
   controller.getConnections.bind(controller),
 );
 
 router.delete(
-  "/networking/connections/:connectionId",
+  "/connections/:connectionId",
   auth,
   controller.removeConnection.bind(controller),
 );

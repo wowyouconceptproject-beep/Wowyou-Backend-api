@@ -1,0 +1,618 @@
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\core\events\register-listeners.ts:2 ==========
+import "./listeners/activity.listener";
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\core\events\listeners\activity.listener.ts:9 ==========
+      "Create Event Activity",
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\core\events\listeners\activity.listener.ts:16 ==========
+     * prisma.eventActivity.create(...)
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\auth\auth.middleware.ts:9 ==========
+const INACTIVITY_LIMIT_MS = 60 * 60 * 1000;
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\auth\auth.middleware.ts:81 ==========
+          lastActivityAt: true,
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\auth\auth.middleware.ts:93 ==========
+        now.getTime() - session.lastActivityAt.getTime() >=
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\auth\auth.middleware.ts:94 ==========
+          INACTIVITY_LIMIT_MS;
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\auth\auth.middleware.ts:116 ==========
+       * Refresh the activity timestamp only after the session
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\auth\auth.middleware.ts:121 ==========
+        data: { lastActivityAt: now },
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\billing\billing.plans.ts:105 ==========
+      "ANNOUNCEMENTS",
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\billing\billing.plans.ts:134 ==========
+      "ANNOUNCEMENTS",
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\billing\billing.plans.ts:166 ==========
+      "ANNOUNCEMENTS",
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\checkin\checkin.service.ts:294 ==========
+        | Activity
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\checkin\checkin.service.ts:298 ==========
+        await tx.eventActivity.create({
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\events\activity.controller.ts:7 ==========
+  listActivity,
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\events\activity.controller.ts:8 ==========
+} from "./activity.service";
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\events\activity.controller.ts:12 ==========
+| Activity Feed
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\events\activity.controller.ts:16 ==========
+export async function activity(
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\events\activity.controller.ts:37 ==========
+      await listActivity(
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\events\activity.controller.ts:45 ==========
+      activity:
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\events\activity.routes.ts:10 ==========
+  activity,
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\events\activity.routes.ts:11 ==========
+} from "./activity.controller";
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\events\activity.routes.ts:17 ==========
+| Event Activity
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\events\activity.routes.ts:31 ==========
+  "/:eventId/activity",
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\events\activity.routes.ts:36 ==========
+  activity,
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\events\activity.service.ts:5 ==========
+| List Activity
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\events\activity.service.ts:9 ==========
+export async function listActivity(
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\events\activity.service.ts:13 ==========
+  const activities =
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\events\activity.service.ts:14 ==========
+    await prisma.eventActivity.findMany({
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\events\activity.service.ts:60 ==========
+  return activities.map((activity) => ({
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\events\activity.service.ts:61 ==========
+    id: activity.id,
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\events\activity.service.ts:63 ==========
+    type: activity.type,
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\events\activity.service.ts:65 ==========
+    title: activity.title,
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\events\activity.service.ts:67 ==========
+    description: activity.description,
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\events\activity.service.ts:69 ==========
+    actorId: activity.actorId,
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\events\activity.service.ts:71 ==========
+    actorName: activity.actor?.name ?? null,
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\events\activity.service.ts:73 ==========
+    actorRole: activity.actor?.role ?? null,
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\events\activity.service.ts:75 ==========
+    attendeeId: activity.attendeeId,
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\events\activity.service.ts:77 ==========
+    attendeeName: activity.attendee
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\events\activity.service.ts:78 ==========
+      ? `${activity.attendee.user.firstName} ${activity.attendee.user.lastName}`
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\events\activity.service.ts:81 ==========
+    purchaseId: activity.purchaseId,
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\events\activity.service.ts:83 ==========
+    ticketTypeId: activity.ticketTypeId,
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\events\activity.service.ts:85 ==========
+    ticketTypeName: activity.ticketType?.name ?? null,
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\events\activity.service.ts:87 ==========
+    station: activity.station,
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\events\activity.service.ts:89 ==========
+    createdAt: activity.createdAt,
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\events\announcement.controller.ts:10 ==========
+  listAnnouncements,
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\events\announcement.controller.ts:30 ==========
+| List Announcements
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\events\announcement.controller.ts:34 ==========
+export async function announcements(
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\events\announcement.controller.ts:55 ==========
+      await listAnnouncements(
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\events\announcement.controller.ts:62 ==========
+      announcements: result,
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\events\announcement.routes.ts:10 ==========
+  announcements,
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\events\announcement.routes.ts:20 ==========
+| List Announcements
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\events\announcement.routes.ts:23 ==========
+| ANNOUNCEMENTS is included in:
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\events\announcement.routes.ts:34 ==========
+  "/:eventId/announcements",
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\events\announcement.routes.ts:37 ==========
+    "ANNOUNCEMENTS",
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\events\announcement.routes.ts:39 ==========
+  announcements,
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\events\announcement.routes.ts:49 ==========
+  "/:eventId/announcements",
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\events\announcement.routes.ts:52 ==========
+    "ANNOUNCEMENTS",
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\events\announcement.routes.ts:64 ==========
+  "/:eventId/announcements/:id/pin",
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\events\announcement.routes.ts:67 ==========
+    "ANNOUNCEMENTS",
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\events\announcement.routes.ts:79 ==========
+  "/:eventId/announcements/:id",
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\events\announcement.routes.ts:82 ==========
+    "ANNOUNCEMENTS",
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\events\announcement.service.ts:37 ==========
+      `[Announcements] Push recipient mapping is not configured for audience "${audience}".`,
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\events\announcement.service.ts:93 ==========
+        `[Announcements] No mapped recipients for announcement ${input.announcementId}.`,
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\events\announcement.service.ts:119 ==========
+        `[Announcements] No recipients have push notifications enabled for ${input.announcementId}.`,
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\events\announcement.service.ts:148 ==========
+        `[Announcements] No device tokens registered for ${input.announcementId}. In-app notifications were saved.`,
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\events\announcement.service.ts:175 ==========
+    console.info("[Announcements] Push delivery completed.", {
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\events\announcement.service.ts:186 ==========
+      `[Announcements] Notification delivery failed for ${input.announcementId}:`,
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\events\announcement.service.ts:194 ==========
+| List Announcements
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\events\announcement.service.ts:198 ==========
+export async function listAnnouncements(
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\events\event.routes.ts:14 ==========
+import activityRoutes from "./activity.routes";
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\events\event.routes.ts:18 ==========
+  NetworkingController,
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\events\event.routes.ts:19 ==========
+} from "../networking/networking.controller";
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\events\event.routes.ts:37 ==========
+const networkingController =
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\events\event.routes.ts:38 ==========
+  new NetworkingController();
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\events\event.routes.ts:163 ==========
+| Networking
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\events\event.routes.ts:166 ==========
+| Organizer networking infrastructure requires an active subscription.
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\events\event.routes.ts:171 ==========
+  "/:eventId/networking",
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\events\event.routes.ts:174 ==========
+  networkingController
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\events\event.routes.ts:177 ==========
+      networkingController,
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\events\event.routes.ts:199 ==========
+  activityRoutes,
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\events\staff.permissions.ts:16 ==========
+        "VIEW_ACTIVITY",
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\events\staff.permissions.ts:28 ==========
+        "VIEW_ACTIVITY",
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\events\staff.permissions.ts:49 ==========
+        "VIEW_ACTIVITY",
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\intelligence\heatmap.service.ts:16 ==========
+  activity: number;
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\intelligence\heatmap.service.ts:76 ==========
+  | Load event + station activity
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\intelligence\heatmap.service.ts:130 ==========
+  | V1 uses station activity.
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\intelligence\heatmap.service.ts:253 ==========
+          activity:
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\intelligence\intelligence.types.ts:66 ==========
+    activityLast15Minutes: number;
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\intelligence\pulse.service.ts:112 ==========
+    activityLast15Minutes,
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\intelligence\pulse.service.ts:151 ==========
+    prisma.eventActivity.count({
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\intelligence\pulse.service.ts:169 ==========
+    prisma.eventActivity.findMany({
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\intelligence\pulse.service.ts:235 ==========
+  const activityPressure = clamp(
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\intelligence\pulse.service.ts:236 ==========
+    activityLast15Minutes * 3,
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\intelligence\pulse.service.ts:250 ==========
+        activityPressure * 0.15 +
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\intelligence\pulse.service.ts:553 ==========
+      "Arrival activity is accelerating and the event is entering a higher-pressure operating state.";
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\intelligence\pulse.service.ts:675 ==========
+      activityLast15Minutes,
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\networking\networking.ai.ts:6 ==========
+  NetworkingProfile,
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\networking\networking.ai.ts:7 ==========
+} from "./networking.types";
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\networking\networking.ai.ts:14 ==========
+export class NetworkingAI {
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\networking\networking.ai.ts:36 ==========
+    me: NetworkingProfile,
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\networking\networking.ai.ts:60 ==========
+You are an expert professional networking coach.
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\networking\networking.ai.ts:146 ==========
+        "Networking AI unavailable:",
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\networking\networking.controller.ts:5 ==========
+import { NetworkingService } from "./networking.service";
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\networking\networking.controller.ts:7 ==========
+export class NetworkingController {
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\networking\networking.controller.ts:8 ==========
+  private readonly service = new NetworkingService();
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\networking\networking.controller.ts:42 ==========
+  console.error(`[NETWORKING ERROR] ${message}`, error);
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\networking\networking.controller.ts:91 ==========
+        "Failed to retrieve networking matches.",
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\networking\networking.controller.ts:97 ==========
+  // GET NETWORKING PROFILE
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\networking\networking.controller.ts:115 ==========
+        "Failed to retrieve networking profile.",
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\networking\networking.controller.ts:121 ==========
+  // UPDATE NETWORKING PROFILE
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\networking\networking.controller.ts:136 ==========
+        message: "Networking profile updated.",
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\networking\networking.controller.ts:143 ==========
+        "Failed to update networking profile.",
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\networking\networking.mapper.ts:7 ==========
+  NetworkingProfile,
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\networking\networking.mapper.ts:8 ==========
+} from "./networking.types";
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\networking\networking.mapper.ts:10 ==========
+import { normalize } from "./networking.utils";
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\networking\networking.mapper.ts:19 ==========
+export class NetworkingMapper {
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\networking\networking.mapper.ts:20 ==========
+  static toNetworkingProfile(
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\networking\networking.mapper.ts:22 ==========
+  ): NetworkingProfile {
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\networking\networking.mapper.ts:59 ==========
+    profile: NetworkingProfile,
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\networking\networking.matcher.ts:7 ==========
+  NetworkingProfile,
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\networking\networking.matcher.ts:8 ==========
+} from "./networking.types";
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\networking\networking.matcher.ts:13 ==========
+} from "./networking.utils";
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\networking\networking.matcher.ts:23 ==========
+export class NetworkingMatcher {
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\networking\networking.matcher.ts:29 ==========
+    attendee: NetworkingProfile,
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\networking\networking.matcher.ts:30 ==========
+    candidate: NetworkingProfile,
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\networking\networking.matcher.ts:54 ==========
+    attendee: NetworkingProfile,
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\networking\networking.matcher.ts:55 ==========
+    candidate: NetworkingProfile,
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\networking\networking.matcher.ts:127 ==========
+        message: "You have similar networking goals.",
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\networking\networking.routes.ts:5 ==========
+import { NetworkingController } from "./networking.controller";
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\networking\networking.routes.ts:8 ==========
+const controller = new NetworkingController();
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\networking\networking.routes.ts:12 ==========
+  "/events/:eventId/networking",
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\networking\networking.routes.ts:19 ==========
+  "/networking/profile",
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\networking\networking.routes.ts:25 ==========
+  "/networking/profile",
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\networking\networking.routes.ts:32 ==========
+  "/networking/requests",
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\networking\networking.routes.ts:38 ==========
+  "/networking/requests/incoming",
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\networking\networking.routes.ts:44 ==========
+  "/networking/requests/outgoing",
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\networking\networking.routes.ts:50 ==========
+  "/networking/requests/:requestId/accept",
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\networking\networking.routes.ts:56 ==========
+  "/networking/requests/:requestId/reject",
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\networking\networking.routes.ts:62 ==========
+  "/networking/requests/:requestId/cancel",
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\networking\networking.routes.ts:69 ==========
+  "/networking/connections",
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\networking\networking.routes.ts:75 ==========
+  "/networking/connections/:connectionId",
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\networking\networking.service.ts:6 ==========
+import { NetworkingAI } from "./networking.ai";
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\networking\networking.service.ts:7 ==========
+import { NetworkingMapper } from "./networking.mapper";
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\networking\networking.service.ts:8 ==========
+import { NetworkingMatcher } from "./networking.matcher";
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\networking\networking.service.ts:9 ==========
+import { MatchCard } from "./networking.types";
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\networking\networking.service.ts:22 ==========
+export class NetworkingService {
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\networking\networking.service.ts:23 ==========
+  private readonly matcher = new NetworkingMatcher();
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\networking\networking.service.ts:24 ==========
+  private readonly ai = new NetworkingAI();
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\networking\networking.service.ts:27 ==========
+  // NETWORKING ELIGIBILITY
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\networking\networking.service.ts:30 ==========
+  private async assertNetworkingEligibility(
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\networking\networking.service.ts:56 ==========
+    if (attendee && !attendee.isNetworkingEnabled) {
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\networking\networking.service.ts:57 ==========
+      throw new Error("Networking is disabled for this attendee.");
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\networking\networking.service.ts:70 ==========
+    await this.assertNetworkingEligibility(userId, eventId);
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\networking\networking.service.ts:118 ==========
+    const me = NetworkingMapper.toNetworkingProfile(attendee);
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\networking\networking.service.ts:129 ==========
+          NetworkingMapper.toNetworkingProfile(candidate);
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\networking\networking.service.ts:133 ==========
+        return NetworkingMapper.toMatchCard(
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\networking\networking.service.ts:156 ==========
+          "This attendee appears to be a strong professional connection based on your shared background and networking goals.",
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\networking\networking.service.ts:160 ==========
+        "Failed to generate networking explanations:",
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\networking\networking.service.ts:281 ==========
+    await this.assertNetworkingEligibility(
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\networking\networking.service.ts:286 ==========
+    await this.assertNetworkingEligibility(
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\networking\networking.service.ts:337 ==========
+        title: "New networking request",
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\networking\networking.service.ts:390 ==========
+        body: "Your networking request has been accepted.",
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\networking\networking.types.ts:8 ==========
+export interface NetworkingProfile {
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\networking\networking.types.ts:69 ==========
+// NETWORKING REQUEST TYPES
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\networking\networking.types.ts:72 ==========
+export type NetworkingRequestStatus =
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\networking\networking.types.ts:78 ==========
+export interface SendNetworkingRequestInput {
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\networking\networking.types.ts:84 ==========
+export interface NetworkingRequest {
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\networking\networking.types.ts:90 ==========
+  status: NetworkingRequestStatus;
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\networking\networking.types.ts:98 ==========
+export interface NetworkingConnection {
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\networking\networking.types.ts:104 ==========
+  status: NetworkingRequestStatus;
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\operations\operations.controller.ts:303 ==========
+        recentActivity: data.recentActivity,
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\operations\operations.permissions.ts:6 ==========
+  VIEW_ACTIVITY: "VIEW_ACTIVITY",
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\operations\operations.service.ts:14 ==========
+  activityCreated,
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\operations\operations.service.ts:16 ==========
+  ActivityType,
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\operations\operations.service.ts:125 ==========
+      // Update last activity
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\operations\operations.service.ts:406 ==========
+    prisma.eventActivity.create({
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\operations\operations.service.ts:510 ==========
+    recentActivity,
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\operations\operations.service.ts:553 ==========
+    prisma.eventActivity.findMany({
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\operations\operations.service.ts:593 ==========
+    recentActivity,
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\operations\operations.service.ts:639 ==========
+  | Use the actual Attendee.id for EventActivity.attendeeId. This also
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\operations\operations.service.ts:681 ==========
+    prisma.eventActivity.create({
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\operations\pulse.controller.ts:116 ==========
+    const activity = await prisma.eventActivity.create({
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\operations\pulse.controller.ts:135 ==========
+        id: activity.id,
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\operations\pulse.controller.ts:136 ==========
+        eventId: activity.eventId,
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\operations\pulse.controller.ts:142 ==========
+        station: activity.station,
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\operations\pulse.controller.ts:143 ==========
+        createdAt: activity.createdAt,
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\purchases\purchase.service.ts:2521 ==========
+          announcements: {
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\purchases\purchase.service.ts:2675 ==========
+            | Announcements
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\purchases\purchase.service.ts:2683 ==========
+            announcements: {
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\purchases\purchase.service.ts:2829 ==========
+        | Attendee Activities
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\purchases\purchase.service.ts:2837 ==========
+        activities: {
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\purchases\ticket-issuance.service.ts:605 ==========
+| • Record PASS_ISSUED activity
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\purchases\ticket-issuance.service.ts:905 ==========
+        | Activity
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\modules\purchases\ticket-issuance.service.ts:909 ==========
+        await tx.eventActivity.create({
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\realtime\activity.ts:5 ==========
+export enum ActivityType {
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\realtime\activity.ts:13 ==========
+export interface ActivityPayload {
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\realtime\activity.ts:18 ==========
+  type: ActivityType;
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\realtime\activity.ts:37 ==========
+export function activityCreated(
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\realtime\activity.ts:38 ==========
+  payload: ActivityPayload
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\realtime\activity.ts:43 ==========
+      RealtimeEvents.ActivityCreated,
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\realtime\events.ts:5 ==========
+  ActivityCreated:
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\realtime\events.ts:6 ==========
+    "activity.created",
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\realtime\index.ts:11 ==========
+export * from "./activity";
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\routes\index.ts:20 ==========
+import networkingRoutes from "../modules/networking/networking.routes";
+
+========== C:\Users\Hp laptop\wowyou-eventtech\backend-api\src\routes\index.ts:54 ==========
+router.use("/networking", networkingRoutes);

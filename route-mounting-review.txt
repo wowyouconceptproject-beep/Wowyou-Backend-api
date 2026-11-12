@@ -1,0 +1,701 @@
+
+========== .\src\routes\index.ts ==========
+import { Router } from "express";
+
+import authRoutes from "../modules/auth/auth.routes";
+import testRoutes from "./test.routes";
+
+import organizationRoutes from "../modules/organizations/organization.routes";
+import eventRoutes from "../modules/events/event.routes";
+import attendeeProfileRoutes from "../modules/attendee-profile/attendee-profile.routes";
+import ticketRoutes from "../modules/tickets/ticket.routes";
+import revenueRoutes from "../modules/revenue/revenue.routes";
+import purchaseRoutes from "../modules/purchases/purchase.routes";
+
+import stripeRoutes from "../modules/payments/stripe/stripe.routes";
+import stripeConnectRoutes from "../modules/stripe/stripe.routes";
+import passRoutes from "../modules/pass/pass.routes";
+import operationsRoutes from "../modules/operations/operations.routes";
+import staffRoutes from "../modules/events/staff.routes";
+import vendorRoutes from "../modules/vendor/vendor.routes";
+import settingsRoutes from "./settings/settings.routes";
+import networkingRoutes from "../modules/networking/networking.routes";
+import mediaRoutes from "../modules/media/media.routes";
+import capacityRoutes from "../modules/operations/capacity/capacity.routes";
+
+const router = Router();
+
+router.get("/", (_req, res) => {
+  res.json({
+    success: true,
+    message: "WowYou EventTech API",
+  });
+});
+
+router.use(testRoutes);
+
+router.use("/auth", authRoutes);
+router.use("/organizations", organizationRoutes);
+router.use("/events", eventRoutes);
+router.use("/attendee-profile", attendeeProfileRoutes);
+router.use("/tickets", ticketRoutes);
+router.use("/revenue", revenueRoutes);
+router.use("/purchase", purchaseRoutes);
+
+router.use("/stripe", stripeRoutes);
+
+
+router.use("/pass", passRoutes);
+router.use("/passes", passRoutes);
+router.use("/operations", operationsRoutes);
+router.use("/staff", staffRoutes);
+router.use("/vendors", vendorRoutes);
+router.use("/settings", settingsRoutes);
+router.use("/media", mediaRoutes);
+
+router.use("/networking", networkingRoutes);
+
+router.use("/operations/capacity", capacityRoutes);
+
+router.use("/stripe", stripeConnectRoutes);
+
+export default router;
+
+========== .\src\modules\events\event.routes.ts ==========
+import {
+  Router,
+} from "express";
+
+import {
+  auth,
+} from "../auth/auth.middleware";
+
+import {
+  requireActiveSubscription,
+} from "../billing/billing.middleware";
+
+import staffRoutes from "./staff.routes";
+import activityRoutes from "./activity.routes";
+import announcementRoutes from "./announcement.routes";
+
+import {
+  NetworkingController,
+} from "../networking/networking.controller";
+
+import {
+  create,
+  update,
+  myEvents,
+  getEvent,
+  publish,
+  getPublicEvent,
+  publicEvents,
+  register,
+  myRegistrations,
+  attendees,
+} from "./event.controller";
+
+const router =
+  Router();
+
+const networkingController =
+  new NetworkingController();
+
+/*
+|--------------------------------------------------------------------------
+| Event Creation
+|--------------------------------------------------------------------------
+|
+| Creating and managing organizer events requires an active subscription.
+|
+*/
+
+router.post(
+  "/",
+  auth,
+  requireActiveSubscription,
+  create,
+);
+
+/*
+|--------------------------------------------------------------------------
+| Public Discovery
+|--------------------------------------------------------------------------
+|
+| These routes MUST appear before /:id.
+|
+*/
+
+router.get(
+  "/public",
+  publicEvents,
+);
+
+router.get(
+  "/public/:id",
+  getPublicEvent,
+);
+
+/*
+|--------------------------------------------------------------------------
+| Organizer Events
+|--------------------------------------------------------------------------
+*/
+
+router.get(
+  "/my",
+  auth,
+  requireActiveSubscription,
+  myEvents,
+);
+
+router.get(
+  "/my-registrations",
+  auth,
+  myRegistrations,
+);
+
+router.get(
+  "/:id",
+  auth,
+  requireActiveSubscription,
+  getEvent,
+);
+
+/*
+|--------------------------------------------------------------------------
+| Update Event
+|--------------------------------------------------------------------------
+|
+| Organizer can update an event belonging to their organization.
+|
+*/
+
+router.patch(
+  "/:id",
+  auth,
+  requireActiveSubscription,
+  update,
+);
+
+/*
+|--------------------------------------------------------------------------
+| Publish Event
+|--------------------------------------------------------------------------
+*/
+
+router.patch(
+  "/:id/publish",
+  auth,
+  requireActiveSubscription,
+  publish,
+);
+
+/*
+|--------------------------------------------------------------------------
+| Attendee Registration
+|--------------------------------------------------------------------------
+|
+| These do NOT require an organizer subscription.
+|
+*/
+
+router.post(
+  "/:id/register",
+  auth,
+  register,
+);
+
+/*
+|--------------------------------------------------------------------------
+| Event Attendees
+|--------------------------------------------------------------------------
+|
+| Organizer functionality.
+|
+*/
+
+router.get(
+  "/:eventId/attendees",
+  auth,
+  requireActiveSubscription,
+  attendees,
+);
+
+/*
+|--------------------------------------------------------------------------
+| Networking
+|--------------------------------------------------------------------------
+|
+| Organizer networking infrastructure requires an active subscription.
+|
+*/
+
+router.get(
+  "/:eventId/networking",
+  auth,
+  requireActiveSubscription,
+  networkingController
+    .getMatches
+    .bind(
+      networkingController,
+    ),
+);
+
+/*
+|--------------------------------------------------------------------------
+| Event Modules
+|--------------------------------------------------------------------------
+|
+| These modules have their own authentication.
+| Their subscription protection should be added inside their respective
+| route files so individual permissions/features can be controlled later.
+|
+*/
+
+router.use(
+  "/",
+  staffRoutes,
+);
+
+router.use(
+  "/",
+  activityRoutes,
+);
+
+router.use(
+  "/",
+  announcementRoutes,
+);
+
+export default router;
+
+========== .\src\modules\events\activity.routes.ts ==========
+import { Router } from "express";
+
+import { auth } from "../auth/auth.middleware";
+
+import {
+  requireFeature,
+} from "../billing/billing.middleware";
+
+import {
+  activity,
+} from "./activity.controller";
+
+const router = Router();
+
+/*
+|--------------------------------------------------------------------------
+| Event Activity
+|--------------------------------------------------------------------------
+|
+| OPERATIONS is included in:
+|
+| PROFESSIONAL
+| BUSINESS
+| ENTERPRISE
+|
+| STARTER does not have operations access.
+|
+*/
+
+router.get(
+  "/:eventId/activity",
+  auth,
+  requireFeature(
+    "OPERATIONS",
+  ),
+  activity,
+);
+
+export default router;
+
+========== .\src\modules\events\announcement.routes.ts ==========
+import { Router } from "express";
+
+import { auth } from "../auth/auth.middleware";
+
+import {
+  requireFeature,
+} from "../billing/billing.middleware";
+
+import {
+  announcements,
+  create,
+  pin,
+  remove,
+} from "./announcement.controller";
+
+const router = Router();
+
+/*
+|--------------------------------------------------------------------------
+| List Announcements
+|--------------------------------------------------------------------------
+|
+| ANNOUNCEMENTS is included in:
+|
+| PROFESSIONAL
+| BUSINESS
+| ENTERPRISE
+|
+| STARTER does not have announcement access.
+|
+*/
+
+router.get(
+  "/:eventId/announcements",
+  auth,
+  requireFeature(
+    "ANNOUNCEMENTS",
+  ),
+  announcements,
+);
+
+/*
+|--------------------------------------------------------------------------
+| Create Announcement
+|--------------------------------------------------------------------------
+*/
+
+router.post(
+  "/:eventId/announcements",
+  auth,
+  requireFeature(
+    "ANNOUNCEMENTS",
+  ),
+  create,
+);
+
+/*
+|--------------------------------------------------------------------------
+| Pin / Unpin Announcement
+|--------------------------------------------------------------------------
+*/
+
+router.patch(
+  "/:eventId/announcements/:id/pin",
+  auth,
+  requireFeature(
+    "ANNOUNCEMENTS",
+  ),
+  pin,
+);
+
+/*
+|--------------------------------------------------------------------------
+| Delete Announcement
+|--------------------------------------------------------------------------
+*/
+
+router.delete(
+  "/:eventId/announcements/:id",
+  auth,
+  requireFeature(
+    "ANNOUNCEMENTS",
+  ),
+  remove,
+);
+
+export default router;
+
+========== .\src\modules\networking\networking.routes.ts ==========
+
+import { Router } from "express";
+
+import { auth } from "../auth/auth.middleware";
+import { NetworkingController } from "./networking.controller";
+
+const router = Router();
+const controller = new NetworkingController();
+
+// Matches
+router.get(
+  "/events/:eventId/networking",
+  auth,
+  controller.getMatches.bind(controller),
+);
+
+// Profile
+router.get(
+  "/networking/profile",
+  auth,
+  controller.getProfile.bind(controller),
+);
+
+router.patch(
+  "/networking/profile",
+  auth,
+  controller.updateProfile.bind(controller),
+);
+
+// Connection requests
+router.post(
+  "/networking/requests",
+  auth,
+  controller.sendRequest.bind(controller),
+);
+
+router.get(
+  "/networking/requests/incoming",
+  auth,
+  controller.getIncomingRequests.bind(controller),
+);
+
+router.get(
+  "/networking/requests/outgoing",
+  auth,
+  controller.getOutgoingRequests.bind(controller),
+);
+
+router.post(
+  "/networking/requests/:requestId/accept",
+  auth,
+  controller.acceptRequest.bind(controller),
+);
+
+router.post(
+  "/networking/requests/:requestId/reject",
+  auth,
+  controller.rejectRequest.bind(controller),
+);
+
+router.post(
+  "/networking/requests/:requestId/cancel",
+  auth,
+  controller.cancelRequest.bind(controller),
+);
+
+// Connections
+router.get(
+  "/networking/connections",
+  auth,
+  controller.getConnections.bind(controller),
+);
+
+router.delete(
+  "/networking/connections/:connectionId",
+  auth,
+  controller.removeConnection.bind(controller),
+);
+
+export default router;
+
+========== .\src\app.ts ==========
+import express from "express";
+import cors from "cors";
+import helmet from "helmet";
+import morgan from "morgan";
+
+import {
+  searchRoutes,
+} from "./modules/search";
+
+import stripeRoutes
+  from "./modules/payments/stripe/stripe.routes";
+
+import intelligenceRoutes
+  from "./modules/intelligence/intelligence.routes";
+
+  import settlementRoutes from "./modules/settlements/settlement.routes";
+
+const app = express();
+
+/*
+|--------------------------------------------------------------------------
+| CORS
+|--------------------------------------------------------------------------
+*/
+
+app.use(
+  cors({
+    origin: true,
+    credentials: true,
+  }),
+);
+
+/*
+|--------------------------------------------------------------------------
+| Security
+|--------------------------------------------------------------------------
+*/
+
+app.use(
+  helmet(),
+);
+
+/*
+|--------------------------------------------------------------------------
+| Logging
+|--------------------------------------------------------------------------
+*/
+
+app.use(
+  morgan("dev"),
+);
+
+/*
+|--------------------------------------------------------------------------
+| Stripe Webhook
+|--------------------------------------------------------------------------
+|
+| Stripe signature verification requires the ORIGINAL raw request body.
+|
+| IMPORTANT:
+| This MUST be registered BEFORE express.json().
+|
+| Endpoint:
+|
+| POST /api/stripe/webhook
+|
+*/
+
+app.post(
+  "/api/stripe/webhook",
+  express.raw({
+    type: "application/json",
+  }),
+  async (req, res, next) => {
+    try {
+      const {
+        webhook,
+      } = await import(
+        "./modules/payments/stripe/stripe.controller"
+      );
+
+      return webhook(
+        req,
+        res,
+      );
+    } catch (error) {
+      return next(error);
+    }
+  },
+);
+
+/*
+|--------------------------------------------------------------------------
+| JSON Parser
+|--------------------------------------------------------------------------
+*/
+
+app.use(
+  express.json({
+    limit: "10mb",
+  }),
+);
+
+/*
+|--------------------------------------------------------------------------
+| Search
+|--------------------------------------------------------------------------
+*/
+
+app.use(
+  "/search",
+  searchRoutes,
+);
+
+app.use(
+  "/api/settlements",
+  settlementRoutes,
+);
+
+/*
+|--------------------------------------------------------------------------
+| Stripe Routes
+|--------------------------------------------------------------------------
+|
+| /api/stripe/...
+|
+| The webhook is handled above because Stripe requires
+| the raw request body for signature verification.
+|
+*/
+
+app.use(
+  "/api/stripe",
+  stripeRoutes,
+);
+
+/*
+|--------------------------------------------------------------------------
+| Event Intelligence
+|--------------------------------------------------------------------------
+*/
+
+app.use(
+  "/api",
+  intelligenceRoutes,
+);
+
+export default app;
+
+========== .\src\server.ts ==========
+import "./core/events/register-listeners";
+import "dotenv/config";
+
+import http from "http";
+
+import app from "./app";
+import routes from "./routes";
+
+import { initializeSocket } from "./realtime/socket";
+
+import discoveryRoutes from "./modules/discovery/discovery.routes";
+import legalRoutes from "./modules/legal/legal.routes";
+import billingRoutes from "./modules/billing/billing.routes";
+
+app.get("/health", (_req, res) => {
+  return res.status(200).json({
+    success: true,
+    status: "ok",
+    service: "WowYou Backend API",
+  });
+});
+
+app.use(routes);
+
+app.use(
+  "/discovery",
+  discoveryRoutes,
+);
+
+app.use(
+  "/api/legal",
+  legalRoutes,
+);
+
+app.use(
+  "/api/billing",
+  billingRoutes,
+);
+
+const PORT = Number(
+  process.env.PORT || 5000
+);
+
+const server =
+  http.createServer(app);
+
+initializeSocket(server);
+
+server.listen(PORT, () => {
+  console.log(`
+ WowYou Backend API Running
+
+Environment: ${
+    process.env.NODE_ENV ||
+    "development"
+  }
+
+Port: ${PORT}
+
+Frontend URL:
+${process.env.FRONTEND_URL}
+
+Health Check:
+http://localhost:${PORT}/health
+  `);
+});
